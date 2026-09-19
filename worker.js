@@ -1112,7 +1112,7 @@ export default {
                         status:
                             "error",
                         message:
-                            "Unable to create account"
+                            error?.message || String(error)
                     }),
                     {
                         status: 500,
