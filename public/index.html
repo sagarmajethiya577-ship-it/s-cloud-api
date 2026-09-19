@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Login | S-CLOUD</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Poppins', sans-serif;
+            background:
+                radial-gradient(
+                    circle at top left,
+                    rgba(59, 130, 246, 0.18),
+                    transparent 35%
+                ),
+                radial-gradient(
+                    circle at bottom right,
+                    rgba(139, 92, 246, 0.15),
+                    transparent 35%
+                ),
+                #050816;
+            color: white;
+            min-height: 100vh;
+        }
+
+        .glass {
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow:
+                0 25px 80px rgba(0, 0, 0, 0.45);
+        }
+
+        .input-box {
+            background: rgba(255, 255, 255, 0.045);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: 0.2s ease;
+        }
+
+        .input-box:focus {
+            border-color: rgba(99, 102, 241, 0.8);
+            background: rgba(255, 255, 255, 0.065);
+            outline: none;
+            box-shadow:
+                0 0 0 3px rgba(99, 102, 241, 0.12);
+        }
+
+        .gradient-text {
+            background:
+                linear-gradient(
+                    90deg,
+                    #60a5fa,
+                    #818cf8,
+                    #c084fc
+                );
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-glow {
+            box-shadow:
+                0 0 35px rgba(99, 102, 241, 0.28);
+        }
+
+        .loader {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .hidden-form {
+            display: none;
+        }
+
+        .message {
+            display: none;
+        }
+
+        .message.show {
+            display: block;
+        }
+    </style>
+</head>
+
+
+<body>
+
+    <div
+        class="min-h-screen flex items-center justify-center px-4 py-10"
+    >
+
+        <div class="w-full max-w-md">
+
+            <!-- ========================================= -->
+            <!-- LOGO -->
+            <!-- ========================================= -->
+
+            <div class="text-center mb-8">
+
+                <div
+                    class="logo-glow mx-auto mb-5 w-16 h-16 rounded-2xl
+                    flex items-center justify-center
+                    bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600"
+                >
+                    <svg
+                        width="34"
+                        height="34"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="white"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <path
+                            d="M17.5 19H9a7 7 0 1 1 6.8-8.7A5 5 0 1 1 17.5 19Z"
+                        />
+                        <path
+                            d="M12 12v6"
+                        />
+                        <path
+                            d="m9.5 15 2.5-3 2.5 3"
+                        />
+                    </svg>
+                </div>
+
+                <h1
+                    class="text-3xl font-bold tracking-wide"
+                >
+                    S-<span class="gradient-text">CLOUD</span>
+                </h1>
+
+                <p
+                    class="text-gray-400 text-sm mt-2"
+                >
+                    Upload, Share & Monetize
+                </p>
+
+            </div>
+
+
+            <!-- ========================================= -->
+            <!-- CARD -->
+            <!-- ========================================= -->
+
+            <div
+                class="glass rounded-3xl p-6 sm:p-8"
+            >
+
+                <!-- ===================================== -->
+                <!-- LOGIN -->
+                <!-- ===================================== -->
+
+                <div id="loginForm">
+
+                    <div class="mb-7">
+
+                        <h2
+                            class="text-2xl font-semibold"
+                        >
+                            Welcome back 👋
+                        </h2>
+
+                        <p
+                            class="text-gray-400 text-sm mt-1"
+                        >
+                            Login to your publisher account
+                        </p>
+
+                    </div>
+
+
+                    <!-- MESSAGE -->
+
+                    <div
+                        id="loginMessage"
+                        class="message mb-5 rounded-xl px-4 py-3 text-sm"
+                    ></div>
+
+
+                    <!-- EMAIL -->
+
+                    <div class="mb-4">
+
+                        <label
+                            class="block text-sm text-gray-300 mb-2"
+                        >
+                            Email
+                        </label>
+
+                        <input
+                            id="loginEmail"
+                            type="email"
+                            autocomplete="email"
+                            placeholder="Enter your email"
+                            class="input-box w-full rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500"
+                        >
+
+                    </div>
+
+
+                    <!-- PASSWORD -->
+
+                    <div class="mb-3">
+
+                        <div
+                            class="flex items-center justify-between mb-2"
+                        >
+
+                            <label
+                                class="text-sm text-gray-300"
+                            >
+                                Password
+                            </label>
+
+                            <button
+                                type="button"
+                                id="forgotPassword"
+                                class="text-xs text-indigo-400 hover:text-indigo-300"
+                            >
+                                Forgot password?
+                            </button>
+
+                        </div>
+
+                        <input
+                            id="loginPassword"
+                            type="password"
+                            autocomplete="current-password"
+                            placeholder="Enter your password"
+                            class="input-box w-full rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500"
+                        >
+
+                    </div>
+
+
+                    <!-- LOGIN BUTTON -->
+
+                    <button
+                        id="loginButton"
+                        type="button"
+                        class="w-full mt-5 rounded-xl py-3.5
+                        bg-gradient-to-r from-blue-600 to-indigo-600
+                        hover:from-blue-500 hover:to-indigo-500
+                        transition font-semibold text-sm
+                        flex items-center justify-center gap-3"
+                    >
+                        <span id="loginButtonText">
+                            Secure Login
+                        </span>
+
+                        <span
+                            id="loginLoader"
+                            class="loader hidden"
+                        ></span>
+
+                    </button>
+
+
+                    <!-- REGISTER SWITCH -->
+
+                    <div
+                        class="text-center mt-7 text-sm text-gray-400"
+                    >
+                        Don't have an account?
+
+                        <button
+                            type="button"
+                            id="showRegister"
+                            class="text-indigo-400 hover:text-indigo-300 font-medium ml-1"
+                        >
+                            Create Account
+                        </button>
+                    </div>
+
+                </div>
+
+
+                <!-- ===================================== -->
+                <!-- REGISTER -->
+                <!-- ===================================== -->
+
+                <div
+                    id="registerForm"
+                    class="hidden-form"
+                >
+
+                    <div class="mb-7">
+
+                        <h2
+                            class="text-2xl font-semibold"
+                        >
+                            Create your account 🚀
+                        </h2>
+
+                        <p
+                            class="text-gray-400 text-sm mt-1"
+                        >
+                            Start uploading and earning
+                        </p>
+
+                    </div>
+
+
+                    <!-- MESSAGE -->
+
+                    <div
+                        id="registerMessage"
+                        class="message mb-5 rounded-xl px-4 py-3 text-sm"
+                    ></div>
+
+
+                    <!-- NAME -->
+
+                    <div class="mb-4">
+
+                        <label
+                            class="block text-sm text-gray-300 mb-2"
+                        >
+                            Username
+                        </label>
+
+                        <input
+                            id="registerName"
+                            type="text"
+                            autocomplete="name"
+                            placeholder="Enter your name"
+                            class="input-box w-full rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500"
+                        >
+
+                    </div>
+
+
+                    <!-- EMAIL -->
+
+                    <div class="mb-4">
+
+                        <label
+                            class="block text-sm text-gray-300 mb-2"
+                        >
+                            Email
+                        </label>
+
+                        <input
+                            id="registerEmail"
+                            type="email"
+                            autocomplete="email"
+                            placeholder="Enter your email"
+                            class="input-box w-full rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500"
+                        >
+
+                    </div>
+
+
+                    <!-- PASSWORD -->
+
+                    <div class="mb-5">
+
+                        <label
+                            class="block text-sm text-gray-300 mb-2"
+                        >
+                            Password
+                        </label>
+
+                        <input
+                            id="registerPassword"
+                            type="password"
+                            autocomplete="new-password"
+                            placeholder="Minimum 8 characters"
+                            class="input-box w-full rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500"
+                        >
+
+                    </div>
+
+
+                    <!-- REGISTER BUTTON -->
+
+                    <button
+                        id="registerButton"
+                        type="button"
+                        class="w-full rounded-xl py-3.5
+                        bg-gradient-to-r from-blue-600 to-indigo-600
+                        hover:from-blue-500 hover:to-indigo-500
+                        transition font-semibold text-sm
+                        flex items-center justify-center gap-3"
+                    >
+
+                        <span id="registerButtonText">
+                            Start Earning Now
+                        </span>
+
+                        <span
+                            id="registerLoader"
+                            class="loader hidden"
+                        ></span>
+
+                    </button>
+
+
+                    <!-- LOGIN SWITCH -->
+
+                    <div
+                        class="text-center mt-7 text-sm text-gray-400"
+                    >
+                        Already have an account?
+
+                        <button
+                            type="button"
+                            id="showLogin"
+                            class="text-indigo-400 hover:text-indigo-300 font-medium ml-1"
+                        >
+                            Secure Login
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ========================================= -->
+            <!-- FOOTER -->
+            <!-- ========================================= -->
+
+            <p
+                class="text-center text-gray-600 text-xs mt-6"
+            >
+                © 2026 S-CLOUD. All rights reserved.
+            </p>
+
+        </div>
+
+    </div>
+
+
+<script>
+
+    // ==================================================
+    // ELEMENTS
+    // ==================================================
+
+    const loginForm =
+        document.getElementById(
+            "loginForm"
+        );
+
+    const registerForm =
+        document.getElementById(
+            "registerForm"
+        );
+
+
+    const loginMessage =
+        document.getElementById(
+            "loginMessage"
+        );
+
+    const registerMessage =
+        document.getElementById(
+            "registerMessage"
+        );
+
+
+    const loginButton =
+        document.getElementById(
+            "loginButton"
+        );
+
+    const registerButton =
+        document.getElementById(
+            "registerButton"
+        );
+
+
+    const loginButtonText =
+        document.getElementById(
+            "loginButtonText"
+        );
+
+    const registerButtonText =
+        document.getElementById(
+            "registerButtonText"
+        );
+
+
+    const loginLoader =
+        document.getElementById(
+            "loginLoader"
+        );
+
+    const registerLoader =
+        document.getElementById(
+            "registerLoader"
+        );
+
+
+    // ==================================================
+    // SHOW MESSAGE
+    // ==================================================
+
+    function showMessage(
+        element,
+        message,
+        type = "error"
+    ) {
+
+        element.textContent =
+            message;
+
+        element.className =
+            "message show mb-5 rounded-xl px-4 py-3 text-sm";
+
+
+        if (
+            type === "success"
+        ) {
+
+            element.classList.add(
+                "bg-green-500/10",
+                "border",
+                "border-green-500/20",
+                "text-green-400"
+            );
+
+        } else {
+
+            element.classList.add(
+                "bg-red-500/10",
+                "border",
+                "border-red-500/20",
+                "text-red-400"
+            );
+        }
+    }
+
+
+    function hideMessage(
+        element
+    ) {
+        element.className =
+            "message mb-5 rounded-xl px-4 py-3 text-sm";
+    }
+
+
+    // ==================================================
+    // FORM TOGGLE
+    // ==================================================
+
+    document
+        .getElementById(
+            "showRegister"
+        )
+        .addEventListener(
+            "click",
+            () => {
+
+                hideMessage(
+                    loginMessage
+                );
+
+                loginForm.style.display =
+                    "none";
+
+                registerForm.style.display =
+                    "block";
+            }
+        );
+
+
+    document
+        .getElementById(
+            "showLogin"
+        )
+        .addEventListener(
+            "click",
+            () => {
+
+                hideMessage(
+                    registerMessage
+                );
+
+                registerForm.style.display =
+                    "none";
+
+                loginForm.style.display =
+                    "block";
+            }
+        );
+
+
+    // ==================================================
+    // LOGIN
+    // ==================================================
+
+    loginButton.addEventListener(
+        "click",
+        async () => {
+
+            hideMessage(
+                loginMessage
+            );
+
+
+            const email =
+                document
+                    .getElementById(
+                        "loginEmail"
+                    )
+                    .value
+                    .trim();
+
+            const password =
+                document
+                    .getElementById(
+                        "loginPassword"
+                    )
+                    .value;
+
+
+            if (
+                !email ||
+                !password
+            ) {
+                showMessage(
+                    loginMessage,
+                    "Email and password are required."
+                );
+
+                return;
+            }
+
+
+            loginButton.disabled =
+                true;
+
+            loginButtonText.textContent =
+                "Signing in...";
+
+            loginLoader.classList.remove(
+                "hidden"
+            );
+
+
+            try {
+
+                const response =
+                    await fetch(
+                        "/api/login",
+                        {
+                            method:
+                                "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            credentials:
+                                "include",
+
+                            body:
+                                JSON.stringify({
+                                    email:
+                                        email,
+                                    password:
+                                        password
+                                })
+                        }
+                    );
+
+
+                const data =
+                    await response.json();
+
+
+                if (
+                    !response.ok ||
+                    data.status !==
+                        "success"
+                ) {
+
+                    showMessage(
+                        loginMessage,
+                        data.message ||
+                        "Invalid email or password."
+                    );
+
+                    return;
+                }
+
+
+                showMessage(
+                    loginMessage,
+                    "Login successful! Redirecting...",
+                    "success"
+                );
+
+
+                setTimeout(
+                    () => {
+                        window.location.href =
+                            "/dashboard";
+                    },
+                    500
+                );
+
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Login error:",
+                    error
+                );
+
+                showMessage(
+                    loginMessage,
+                    "Network error. Please try again."
+                );
+
+            } finally {
+
+                loginButton.disabled =
+                    false;
+
+                loginButtonText.textContent =
+                    "Secure Login";
+
+                loginLoader.classList.add(
+                    "hidden"
+                );
+            }
+        }
+    );
+
+
+    // ==================================================
+    // REGISTER
+    // ==================================================
+
+    registerButton.addEventListener(
+        "click",
+        async () => {
+
+            hideMessage(
+                registerMessage
+            );
+
+
+            const name =
+                document
+                    .getElementById(
+                        "registerName"
+                    )
+                    .value
+                    .trim();
+
+            const email =
+                document
+                    .getElementById(
+                        "registerEmail"
+                    )
+                    .value
+                    .trim();
+
+            const password =
+                document
+                    .getElementById(
+                        "registerPassword"
+                    )
+                    .value;
+
+
+            if (
+                !name ||
+                !email ||
+                !password
+            ) {
+
+                showMessage(
+                    registerMessage,
+                    "All fields are required."
+                );
+
+                return;
+            }
+
+
+            if (
+                password.length <
+                8
+            ) {
+
+                showMessage(
+                    registerMessage,
+                    "Password must be at least 8 characters."
+                );
+
+                return;
+            }
+
+
+            registerButton.disabled =
+                true;
+
+            registerButtonText.textContent =
+                "Creating account...";
+
+            registerLoader.classList.remove(
+                "hidden"
+            );
+
+
+            try {
+
+                const response =
+                    await fetch(
+                        "/api/signup",
+                        {
+                            method:
+                                "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            credentials:
+                                "include",
+
+                            body:
+                                JSON.stringify({
+                                    name:
+                                        name,
+                                    email:
+                                        email,
+                                    password:
+                                        password
+                                })
+                        }
+                    );
+
+
+                const data =
+                    await response.json();
+
+
+                if (
+                    !response.ok ||
+                    data.status !==
+                        "success"
+                ) {
+
+                    showMessage(
+                        registerMessage,
+                        data.message ||
+                        "Unable to create account."
+                    );
+
+                    return;
+                }
+
+
+                showMessage(
+                    registerMessage,
+                    "Account created successfully! Please login.",
+                    "success"
+                );
+
+
+                document
+                    .getElementById(
+                        "registerName"
+                    )
+                    .value = "";
+
+                document
+                    .getElementById(
+                        "registerEmail"
+                    )
+                    .value = "";
+
+                document
+                    .getElementById(
+                        "registerPassword"
+                    )
+                    .value = "";
+
+
+                setTimeout(
+                    () => {
+
+                        registerForm.style.display =
+                            "none";
+
+                        loginForm.style.display =
+                            "block";
+
+                        document
+                            .getElementById(
+                                "loginEmail"
+                            )
+                            .value =
+                            email;
+
+                        showMessage(
+                            loginMessage,
+                            "Account created. Please login.",
+                            "success"
+                        );
+
+                    },
+                    800
+                );
+
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Register error:",
+                    error
+                );
+
+                showMessage(
+                    registerMessage,
+                    "Network error. Please try again."
+                );
+
+            } finally {
+
+                registerButton.disabled =
+                    false;
+
+                registerButtonText.textContent =
+                    "Start Earning Now";
+
+                registerLoader.classList.add(
+                    "hidden"
+                );
+            }
+        }
+    );
+
+
+    // ==================================================
+    // ENTER KEY SUPPORT
+    // ==================================================
+
+    document
+        .getElementById(
+            "loginPassword"
+        )
+        .addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key ===
+                    "Enter"
+                ) {
+                    loginButton.click();
+                }
+            }
+        );
+
+
+    document
+        .getElementById(
+            "registerPassword"
+        )
+        .addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key ===
+                    "Enter"
+                ) {
+                    registerButton.click();
+                }
+            }
+        );
+
+
+    // ==================================================
+    // CHECK EXISTING SESSION
+    // ==================================================
+
+    async function checkExistingSession() {
+
+        try {
+
+            const response =
+                await fetch(
+                    "/api/me",
+                    {
+                        method:
+                            "GET",
+                        credentials:
+                            "include"
+                    }
+                );
+
+
+            if (
+                response.ok
+            ) {
+
+                const data =
+                    await response.json();
+
+                if (
+                    data.status ===
+                    "success"
+                ) {
+                    window.location.href =
+                        "/dashboard";
+                }
+            }
+
+        } catch (
+            error
+        ) {
+
+            console.log(
+                "No active session."
+            );
+        }
+    }
+
+
+    checkExistingSession();
+
+
+    // ==================================================
+    // FORGOT PASSWORD
+    // ==================================================
+
+    document
+        .getElementById(
+            "forgotPassword"
+        )
+        .addEventListener(
+            "click",
+            () => {
+
+                showMessage(
+                    loginMessage,
+                    "Password reset system will be added next."
+                );
+            }
+        );
+
+</script>
+
+</body>
+</html>

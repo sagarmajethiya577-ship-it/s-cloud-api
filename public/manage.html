@@ -1,0 +1,3941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Manage Files | S-CLOUD</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Poppins', sans-serif;
+            background:
+                radial-gradient(circle at 15% 10%, rgba(37, 99, 235, 0.12), transparent 28%),
+                radial-gradient(circle at 90% 15%, rgba(124, 58, 237, 0.10), transparent 30%),
+                #0b0f19;
+            color: #f8fafc;
+        }
+
+        ::-webkit-scrollbar {
+            width: 7px;
+            height: 7px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100, 116, 139, 0.45);
+            border-radius: 20px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(148, 163, 184, 0.55);
+        }
+
+        .glass {
+            background: rgba(17, 24, 39, 0.72);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(148, 163, 184, 0.10);
+            box-shadow:
+                0 20px 50px rgba(0, 0, 0, 0.18),
+                inset 0 1px 0 rgba(255, 255, 255, 0.025);
+        }
+
+        .sidebar {
+            background: rgba(13, 19, 32, 0.96);
+            border-right: 1px solid rgba(148, 163, 184, 0.10);
+        }
+
+        .gradient-text {
+            background: linear-gradient(
+                90deg,
+                #60a5fa,
+                #818cf8,
+                #a78bfa
+            );
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .logo-box {
+            background: linear-gradient(
+                135deg,
+                #2563eb,
+                #4f46e5,
+                #7c3aed
+            );
+            box-shadow:
+                0 0 28px rgba(79, 70, 229, 0.30),
+                inset 0 1px 0 rgba(255,255,255,.15);
+        }
+
+        .nav-item {
+            transition: all .2s ease;
+        }
+
+        .nav-item:hover {
+            background: rgba(51, 65, 85, 0.34);
+            color: #fff;
+        }
+
+        .nav-item.active {
+            background:
+                linear-gradient(
+                    90deg,
+                    rgba(37, 99, 235, 0.20),
+                    rgba(79, 70, 229, 0.14)
+                );
+            color: #fff;
+            border: 1px solid rgba(96, 165, 250, 0.10);
+        }
+
+        .main-content {
+            margin-left: 256px;
+        }
+
+        .mobile-overlay {
+            display: none;
+        }
+
+        .sidebar-open .mobile-overlay {
+            display: block;
+        }
+
+        .sidebar-open .mobile-sidebar {
+            transform: translateX(0);
+        }
+
+        .mobile-sidebar {
+            transform: translateX(-100%);
+            transition: transform .25s ease;
+        }
+
+        .profile-menu {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-6px);
+            transition: all .18s ease;
+        }
+
+        .profile-menu.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .search-input {
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            outline: none;
+            transition: all .2s ease;
+        }
+
+        .search-input:focus {
+            border-color: rgba(96, 165, 250, 0.42);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+        }
+
+        .select-box {
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            outline: none;
+            color: #cbd5e1;
+        }
+
+        .select-box:focus {
+            border-color: rgba(96, 165, 250, 0.42);
+        }
+
+        .file-row {
+            transition: background .18s ease;
+        }
+
+        .file-row:hover {
+            background: rgba(30, 41, 59, 0.34);
+        }
+
+        .file-icon {
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(37, 99, 235, 0.18),
+                    rgba(124, 58, 237, 0.15)
+                );
+            border: 1px solid rgba(96, 165, 250, 0.10);
+        }
+
+        .status-active {
+            background: rgba(16, 185, 129, 0.10);
+            color: #6ee7b7;
+            border: 1px solid rgba(16, 185, 129, 0.14);
+        }
+
+        .status-deleted {
+            background: rgba(239, 68, 68, 0.09);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.13);
+        }
+
+        .status-other {
+            background: rgba(245, 158, 11, 0.09);
+            color: #fcd34d;
+            border: 1px solid rgba(245, 158, 11, 0.13);
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        .table-wrapper::-webkit-scrollbar {
+            height: 5px;
+        }
+
+        .dropdown {
+            background: rgba(15, 23, 42, 0.98);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.30);
+            backdrop-filter: blur(18px);
+        }
+
+        .action-menu {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-5px);
+            transition: all .15s ease;
+        }
+
+        .action-menu.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .modal-backdrop {
+            background: rgba(2, 6, 23, 0.72);
+            backdrop-filter: blur(7px);
+            -webkit-backdrop-filter: blur(7px);
+        }
+
+        .modal-box {
+            animation: modalIn .18s ease-out;
+        }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: scale(.97) translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,.22);
+            border-top-color: white;
+            animation: spin .7s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .page-btn {
+            transition: all .18s ease;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: rgba(51, 65, 85, 0.45);
+        }
+
+        .page-btn.active {
+            background: linear-gradient(
+                135deg,
+                #2563eb,
+                #4f46e5
+            );
+            color: white;
+            border-color: rgba(96, 165, 250, 0.30);
+        }
+
+        .page-btn:disabled {
+            opacity: .38;
+            cursor: not-allowed;
+        }
+
+        .toast {
+            transform: translateY(20px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all .25s ease;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .toast-success {
+            border-color: rgba(16,185,129,.20);
+        }
+
+        .toast-error {
+            border-color: rgba(239,68,68,.20);
+        }
+
+        .toast-info {
+            border-color: rgba(59,130,246,.20);
+        }
+
+        .empty-icon {
+            background:
+                radial-gradient(
+                    circle,
+                    rgba(59,130,246,.13),
+                    rgba(124,58,237,.06),
+                    transparent 70%
+                );
+        }
+
+        .mobile-file-card {
+            transition: background .18s ease;
+        }
+
+        .mobile-file-card:hover {
+            background: rgba(30, 41, 59, 0.30);
+        }
+
+        @media (max-width: 1023px) {
+            .desktop-sidebar {
+                display: none;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .mobile-sidebar,
+            .mobile-overlay {
+                display: none !important;
+            }
+        }
+
+        @media (max-width: 639px) {
+            .page-container {
+                padding-left: 14px;
+                padding-right: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ========================================================= -->
+    <!-- DESKTOP SIDEBAR -->
+    <!-- ========================================================= -->
+
+    <aside class="desktop-sidebar sidebar fixed left-0 top-0 z-40 h-screen w-64">
+
+        <div class="flex h-full flex-col">
+
+            <!-- Logo -->
+            <div class="flex h-20 items-center px-5">
+
+                <a href="/dashboard" class="flex items-center gap-3">
+
+                    <div class="logo-box flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
+
+                        <svg
+                            width="25"
+                            height="25"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                d="M7.2 18.2H17.1C19.37 18.2 21 16.65 21 14.5C21 12.55 19.57 11.12 17.58 10.87C17.25 7.62 14.51 5.2 11.18 5.2C8.31 5.2 5.9 7.01 5.02 9.55C2.73 9.78 1 11.52 1 13.72C1 16.2 2.92 18.2 5.4 18.2H7.2Z"
+                                fill="white"
+                                fill-opacity=".96"
+                            />
+
+                            <path
+                                d="M12 9.2V15.3M9.7 12.9L12 15.3L14.3 12.9"
+                                stroke="#4F46E5"
+                                stroke-width="1.8"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+
+                    </div>
+
+                    <div class="leading-none">
+                        <div class="text-[17px] font-bold tracking-wide text-white">
+                            S-<span class="gradient-text">CLOUD</span>
+                        </div>
+
+                        <div class="mt-1 text-[9px] font-medium tracking-[.16em] text-slate-500">
+                            PUBLISHER NETWORK
+                        </div>
+                    </div>
+
+                </a>
+
+            </div>
+
+
+            <!-- Navigation -->
+            <nav class="flex-1 px-3 py-4">
+
+                <div class="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-600">
+                    Main Menu
+                </div>
+
+                <div class="space-y-1">
+
+                    <a
+                        href="/dashboard"
+                        class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                            <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                            <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                            <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                        </svg>
+
+                        <span>Analytics</span>
+                    </a>
+
+
+                    <a
+                        href="/upload"
+                        class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 16V4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M7.5 8.5L12 4L16.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 14.5V18.5C5 19.6 5.9 20.5 7 20.5H17C18.1 20.5 19 19.6 19 18.5V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+
+                        <span>Upload File</span>
+                    </a>
+
+
+                    <a
+                        href="/manage"
+                        class="nav-item active flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-200"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+
+                        <span>Manage Files</span>
+                    </a>
+
+
+                    <button
+                        type="button"
+                        onclick="showComingSoon('API Documentation')"
+                        class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path d="M8 8L4 12L8 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M16 8L20 12L16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M14 5L10 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+
+                        <span>API Document</span>
+
+                        <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+                            Soon
+                        </span>
+                    </button>
+
+
+                    <button
+                        type="button"
+                        onclick="showComingSoon('Telegram Support')"
+                        class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M21 4.8L17.9 19.1C17.67 20.11 17.08 20.36 16.25 19.91L11.57 16.46L9.31 18.64C9.06 18.89 8.85 19.1 8.35 19.1L8.69 14.26L17.49 6.31C17.87 5.97 17.41 5.78 16.9 6.12L6.02 12.98L1.34 11.52C0.32 11.2 0.3 10.51 1.55 10.02L19.86 2.96C20.71 2.65 21.45 3.16 21 4.8Z"
+                                fill="currentColor"
+                            />
+                        </svg>
+
+                        <span>Telegram Support</span>
+
+                        <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+                            Soon
+                        </span>
+                    </button>
+
+                </div>
+
+            </nav>
+
+
+            <!-- Start Earning Card -->
+            <div class="px-3 pb-3">
+
+                <div class="overflow-hidden rounded-2xl border border-blue-500/10 bg-gradient-to-br from-blue-600/10 via-indigo-600/10 to-purple-600/10 p-4">
+
+                    <div class="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-300">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 3V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M16.5 7.2C16.5 5.87 14.71 4.8 12.5 4.8C10.29 4.8 8.5 5.87 8.5 7.2C8.5 8.53 10.29 9.6 12.5 9.6C14.71 9.6 16.5 10.67 16.5 12C16.5 13.33 14.71 14.4 12.5 14.4C10.29 14.4 8.5 13.33 8.5 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+
+                    <div class="text-xs font-semibold text-slate-200">
+                        Start Earning
+                    </div>
+
+                    <div class="mt-1 text-[10px] leading-relaxed text-slate-500">
+                        Upload files and earn from downloads.
+                    </div>
+
+                    <a
+                        href="/upload"
+                        class="mt-3 flex items-center justify-center rounded-xl bg-blue-600/80 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-blue-600"
+                    >
+                        Upload Now
+                    </a>
+
+                </div>
+
+            </div>
+
+
+            <!-- Sidebar Footer -->
+            <div class="border-t border-slate-800/60 px-5 py-4">
+                <div class="text-[10px] text-slate-600">
+                    S-CLOUD Publisher Network
+                </div>
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- ========================================================= -->
+    <!-- MOBILE SIDEBAR -->
+    <!-- ========================================================= -->
+
+    <div
+        id="mobileOverlay"
+        class="mobile-overlay fixed inset-0 z-40 bg-black/60"
+        onclick="closeSidebar()"
+    ></div>
+
+
+    <aside
+        id="mobileSidebar"
+        class="mobile-sidebar sidebar fixed left-0 top-0 z-50 h-screen w-72"
+    >
+
+        <div class="flex h-full flex-col">
+
+            <div class="flex h-20 items-center justify-between px-5">
+
+                <a href="/dashboard" class="flex items-center gap-3">
+
+                    <div class="logo-box flex h-10 w-10 items-center justify-center rounded-2xl">
+
+                        <svg
+                            width="23"
+                            height="23"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                        >
+                            <path
+                                d="M7.2 18.2H17.1C19.37 18.2 21 16.65 21 14.5C21 12.55 19.57 11.12 17.58 10.87C17.25 7.62 14.51 5.2 11.18 5.2C8.31 5.2 5.9 7.01 5.02 9.55C2.73 9.78 1 11.52 1 13.72C1 16.2 2.92 18.2 5.4 18.2H7.2Z"
+                                fill="white"
+                            />
+
+                            <path
+                                d="M12 9.2V15.3M9.7 12.9L12 15.3L14.3 12.9"
+                                stroke="#4F46E5"
+                                stroke-width="1.8"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+
+                    </div>
+
+                    <div>
+                        <div class="text-[16px] font-bold text-white">
+                            S-<span class="gradient-text">CLOUD</span>
+                        </div>
+                    </div>
+
+                </a>
+
+
+                <button
+                    type="button"
+                    onclick="closeSidebar()"
+                    class="rounded-xl p-2 text-slate-500 hover:bg-slate-800/50 hover:text-white"
+                >
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+                        <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </button>
+
+            </div>
+
+
+            <nav class="flex-1 px-3 py-4">
+
+                <div class="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-600">
+                    Main Menu
+                </div>
+
+                <div class="space-y-1">
+
+                    <a
+                        href="/dashboard"
+                        class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                            <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                            <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                            <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                        </svg>
+
+                        <span>Analytics</span>
+                    </a>
+
+
+                    <a
+                        href="/upload"
+                        class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 16V4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M7.5 8.5L12 4L16.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 14.5V18.5C5 19.6 5.9 20.5 7 20.5H17C18.1 20.5 19 19.6 19 18.5V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+
+                        <span>Upload File</span>
+                    </a>
+
+
+                    <a
+                        href="/manage"
+                        class="nav-item active flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-200"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+
+                        <span>Manage Files</span>
+                    </a>
+
+
+                    <button
+                        type="button"
+                        onclick="showComingSoon('API Documentation')"
+                        class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path d="M8 8L4 12L8 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M16 8L20 12L16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M14 5L10 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+
+                        <span>API Document</span>
+
+                        <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+                            Soon
+                        </span>
+                    </button>
+
+
+                    <button
+                        type="button"
+                        onclick="showComingSoon('Telegram Support')"
+                        class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M21 4.8L17.9 19.1C17.67 20.11 17.08 20.36 16.25 19.91L11.57 16.46L9.31 18.64C9.06 18.89 8.85 19.1 8.35 19.1L8.69 14.26L17.49 6.31C17.87 5.97 17.41 5.78 16.9 6.12L6.02 12.98L1.34 11.52C0.32 11.2 0.3 10.51 1.55 10.02L19.86 2.96C20.71 2.65 21.45 3.16 21 4.8Z"
+                                fill="currentColor"
+                            />
+                        </svg>
+
+                        <span>Telegram Support</span>
+
+                        <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+                            Soon
+                        </span>
+                    </button>
+
+                </div>
+
+            </nav>
+
+
+            <div class="px-3 pb-4">
+
+                <div class="rounded-2xl border border-blue-500/10 bg-gradient-to-br from-blue-600/10 via-indigo-600/10 to-purple-600/10 p-4">
+
+                    <div class="text-xs font-semibold text-slate-200">
+                        Start Earning
+                    </div>
+
+                    <div class="mt-1 text-[10px] leading-relaxed text-slate-500">
+                        Upload files and earn from downloads.
+                    </div>
+
+                    <a
+                        href="/upload"
+                        class="mt-3 flex items-center justify-center rounded-xl bg-blue-600/80 px-3 py-2 text-[11px] font-semibold text-white"
+                    >
+                        Upload Now
+                    </a>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- ========================================================= -->
+    <!-- MAIN -->
+    <!-- ========================================================= -->
+
+    <main class="main-content min-h-screen">
+
+        <!-- Top Navbar -->
+        <header class="sticky top-0 z-30 border-b border-slate-800/60 bg-[#0b0f19]/80 backdrop-blur-xl">
+
+            <div class="page-container flex h-[72px] items-center justify-between px-4 sm:px-6 lg:px-8">
+
+                <div class="flex items-center gap-3">
+
+                    <!-- Mobile Menu -->
+                    <button
+                        type="button"
+                        onclick="openSidebar()"
+                        class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 text-slate-300 lg:hidden"
+                    >
+                        <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+                            <path d="M4 7H20M4 12H20M4 17H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+
+
+                    <!-- Mobile Brand -->
+                    <a href="/dashboard" class="flex items-center gap-2.5 lg:hidden">
+
+                        <div class="logo-box flex h-9 w-9 items-center justify-center rounded-xl">
+
+                            <svg
+                                width="21"
+                                height="21"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                            >
+                                <path
+                                    d="M7.2 18.2H17.1C19.37 18.2 21 16.65 21 14.5C21 12.55 19.57 11.12 17.58 10.87C17.25 7.62 14.51 5.2 11.18 5.2C8.31 5.2 5.9 7.01 5.02 9.55C2.73 9.78 1 11.52 1 13.72C1 16.2 2.92 18.2 5.4 18.2H7.2Z"
+                                    fill="white"
+                                />
+
+                                <path
+                                    d="M12 9.2V15.3M9.7 12.9L12 15.3L14.3 12.9"
+                                    stroke="#4F46E5"
+                                    stroke-width="1.8"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
+
+                        </div>
+
+                        <span class="text-sm font-bold text-white">
+                            S-<span class="gradient-text">CLOUD</span>
+                        </span>
+
+                    </a>
+
+
+                    <!-- Desktop Page Title -->
+                    <div class="hidden lg:block">
+
+                        <div class="text-sm font-semibold text-white">
+                            Manage Files
+                        </div>
+
+                        <div class="text-[10px] text-slate-500">
+                            Manage and organize your uploaded files
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- Right -->
+                <div class="relative">
+
+                    <button
+                        id="profileButton"
+                        type="button"
+                        onclick="toggleProfileMenu()"
+                        class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/55 px-2 py-1.5 transition hover:bg-slate-800/60"
+                    >
+
+                        <div
+                            id="profileAvatar"
+                            class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 text-xs font-semibold text-white"
+                        >
+                            U
+                        </div>
+
+                        <div class="hidden text-left sm:block">
+
+                            <div
+                                id="profileName"
+                                class="max-w-[130px] truncate text-xs font-medium text-slate-200"
+                            >
+                                Loading...
+                            </div>
+
+                            <div class="text-[9px] text-slate-500">
+                                Publisher
+                            </div>
+
+                        </div>
+
+                        <svg
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            class="text-slate-500"
+                        >
+                            <path
+                                d="M6 9L12 15L18 9"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+
+                    </button>
+
+
+                    <!-- Profile Dropdown -->
+                    <div
+                        id="profileMenu"
+                        class="profile-menu dropdown absolute right-0 top-[48px] w-52 rounded-2xl p-2"
+                    >
+
+                        <div class="border-b border-slate-800/70 px-3 py-2.5">
+
+                            <div
+                                id="profileMenuName"
+                                class="truncate text-xs font-semibold text-white"
+                            >
+                                User
+                            </div>
+
+                            <div
+                                id="profileMenuEmail"
+                                class="mt-0.5 truncate text-[10px] text-slate-500"
+                            >
+                                —
+                            </div>
+
+                        </div>
+
+
+                        <div class="mt-1">
+
+                            <a
+                                href="/settings"
+                                class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs text-slate-400 transition hover:bg-slate-800/60 hover:text-white"
+                            >
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                                    <path
+                                        d="M12 15.2C13.77 15.2 15.2 13.77 15.2 12C15.2 10.23 13.77 8.8 12 8.8C10.23 8.8 8.8 10.23 8.8 12C8.8 13.77 10.23 15.2 12 15.2Z"
+                                        stroke="currentColor"
+                                        stroke-width="1.6"
+                                    />
+
+                                    <path
+                                        d="M19.4 15C19.62 14.63 19.79 14.23 19.91 13.82L21.45 12.62L20.02 10.15L18.12 10.55C17.5 9.93 16.74 9.45 15.91 9.16L15.45 7.3H12.55L12.09 9.16C11.26 9.45 10.5 9.93 9.88 10.55L7.98 10.15L6.55 12.62L8.09 13.82C8.21 14.23 8.38 14.63 8.6 15L8.09 16.84L10.55 18.27L11.91 17.02C12.35 17.08 12.79 17.08 13.23 17.02L14.59 18.27L17.05 16.84L16.54 15C16.76 14.63 16.93 14.23 17.05 13.82"
+                                        stroke="currentColor"
+                                        stroke-width="1.2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+
+                                <span>Settings</span>
+                            </a>
+
+
+                            <button
+                                type="button"
+                                onclick="logout()"
+                                class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs text-red-400 transition hover:bg-red-500/10"
+                            >
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                                    <path
+                                        d="M10 17L15 12L10 7"
+                                        stroke="currentColor"
+                                        stroke-width="1.7"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+
+                                    <path
+                                        d="M15 12H3"
+                                        stroke="currentColor"
+                                        stroke-width="1.7"
+                                        stroke-linecap="round"
+                                    />
+
+                                    <path
+                                        d="M14 4H19C20.1 4 21 4.9 21 6V18C21 19.1 20.1 20 19 20H14"
+                                        stroke="currentColor"
+                                        stroke-width="1.7"
+                                        stroke-linecap="round"
+                                    />
+                                </svg>
+
+                                <span>Logout</span>
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </header>
+
+
+        <!-- ===================================================== -->
+        <!-- CONTENT -->
+        <!-- ===================================================== -->
+
+        <div class="page-container px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+
+            <!-- Heading -->
+            <div class="mb-6">
+
+                <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+
+                    <div>
+
+                        <h1 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                            Manage Files
+                        </h1>
+
+                        <p class="mt-1.5 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                            View, rename, copy and manage all your uploaded files.
+                        </p>
+
+                    </div>
+
+
+                    <a
+                        href="/upload"
+                        class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-900/20 transition hover:from-blue-500 hover:to-indigo-500"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 16V4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M7.5 8.5L12 4L16.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 14.5V18.5C5 19.6 5.9 20.5 7 20.5H17C18.1 20.5 19 19.6 19 18.5V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+
+                        Upload File
+                    </a>
+
+                </div>
+
+            </div>
+
+
+            <!-- Stats -->
+            <div class="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+
+                <div class="glass rounded-2xl p-4">
+
+                    <div class="flex items-center justify-between">
+
+                        <span class="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            Total Files
+                        </span>
+
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z" stroke="currentColor" stroke-width="1.7"/>
+                            </svg>
+                        </div>
+
+                    </div>
+
+                    <div
+                        id="totalFiles"
+                        class="mt-2 text-xl font-semibold text-white"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+
+                <div class="glass rounded-2xl p-4">
+
+                    <div class="flex items-center justify-between">
+
+                        <span class="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            Active
+                        </span>
+
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M5 12.5L9.2 16.5L19 6.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+
+                    </div>
+
+                    <div
+                        id="activeFiles"
+                        class="mt-2 text-xl font-semibold text-white"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+
+                <div class="glass rounded-2xl p-4">
+
+                    <div class="flex items-center justify-between">
+
+                        <span class="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            Views
+                        </span>
+
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10 text-purple-400">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M2.5 12C4.6 7.7 8 5.5 12 5.5C16 5.5 19.4 7.7 21.5 12C19.4 16.3 16 18.5 12 18.5C8 18.5 4.6 16.3 2.5 12Z" stroke="currentColor" stroke-width="1.6"/>
+                                <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/>
+                            </svg>
+                        </div>
+
+                    </div>
+
+                    <div
+                        id="totalViews"
+                        class="mt-2 text-xl font-semibold text-white"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+
+                <div class="glass rounded-2xl p-4">
+
+                    <div class="flex items-center justify-between">
+
+                        <span class="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            Deleted
+                        </span>
+
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M5 7H19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                                <path d="M9 7V4H15V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                                <path d="M7 7L7.8 19H16.2L17 7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+
+                    </div>
+
+                    <div
+                        id="deletedFiles"
+                        class="mt-2 text-xl font-semibold text-white"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Main Files Card -->
+            <section class="glass overflow-hidden rounded-2xl">
+
+                <!-- Toolbar -->
+                <div class="border-b border-slate-800/70 p-4 sm:p-5">
+
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+                        <!-- Search -->
+                        <div class="relative w-full lg:max-w-md">
+
+                            <svg
+                                class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-600"
+                                width="17"
+                                height="17"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                            >
+                                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7"/>
+                                <path d="M16.2 16.2L21 21" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                            </svg>
+
+                            <input
+                                id="searchInput"
+                                type="text"
+                                autocomplete="off"
+                                placeholder="Search files..."
+                                class="search-input h-11 w-full rounded-xl pl-10 pr-10 text-xs text-slate-200 placeholder:text-slate-600"
+                            >
+
+                            <button
+                                id="clearSearch"
+                                type="button"
+                                onclick="clearSearch()"
+                                class="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-lg p-1.5 text-slate-600 transition hover:bg-slate-800 hover:text-slate-300"
+                            >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                    <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+
+                        </div>
+
+
+                        <!-- Sort / Refresh -->
+                        <div class="flex gap-2">
+
+                            <select
+                                id="sortSelect"
+                                class="select-box h-11 flex-1 rounded-xl px-3 text-xs sm:w-44 sm:flex-none"
+                            >
+                                <option value="newest">Newest First</option>
+                                <option value="oldest">Oldest First</option>
+                                <option value="views">Most Views</option>
+                                <option value="name">Name A-Z</option>
+                            </select>
+
+
+                            <button
+                                type="button"
+                                onclick="loadFiles()"
+                                title="Refresh files"
+                                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
+                            >
+                                <svg id="refreshIcon" width="17" height="17" viewBox="0 0 24 24" fill="none">
+                                    <path d="M20 11A8 8 0 0 0 6.4 5.2L4 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M4 4.5V7.5H7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M4 13A8 8 0 0 0 17.6 18.8L20 16.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M20 19.5V16.5H17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- Loading -->
+                <div id="loadingState" class="px-5 py-16 text-center">
+
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10">
+
+                        <div class="spinner"></div>
+
+                    </div>
+
+                    <div class="mt-4 text-sm font-medium text-slate-300">
+                        Loading files...
+                    </div>
+
+                    <div class="mt-1 text-xs text-slate-600">
+                        Please wait a moment.
+                    </div>
+
+                </div>
+
+
+                <!-- Error -->
+                <div id="errorState" class="hidden px-5 py-16 text-center">
+
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-400">
+
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
+                            <path d="M12 8V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <circle cx="12" cy="16.5" r="1" fill="currentColor"/>
+                        </svg>
+
+                    </div>
+
+                    <div class="mt-4 text-sm font-medium text-slate-300">
+                        Unable to load files
+                    </div>
+
+                    <div
+                        id="errorMessage"
+                        class="mx-auto mt-1 max-w-md text-xs leading-relaxed text-slate-600"
+                    >
+                        Something went wrong.
+                    </div>
+
+                    <button
+                        type="button"
+                        onclick="loadFiles()"
+                        class="mt-4 rounded-xl bg-blue-600/90 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-600"
+                    >
+                        Try Again
+                    </button>
+
+                </div>
+
+
+                <!-- Empty -->
+                <div id="emptyState" class="hidden px-5 py-16 text-center">
+
+                    <div class="empty-icon mx-auto flex h-20 w-20 items-center justify-center rounded-full">
+
+                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                class="text-slate-600"
+                            />
+
+                            <path
+                                d="M8 12H16"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                                class="text-slate-700"
+                            />
+                        </svg>
+
+                    </div>
+
+                    <div
+                        id="emptyTitle"
+                        class="mt-4 text-sm font-medium text-slate-300"
+                    >
+                        No files found
+                    </div>
+
+                    <div
+                        id="emptyDescription"
+                        class="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-slate-600"
+                    >
+                        Upload your first file to start earning.
+                    </div>
+
+                    <a
+                        id="emptyUploadButton"
+                        href="/upload"
+                        class="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600/90 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-600"
+                    >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 16V4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M7.5 8.5L12 4L16.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 14.5V18.5C5 19.6 5.9 20.5 7 20.5H17C18.1 20.5 19 19.6 19 18.5V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+
+                        Upload File
+                    </a>
+
+                </div>
+
+
+                <!-- Desktop Table -->
+                <div id="desktopFiles" class="hidden">
+
+                    <div class="table-wrapper">
+
+                        <table class="w-full min-w-[900px]">
+
+                            <thead>
+
+                                <tr class="border-b border-slate-800/60 text-left">
+
+                                    <th class="px-5 py-3.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        File Details
+                                    </th>
+
+                                    <th class="px-5 py-3.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        File Link
+                                    </th>
+
+                                    <th class="px-5 py-3.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        Views
+                                    </th>
+
+                                    <th class="px-5 py-3.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        Earnings
+                                    </th>
+
+                                    <th class="px-5 py-3.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        Status
+                                    </th>
+
+                                    <th class="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        Actions
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+                            <tbody id="filesTableBody"></tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+
+
+                <!-- Mobile Cards -->
+                <div id="mobileFiles" class="hidden divide-y divide-slate-800/60"></div>
+
+
+                <!-- Pagination -->
+                <div
+                    id="pagination"
+                    class="hidden border-t border-slate-800/70 px-4 py-4 sm:px-5"
+                >
+
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+                        <div
+                            id="paginationInfo"
+                            class="text-[10px] text-slate-600"
+                        >
+                            —
+                        </div>
+
+
+                        <div
+                            id="paginationButtons"
+                            class="flex items-center justify-center gap-1.5 sm:justify-end"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+        </div>
+
+    </main>
+
+
+    <!-- ========================================================= -->
+    <!-- ACTION MENU -->
+    <!-- ========================================================= -->
+
+    <div
+        id="globalActionMenu"
+        class="action-menu dropdown fixed z-[70] hidden w-40 rounded-xl p-1.5"
+    >
+
+        <button
+            id="actionCopy"
+            type="button"
+            class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
+        >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <rect x="8" y="8" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M16 8V6C16 4.9 15.1 4 14 4H6C4.9 4 4 4.9 4 6V14C4 15.1 4.9 16 6 16H8" stroke="currentColor" stroke-width="1.6"/>
+            </svg>
+            Copy Link
+        </button>
+
+
+        <button
+            id="actionRename"
+            type="button"
+            class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
+        >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M4 20H8L19 9C20.1 7.9 20.1 6.1 19 5C17.9 3.9 16.1 3.9 15 5L4 16V20Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                <path d="M13.5 6.5L17.5 10.5" stroke="currentColor" stroke-width="1.6"/>
+            </svg>
+            Rename
+        </button>
+
+
+        <div class="my-1 border-t border-slate-800/70"></div>
+
+
+        <button
+            id="actionDelete"
+            type="button"
+            class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs text-red-400 transition hover:bg-red-500/10"
+        >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M5 7H19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                <path d="M9 7V4H15V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                <path d="M7 7L7.8 19H16.2L17 7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            </svg>
+            Delete
+        </button>
+
+    </div>
+
+
+    <!-- ========================================================= -->
+    <!-- RENAME MODAL -->
+    <!-- ========================================================= -->
+
+    <div
+        id="renameModal"
+        class="modal-backdrop fixed inset-0 z-[80] hidden items-center justify-center p-4"
+    >
+
+        <div class="modal-box glass w-full max-w-md rounded-2xl p-5 sm:p-6">
+
+            <div class="flex items-start justify-between gap-4">
+
+                <div>
+
+                    <h3 class="text-base font-semibold text-white">
+                        Rename File
+                    </h3>
+
+                    <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                        Enter a new name for this file.
+                    </p>
+
+                </div>
+
+
+                <button
+                    type="button"
+                    onclick="closeRenameModal()"
+                    class="rounded-lg p-1.5 text-slate-600 transition hover:bg-slate-800 hover:text-slate-300"
+                >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                    </svg>
+                </button>
+
+            </div>
+
+
+            <div class="mt-5">
+
+                <label
+                    for="renameInput"
+                    class="mb-2 block text-[11px] font-medium text-slate-400"
+                >
+                    File Name
+                </label>
+
+                <input
+                    id="renameInput"
+                    type="text"
+                    maxlength="255"
+                    autocomplete="off"
+                    class="search-input h-11 w-full rounded-xl px-3 text-sm text-slate-200"
+                    placeholder="Enter file name"
+                >
+
+            </div>
+
+
+            <div class="mt-6 flex justify-end gap-2">
+
+                <button
+                    type="button"
+                    onclick="closeRenameModal()"
+                    class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                >
+                    Cancel
+                </button>
+
+
+                <button
+                    id="renameConfirmButton"
+                    type="button"
+                    onclick="confirmRename()"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-500"
+                >
+                    <span>Save Changes</span>
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ========================================================= -->
+    <!-- DELETE MODAL -->
+    <!-- ========================================================= -->
+
+    <div
+        id="deleteModal"
+        class="modal-backdrop fixed inset-0 z-[80] hidden items-center justify-center p-4"
+    >
+
+        <div class="modal-box glass w-full max-w-md rounded-2xl p-5 sm:p-6">
+
+            <div class="flex items-start gap-4">
+
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-400">
+
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 7H19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                        <path d="M9 7V4H15V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                        <path d="M7 7L7.8 19H16.2L17 7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                    </svg>
+
+                </div>
+
+
+                <div class="min-w-0">
+
+                    <h3 class="text-base font-semibold text-white">
+                        Delete File?
+                    </h3>
+
+                    <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                        This will mark the file as deleted. The file record will remain in your account.
+                    </p>
+
+                    <div
+                        id="deleteFileName"
+                        class="mt-3 truncate rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs font-medium text-slate-300"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="mt-6 flex justify-end gap-2">
+
+                <button
+                    type="button"
+                    onclick="closeDeleteModal()"
+                    class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                >
+                    Cancel
+                </button>
+
+
+                <button
+                    id="deleteConfirmButton"
+                    type="button"
+                    onclick="confirmDelete()"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600/90 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-red-600"
+                >
+                    <span>Delete File</span>
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ========================================================= -->
+    <!-- TOAST -->
+    <!-- ========================================================= -->
+
+    <div
+        id="toast"
+        class="toast fixed bottom-5 left-1/2 z-[100] w-[calc(100%-28px)] max-w-sm -translate-x-1/2 rounded-2xl border bg-slate-900/95 px-4 py-3 shadow-2xl backdrop-blur-xl"
+    >
+
+        <div class="flex items-start gap-3">
+
+            <div
+                id="toastIcon"
+                class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+            ></div>
+
+            <div class="min-w-0 flex-1">
+
+                <div
+                    id="toastTitle"
+                    class="text-xs font-semibold text-white"
+                >
+                    Done
+                </div>
+
+                <div
+                    id="toastMessage"
+                    class="mt-0.5 text-[10px] leading-relaxed text-slate-500"
+                >
+                    —
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ========================================================= -->
+    <!-- JAVASCRIPT -->
+    <!-- ========================================================= -->
+
+    <script>
+
+        /* =========================================================
+           STATE
+        ========================================================= */
+
+        let allFiles = [];
+        let filteredFiles = [];
+
+        let currentPage = 1;
+
+        const FILES_PER_PAGE = 10;
+
+        let activeActionFile = null;
+        let renameFile = null;
+        let deleteFile = null;
+
+        let toastTimer = null;
+
+
+        /* =========================================================
+           DOM
+        ========================================================= */
+
+        const searchInput = document.getElementById("searchInput");
+        const clearSearchButton = document.getElementById("clearSearch");
+        const sortSelect = document.getElementById("sortSelect");
+
+        const loadingState = document.getElementById("loadingState");
+        const errorState = document.getElementById("errorState");
+        const emptyState = document.getElementById("emptyState");
+
+        const desktopFiles = document.getElementById("desktopFiles");
+        const mobileFiles = document.getElementById("mobileFiles");
+
+        const pagination = document.getElementById("pagination");
+        const paginationInfo = document.getElementById("paginationInfo");
+        const paginationButtons = document.getElementById("paginationButtons");
+
+        const filesTableBody = document.getElementById("filesTableBody");
+
+
+        /* =========================================================
+           SIDEBAR
+        ========================================================= */
+
+        function openSidebar() {
+            document.body.classList.add("sidebar-open");
+        }
+
+
+        function closeSidebar() {
+            document.body.classList.remove("sidebar-open");
+        }
+
+
+        /* =========================================================
+           PROFILE
+        ========================================================= */
+
+        function toggleProfileMenu() {
+            const menu = document.getElementById("profileMenu");
+
+            menu.classList.toggle("show");
+        }
+
+
+        document.addEventListener("click", function(event) {
+
+            const menu = document.getElementById("profileMenu");
+            const button = document.getElementById("profileButton");
+
+            if (!menu || !button) return;
+
+            if (
+                menu.classList.contains("show") &&
+                !menu.contains(event.target) &&
+                !button.contains(event.target)
+            ) {
+                menu.classList.remove("show");
+            }
+
+        });
+
+
+        /* =========================================================
+           TOAST
+        ========================================================= */
+
+        function showToast(type, title, message) {
+
+            const toast = document.getElementById("toast");
+            const toastIcon = document.getElementById("toastIcon");
+            const toastTitle = document.getElementById("toastTitle");
+            const toastMessage = document.getElementById("toastMessage");
+
+            clearTimeout(toastTimer);
+
+            toast.classList.remove(
+                "toast-success",
+                "toast-error",
+                "toast-info"
+            );
+
+            toast.classList.add(
+                type === "success"
+                    ? "toast-success"
+                    : type === "error"
+                        ? "toast-error"
+                        : "toast-info"
+            );
+
+            if (type === "success") {
+
+                toastIcon.className =
+                    "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400";
+
+                toastIcon.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path
+                            d="M5 12.5L9.2 16.5L19 6.8"
+                            stroke="currentColor"
+                            stroke-width="1.8"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                `;
+
+            } else if (type === "error") {
+
+                toastIcon.className =
+                    "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-400";
+
+                toastIcon.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/>
+                        <path d="M12 8V13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                        <circle cx="12" cy="16" r="1" fill="currentColor"/>
+                    </svg>
+                `;
+
+            } else {
+
+                toastIcon.className =
+                    "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400";
+
+                toastIcon.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/>
+                        <path d="M12 10.5V16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                        <circle cx="12" cy="7.5" r="1" fill="currentColor"/>
+                    </svg>
+                `;
+
+            }
+
+            toastTitle.textContent = title || "Done";
+            toastMessage.textContent = message || "";
+
+            toast.classList.add("show");
+
+            toastTimer = setTimeout(function() {
+                toast.classList.remove("show");
+            }, 3500);
+        }
+
+
+        function showComingSoon(feature) {
+            showToast(
+                "info",
+                "Coming Soon",
+                `${feature} will be available soon.`
+            );
+        }
+
+
+        /* =========================================================
+           USER
+        ========================================================= */
+
+        async function loadUser() {
+
+            try {
+
+                const response = await fetch("/api/me", {
+                    method: "GET",
+                    credentials: "include"
+                });
+
+                if (!response.ok) {
+                    window.location.href = "/";
+                    return;
+                }
+
+                const result = await response.json();
+
+                if (
+                    result.status !== "success" ||
+                    !result.user
+                ) {
+                    window.location.href = "/";
+                    return;
+                }
+
+                const user = result.user;
+
+                const name =
+                    user.name ||
+                    user.email ||
+                    "Publisher";
+
+                const email =
+                    user.email ||
+                    "—";
+
+                const initials = getInitials(name);
+
+                document.getElementById("profileName").textContent = name;
+                document.getElementById("profileAvatar").textContent = initials;
+
+                document.getElementById("profileMenuName").textContent = name;
+                document.getElementById("profileMenuEmail").textContent = email;
+
+            } catch (error) {
+
+                window.location.href = "/";
+
+            }
+
+        }
+
+
+        function getInitials(name) {
+
+            const text = String(name || "U").trim();
+
+            if (!text) return "U";
+
+            const parts = text.split(/\s+/).filter(Boolean);
+
+            if (parts.length >= 2) {
+                return (
+                    parts[0][0] +
+                    parts[parts.length - 1][0]
+                ).toUpperCase();
+            }
+
+            return text.substring(0, 2).toUpperCase();
+
+        }
+
+
+        /* =========================================================
+           LOGOUT
+        ========================================================= */
+
+        async function logout() {
+
+            try {
+
+                await fetch("/api/logout", {
+                    method: "POST",
+                    credentials: "include"
+                });
+
+            } catch (error) {
+                // Redirect anyway.
+            }
+
+            window.location.href = "/";
+
+        }
+
+
+        /* =========================================================
+           FILE API
+        ========================================================= */
+
+        async function loadFiles() {
+
+            setLoadingState();
+
+            const refreshIcon =
+                document.getElementById("refreshIcon");
+
+            refreshIcon.classList.add("animate-spin");
+
+            try {
+
+                const response = await fetch("/api/files", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: "{}"
+                });
+
+                if (response.status === 401) {
+                    window.location.href = "/";
+                    return;
+                }
+
+                let result = null;
+
+                try {
+                    result = await response.json();
+                } catch (error) {
+                    throw new Error("Invalid server response.");
+                }
+
+                if (!response.ok) {
+                    throw new Error(
+                        result?.message ||
+                        "Unable to load files."
+                    );
+                }
+
+                if (result.status !== "success") {
+                    throw new Error(
+                        result?.message ||
+                        "Unable to load files."
+                    );
+                }
+
+                allFiles = Array.isArray(result.data)
+                    ? result.data
+                    : [];
+
+                currentPage = 1;
+
+                updateStats();
+
+                applyFilters();
+
+            } catch (error) {
+
+                console.error("loadFiles error:", error);
+
+                showError(
+                    error?.message ||
+                    "Something went wrong while loading your files."
+                );
+
+            } finally {
+
+                refreshIcon.classList.remove("animate-spin");
+
+            }
+
+        }
+
+
+        /* =========================================================
+           FILTER / SEARCH / SORT
+        ========================================================= */
+
+        function applyFilters() {
+
+            const search =
+                String(searchInput.value || "")
+                    .trim()
+                    .toLowerCase();
+
+            if (search) {
+
+                filteredFiles = allFiles.filter(function(file) {
+
+                    const name =
+                        String(file.file_name || "")
+                            .toLowerCase();
+
+                    const shortId =
+                        String(file.short_id || "")
+                            .toLowerCase();
+
+                    const id =
+                        String(file.id || "")
+                            .toLowerCase();
+
+                    return (
+                        name.includes(search) ||
+                        shortId.includes(search) ||
+                        id.includes(search)
+                    );
+
+                });
+
+            } else {
+
+                filteredFiles = [...allFiles];
+
+            }
+
+            sortFiles();
+
+            currentPage = 1;
+
+            renderFiles();
+
+        }
+
+
+        function sortFiles() {
+
+            const sort = sortSelect.value;
+
+            filteredFiles.sort(function(a, b) {
+
+                if (sort === "oldest") {
+
+                    return (
+                        getTimestamp(a.created_at) -
+                        getTimestamp(b.created_at)
+                    );
+
+                }
+
+
+                if (sort === "views") {
+
+                    return (
+                        Number(b.views || 0) -
+                        Number(a.views || 0)
+                    );
+
+                }
+
+
+                if (sort === "name") {
+
+                    return String(a.file_name || "")
+                        .localeCompare(
+                            String(b.file_name || ""),
+                            undefined,
+                            {
+                                sensitivity: "base"
+                            }
+                        );
+
+                }
+
+
+                // Newest first
+                return (
+                    getTimestamp(b.created_at) -
+                    getTimestamp(a.created_at)
+                );
+
+            });
+
+        }
+
+
+        searchInput.addEventListener(
+            "input",
+            function() {
+
+                clearSearchButton.classList.toggle(
+                    "hidden",
+                    !searchInput.value
+                );
+
+                applyFilters();
+
+            }
+        );
+
+
+        sortSelect.addEventListener(
+            "change",
+            function() {
+                applyFilters();
+            }
+        );
+
+
+        function clearSearch() {
+
+            searchInput.value = "";
+
+            clearSearchButton.classList.add("hidden");
+
+            applyFilters();
+
+            searchInput.focus();
+
+        }
+
+
+        /* =========================================================
+           RENDER
+        ========================================================= */
+
+        function renderFiles() {
+
+            hideAllStates();
+
+            if (filteredFiles.length === 0) {
+
+                showEmptyState();
+
+                return;
+
+            }
+
+            desktopFiles.classList.remove("hidden");
+            mobileFiles.classList.remove("hidden");
+            pagination.classList.remove("hidden");
+
+            const totalPages =
+                Math.max(
+                    1,
+                    Math.ceil(
+                        filteredFiles.length /
+                        FILES_PER_PAGE
+                    )
+                );
+
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+
+            const start =
+                (currentPage - 1) *
+                FILES_PER_PAGE;
+
+            const end =
+                start +
+                FILES_PER_PAGE;
+
+            const pageFiles =
+                filteredFiles.slice(start, end);
+
+            renderDesktop(pageFiles);
+
+            renderMobile(pageFiles);
+
+            renderPagination();
+
+        }
+
+
+        function renderDesktop(files) {
+
+            filesTableBody.innerHTML = files
+                .map(function(file) {
+
+                    const fileId =
+                        escapeHtml(
+                            String(
+                                file.short_id ||
+                                file.id ||
+                                ""
+                            )
+                        );
+
+                    const name =
+                        escapeHtml(
+                            file.file_name ||
+                            "Unnamed File"
+                        );
+
+                    const size =
+                        escapeHtml(
+                            file.file_size ||
+                            "Unknown size"
+                        );
+
+                    const views =
+                        formatNumber(
+                            Number(file.views || 0)
+                        );
+
+                    const date =
+                        formatDate(file.created_at);
+
+                    const status =
+                        String(
+                            file.status ||
+                            "active"
+                        ).toLowerCase();
+
+                    const deleted =
+                        status === "deleted";
+
+                    const link =
+                        getFileLink(file);
+
+                    return `
+                        <tr class="file-row border-b border-slate-800/50 last:border-0">
+
+                            <td class="px-5 py-4">
+
+                                <div class="flex min-w-0 items-center gap-3">
+
+                                    <div class="file-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-blue-400">
+
+                                        ${getFileIcon(file)}
+
+                                    </div>
+
+                                    <div class="min-w-0">
+
+                                        <div
+                                            title="${name}"
+                                            class="max-w-[280px] truncate text-xs font-medium ${deleted ? "text-slate-500 line-through" : "text-slate-200"}"
+                                        >
+                                            ${name}
+                                        </div>
+
+                                        <div class="mt-1 flex items-center gap-2">
+
+                                            <span class="text-[10px] text-slate-600">
+                                                ${size}
+                                            </span>
+
+                                            <span class="text-slate-800">
+                                                •
+                                            </span>
+
+                                            <span class="text-[10px] text-slate-600">
+                                                ${date}
+                                            </span>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </td>
+
+
+                            <td class="px-5 py-4">
+
+                                ${
+                                    deleted
+                                        ? `
+                                            <span class="text-[10px] text-slate-700">
+                                                Link unavailable
+                                            </span>
+                                        `
+                                        : `
+                                            <div class="flex items-center gap-2">
+
+                                                <a
+                                                    href="${escapeAttribute(link)}"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    title="${escapeAttribute(link)}"
+                                                    class="max-w-[210px] truncate text-[10px] text-blue-400 transition hover:text-blue-300"
+                                                >
+                                                    ${escapeHtml(link)}
+                                                </a>
+
+                                                <button
+                                                    type="button"
+                                                    onclick="copyFileLinkById('${escapeJs(file.short_id || file.id || "")}')"
+                                                    title="Copy link"
+                                                    class="shrink-0 rounded-lg p-1.5 text-slate-600 transition hover:bg-slate-800 hover:text-slate-300"
+                                                >
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                                        <rect x="8" y="8" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/>
+                                                        <path d="M16 8V6C16 4.9 15.1 4 14 4H6C4.9 4 4 4.9 4 6V14C4 15.1 4.9 16 6 16H8" stroke="currentColor" stroke-width="1.6"/>
+                                                    </svg>
+                                                </button>
+
+                                            </div>
+                                        `
+                                }
+
+                            </td>
+
+
+                            <td class="px-5 py-4 text-center">
+
+                                <span class="text-xs font-medium text-slate-300">
+                                    ${views}
+                                </span>
+
+                            </td>
+
+
+                            <td class="px-5 py-4 text-center">
+
+                                <span class="text-xs text-slate-600">
+                                    —
+                                </span>
+
+                            </td>
+
+
+                            <td class="px-5 py-4 text-center">
+
+                                ${getStatusBadge(status)}
+
+                            </td>
+
+
+                            <td class="px-5 py-4 text-right">
+
+                                ${
+                                    deleted
+                                        ? `
+                                            <span class="text-[10px] text-slate-700">
+                                                No actions
+                                            </span>
+                                        `
+                                        : `
+                                            <button
+                                                type="button"
+                                                onclick="openActionMenu(event, '${escapeJs(file.short_id || file.id || "")}')"
+                                                class="rounded-lg p-2 text-slate-600 transition hover:bg-slate-800/70 hover:text-slate-300"
+                                                title="Actions"
+                                            >
+                                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                                                    <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+                                                    <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                                                    <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
+                                                </svg>
+                                            </button>
+                                        `
+                                }
+
+                            </td>
+
+                        </tr>
+                    `;
+
+                })
+                .join("");
+
+        }
+
+
+        function renderMobile(files) {
+
+            mobileFiles.innerHTML = files
+                .map(function(file) {
+
+                    const fileKey =
+                        escapeJs(
+                            file.short_id ||
+                            file.id ||
+                            ""
+                        );
+
+                    const name =
+                        escapeHtml(
+                            file.file_name ||
+                            "Unnamed File"
+                        );
+
+                    const size =
+                        escapeHtml(
+                            file.file_size ||
+                            "Unknown size"
+                        );
+
+                    const views =
+                        formatNumber(
+                            Number(file.views || 0)
+                        );
+
+                    const date =
+                        formatDate(file.created_at);
+
+                    const status =
+                        String(
+                            file.status ||
+                            "active"
+                        ).toLowerCase();
+
+                    const deleted =
+                        status === "deleted";
+
+                    const link =
+                        getFileLink(file);
+
+                    return `
+                        <div class="mobile-file-card p-4">
+
+                            <div class="flex items-start gap-3">
+
+                                <div class="file-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-blue-400">
+
+                                    ${getFileIcon(file)}
+
+                                </div>
+
+
+                                <div class="min-w-0 flex-1">
+
+                                    <div class="flex items-start justify-between gap-2">
+
+                                        <div
+                                            title="${name}"
+                                            class="min-w-0 truncate text-xs font-medium ${deleted ? "text-slate-500 line-through" : "text-slate-200"}"
+                                        >
+                                            ${name}
+                                        </div>
+
+                                        ${
+                                            deleted
+                                                ? `
+                                                    <div class="shrink-0">
+                                                        ${getStatusBadge(status)}
+                                                    </div>
+                                                `
+                                                : `
+                                                    <button
+                                                        type="button"
+                                                        onclick="openActionMenu(event, '${fileKey}')"
+                                                        class="shrink-0 rounded-lg p-1.5 text-slate-600 hover:bg-slate-800 hover:text-slate-300"
+                                                    >
+                                                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                                                            <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+                                                            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                                                            <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
+                                                        </svg>
+                                                    </button>
+                                                `
+                                        }
+
+                                    </div>
+
+
+                                    <div class="mt-1 flex flex-wrap items-center gap-2">
+
+                                        <span class="text-[10px] text-slate-600">
+                                            ${size}
+                                        </span>
+
+                                        <span class="text-slate-800">
+                                            •
+                                        </span>
+
+                                        <span class="text-[10px] text-slate-600">
+                                            ${date}
+                                        </span>
+
+                                    </div>
+
+
+                                    <div class="mt-3 grid grid-cols-2 gap-2">
+
+                                        <div class="rounded-xl border border-slate-800/60 bg-slate-900/45 px-3 py-2">
+
+                                            <div class="text-[9px] uppercase tracking-wide text-slate-600">
+                                                Views
+                                            </div>
+
+                                            <div class="mt-0.5 text-xs font-medium text-slate-300">
+                                                ${views}
+                                            </div>
+
+                                        </div>
+
+
+                                        <div class="rounded-xl border border-slate-800/60 bg-slate-900/45 px-3 py-2">
+
+                                            <div class="text-[9px] uppercase tracking-wide text-slate-600">
+                                                Earnings
+                                            </div>
+
+                                            <div class="mt-0.5 text-xs font-medium text-slate-600">
+                                                —
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+
+                                    ${
+                                        deleted
+                                            ? `
+                                                <div class="mt-3 rounded-xl border border-red-500/10 bg-red-500/5 px-3 py-2 text-[10px] text-red-400/70">
+                                                    This file has been deleted.
+                                                </div>
+                                            `
+                                            : `
+                                                <div class="mt-3 flex items-center gap-2">
+
+                                                    <a
+                                                        href="${escapeAttribute(link)}"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        class="min-w-0 flex-1 truncate rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2.5 text-[10px] text-blue-400"
+                                                    >
+                                                        ${escapeHtml(link)}
+                                                    </a>
+
+                                                    <button
+                                                        type="button"
+                                                        onclick="copyFileLinkById('${fileKey}')"
+                                                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/50 text-slate-500 transition hover:bg-slate-800 hover:text-white"
+                                                        title="Copy link"
+                                                    >
+                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                                            <rect x="8" y="8" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/>
+                                                            <path d="M16 8V6C16 4.9 15.1 4 14 4H6C4.9 4 4 4.9 4 6V14C4 15.1 4.9 16 6 16H8" stroke="currentColor" stroke-width="1.6"/>
+                                                        </svg>
+                                                    </button>
+
+                                                </div>
+                                            `
+                                    }
+
+                                </div>
+
+                            </div>
+
+                        </div>
+                    `;
+
+                })
+                .join("");
+
+        }
+
+
+        /* =========================================================
+           STATUS
+        ========================================================= */
+
+        function getStatusBadge(status) {
+
+            if (status === "active") {
+
+                return `
+                    <span class="status-active inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-medium">
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                        Active
+                    </span>
+                `;
+
+            }
+
+
+            if (status === "deleted") {
+
+                return `
+                    <span class="status-deleted inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-medium">
+                        <span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>
+                        Deleted
+                    </span>
+                `;
+
+            }
+
+
+            return `
+                <span class="status-other inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-medium">
+                    <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+                    ${escapeHtml(formatStatus(status))}
+                </span>
+            `;
+
+        }
+
+
+        function formatStatus(status) {
+
+            return String(status || "unknown")
+                .replace(/[_-]+/g, " ")
+                .replace(/\b\w/g, function(char) {
+                    return char.toUpperCase();
+                });
+
+        }
+
+
+        /* =========================================================
+           FILE ICON
+        ========================================================= */
+
+        function getFileIcon(file) {
+
+            const name =
+                String(file.file_name || "")
+                    .toLowerCase();
+
+            if (
+                name.endsWith(".mp4") ||
+                name.endsWith(".mkv") ||
+                name.endsWith(".avi") ||
+                name.endsWith(".mov") ||
+                name.endsWith(".webm")
+            ) {
+
+                return `
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <rect x="4" y="5" width="16" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"/>
+                        <path d="M10 9L16 12L10 15V9Z" fill="currentColor"/>
+                    </svg>
+                `;
+
+            }
+
+
+            if (
+                name.endsWith(".zip") ||
+                name.endsWith(".rar") ||
+                name.endsWith(".7z")
+            ) {
+
+                return `
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M6 4H14L18 8V20H6V4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M14 4V8H18" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M10 9H14M10 12H14M10 15H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                `;
+
+            }
+
+
+            if (
+                name.endsWith(".pdf") ||
+                name.endsWith(".doc") ||
+                name.endsWith(".docx")
+            ) {
+
+                return `
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <path d="M6 4H14L18 8V20H6V4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M14 4V8H18" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M9 13H15M9 16H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                `;
+
+            }
+
+
+            return `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M6 4H14L18 8V20H6V4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                    <path d="M14 4V8H18" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                    <path d="M9 13H15M9 16H15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            `;
+
+        }
+
+
+        /* =========================================================
+           LINK
+        ========================================================= */
+
+        function getFileLink(file) {
+
+            const shortId =
+                file.short_id ||
+                file.id ||
+                "";
+
+            if (!shortId) {
+                return "#";
+            }
+
+            return (
+                window.location.origin +
+                "/file/" +
+                encodeURIComponent(shortId)
+            );
+
+        }
+
+
+        /* =========================================================
+           COPY
+        ========================================================= */
+
+        async function copyFileLinkById(fileId) {
+
+            const file =
+                findFile(fileId);
+
+            if (!file) {
+
+                showToast(
+                    "error",
+                    "File Not Found",
+                    "Unable to find this file."
+                );
+
+                return;
+
+            }
+
+            if (
+                String(file.status || "")
+                    .toLowerCase() === "deleted"
+            ) {
+
+                showToast(
+                    "error",
+                    "Unavailable",
+                    "Deleted files do not have an active link."
+                );
+
+                return;
+
+            }
+
+            const link =
+                getFileLink(file);
+
+            await copyText(link);
+
+        }
+
+
+        async function copyText(text) {
+
+            try {
+
+                if (
+                    navigator.clipboard &&
+                    window.isSecureContext
+                ) {
+
+                    await navigator.clipboard.writeText(text);
+
+                } else {
+
+                    const textarea =
+                        document.createElement("textarea");
+
+                    textarea.value = text;
+
+                    textarea.style.position = "fixed";
+                    textarea.style.left = "-9999px";
+                    textarea.style.top = "0";
+
+                    document.body.appendChild(textarea);
+
+                    textarea.focus();
+                    textarea.select();
+
+                    document.execCommand("copy");
+
+                    textarea.remove();
+
+                }
+
+                showToast(
+                    "success",
+                    "Link Copied",
+                    "The file link has been copied to your clipboard."
+                );
+
+            } catch (error) {
+
+                showToast(
+                    "error",
+                    "Copy Failed",
+                    "Unable to copy the link. Please copy it manually."
+                );
+
+            }
+
+        }
+
+
+        /* =========================================================
+           ACTION MENU
+        ========================================================= */
+
+        function openActionMenu(event, fileId) {
+
+            event.stopPropagation();
+
+            const file =
+                findFile(fileId);
+
+            if (!file) return;
+
+            if (
+                String(file.status || "")
+                    .toLowerCase() === "deleted"
+            ) {
+                return;
+            }
+
+            activeActionFile = file;
+
+            const menu =
+                document.getElementById("globalActionMenu");
+
+            const button =
+                event.currentTarget;
+
+            const rect =
+                button.getBoundingClientRect();
+
+            menu.classList.remove("hidden");
+
+            menu.style.visibility = "hidden";
+
+            const menuWidth = 160;
+
+            let left =
+                rect.right -
+                menuWidth;
+
+            let top =
+                rect.bottom +
+                7;
+
+            if (
+                left < 10
+            ) {
+                left = 10;
+            }
+
+            if (
+                left + menuWidth >
+                window.innerWidth - 10
+            ) {
+                left =
+                    window.innerWidth -
+                    menuWidth -
+                    10;
+            }
+
+            if (
+                top + 150 >
+                window.innerHeight
+            ) {
+                top =
+                    rect.top -
+                    157;
+            }
+
+            menu.style.left =
+                `${left}px`;
+
+            menu.style.top =
+                `${Math.max(10, top)}px`;
+
+            menu.style.visibility = "visible";
+
+            requestAnimationFrame(function() {
+                menu.classList.add("show");
+            });
+
+        }
+
+
+        function closeActionMenu() {
+
+            const menu =
+                document.getElementById("globalActionMenu");
+
+            menu.classList.remove("show");
+
+            setTimeout(function() {
+
+                if (!menu.classList.contains("show")) {
+                    menu.classList.add("hidden");
+                }
+
+            }, 150);
+
+            activeActionFile = null;
+
+        }
+
+
+        document.addEventListener("click", function(event) {
+
+            const menu =
+                document.getElementById("globalActionMenu");
+
+            if (!menu) return;
+
+            if (
+                !menu.contains(event.target)
+            ) {
+                closeActionMenu();
+            }
+
+        });
+
+
+        document
+            .getElementById("actionCopy")
+            .addEventListener(
+                "click",
+                async function() {
+
+                    if (!activeActionFile) return;
+
+                    const file =
+                        activeActionFile;
+
+                    closeActionMenu();
+
+                    await copyFileLinkById(
+                        file.short_id ||
+                        file.id
+                    );
+
+                }
+            );
+
+
+        document
+            .getElementById("actionRename")
+            .addEventListener(
+                "click",
+                function() {
+
+                    if (!activeActionFile) return;
+
+                    const file =
+                        activeActionFile;
+
+                    closeActionMenu();
+
+                    openRenameModal(file);
+
+                }
+            );
+
+
+        document
+            .getElementById("actionDelete")
+            .addEventListener(
+                "click",
+                function() {
+
+                    if (!activeActionFile) return;
+
+                    const file =
+                        activeActionFile;
+
+                    closeActionMenu();
+
+                    openDeleteModal(file);
+
+                }
+            );
+
+
+        /* =========================================================
+           RENAME
+        ========================================================= */
+
+        function openRenameModal(file) {
+
+            renameFile = file;
+
+            const modal =
+                document.getElementById("renameModal");
+
+            const input =
+                document.getElementById("renameInput");
+
+            input.value =
+                file.file_name ||
+                "";
+
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+
+            setTimeout(function() {
+
+                input.focus();
+
+                input.select();
+
+            }, 50);
+
+        }
+
+
+        function closeRenameModal() {
+
+            const modal =
+                document.getElementById("renameModal");
+
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+
+            renameFile = null;
+
+        }
+
+
+        async function confirmRename() {
+
+            if (!renameFile) return;
+
+            const input =
+                document.getElementById("renameInput");
+
+            const button =
+                document.getElementById("renameConfirmButton");
+
+            const newName =
+                String(input.value || "")
+                    .trim();
+
+            if (!newName) {
+
+                showToast(
+                    "error",
+                    "Invalid Name",
+                    "File name cannot be empty."
+                );
+
+                input.focus();
+
+                return;
+
+            }
+
+            if (newName.length > 255) {
+
+                showToast(
+                    "error",
+                    "Name Too Long",
+                    "File name must be 255 characters or less."
+                );
+
+                input.focus();
+
+                return;
+
+            }
+
+            const originalHTML =
+                button.innerHTML;
+
+            button.disabled = true;
+
+            button.innerHTML = `
+                <div class="spinner"></div>
+                <span>Saving...</span>
+            `;
+
+            try {
+
+                const fileId =
+                    renameFile.short_id ||
+                    renameFile.id;
+
+                const response =
+                    await fetch("/api/rename", {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            file_id: fileId,
+                            new_name: newName
+                        })
+                    });
+
+                if (response.status === 401) {
+                    window.location.href = "/";
+                    return;
+                }
+
+                const result =
+                    await response.json();
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        result?.message ||
+                        "Rename failed."
+                    );
+
+                }
+
+                if (
+                    result.status !== "success"
+                ) {
+
+                    throw new Error(
+                        result?.message ||
+                        "Rename failed."
+                    );
+
+                }
+
+                closeRenameModal();
+
+                showToast(
+                    "success",
+                    "File Renamed",
+                    "The file name has been updated successfully."
+                );
+
+                await loadFiles();
+
+            } catch (error) {
+
+                showToast(
+                    "error",
+                    "Rename Failed",
+                    error?.message ||
+                    "Unable to rename the file."
+                );
+
+            } finally {
+
+                button.disabled = false;
+
+                button.innerHTML =
+                    originalHTML;
+
+            }
+
+        }
+
+
+        document
+            .getElementById("renameInput")
+            .addEventListener(
+                "keydown",
+                function(event) {
+
+                    if (
+                        event.key === "Enter"
+                    ) {
+
+                        event.preventDefault();
+
+                        confirmRename();
+
+                    }
+
+                    if (
+                        event.key === "Escape"
+                    ) {
+
+                        closeRenameModal();
+
+                    }
+
+                }
+            );
+
+
+        /* =========================================================
+           DELETE
+        ========================================================= */
+
+        function openDeleteModal(file) {
+
+            deleteFile = file;
+
+            document.getElementById(
+                "deleteFileName"
+            ).textContent =
+                file.file_name ||
+                "Unnamed File";
+
+            const modal =
+                document.getElementById("deleteModal");
+
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+
+        }
+
+
+        function closeDeleteModal() {
+
+            const modal =
+                document.getElementById("deleteModal");
+
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+
+            deleteFile = null;
+
+        }
+
+
+        async function confirmDelete() {
+
+            if (!deleteFile) return;
+
+            const button =
+                document.getElementById(
+                    "deleteConfirmButton"
+                );
+
+            const originalHTML =
+                button.innerHTML;
+
+            button.disabled = true;
+
+            button.innerHTML = `
+                <div class="spinner"></div>
+                <span>Deleting...</span>
+            `;
+
+            try {
+
+                const fileId =
+                    deleteFile.short_id ||
+                    deleteFile.id;
+
+                const response =
+                    await fetch("/api/delete", {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            file_id: fileId
+                        })
+                    });
+
+                if (response.status === 401) {
+                    window.location.href = "/";
+                    return;
+                }
+
+                const result =
+                    await response.json();
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        result?.message ||
+                        "Delete failed."
+                    );
+
+                }
+
+                if (
+                    result.status !== "success"
+                ) {
+
+                    throw new Error(
+                        result?.message ||
+                        "Delete failed."
+                    );
+
+                }
+
+                closeDeleteModal();
+
+                showToast(
+                    "success",
+                    "File Deleted",
+                    "The file has been marked as deleted."
+                );
+
+                await loadFiles();
+
+            } catch (error) {
+
+                showToast(
+                    "error",
+                    "Delete Failed",
+                    error?.message ||
+                    "Unable to delete the file."
+                );
+
+            } finally {
+
+                button.disabled = false;
+
+                button.innerHTML =
+                    originalHTML;
+
+            }
+
+        }
+
+
+        /* =========================================================
+           PAGINATION
+        ========================================================= */
+
+        function renderPagination() {
+
+            const total =
+                filteredFiles.length;
+
+            const totalPages =
+                Math.max(
+                    1,
+                    Math.ceil(
+                        total /
+                        FILES_PER_PAGE
+                    )
+                );
+
+            const start =
+                total === 0
+                    ? 0
+                    : ((currentPage - 1) * FILES_PER_PAGE) + 1;
+
+            const end =
+                Math.min(
+                    currentPage * FILES_PER_PAGE,
+                    total
+                );
+
+            paginationInfo.textContent =
+                `Showing ${start}-${end} of ${total} files`;
+
+            paginationButtons.innerHTML = "";
+
+
+            // Previous
+            const previous =
+                document.createElement("button");
+
+            previous.type = "button";
+
+            previous.className =
+                "page-btn flex h-8 w-8 items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50 text-slate-500";
+
+            previous.disabled =
+                currentPage <= 1;
+
+            previous.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            `;
+
+            previous.onclick = function() {
+
+                if (currentPage > 1) {
+
+                    currentPage--;
+
+                    renderFiles();
+
+                    scrollToFilesTop();
+
+                }
+
+            };
+
+            paginationButtons.appendChild(previous);
+
+
+            // Page numbers
+            const pages =
+                getPaginationPages(
+                    currentPage,
+                    totalPages
+                );
+
+            pages.forEach(function(page) {
+
+                if (page === "...") {
+
+                    const dots =
+                        document.createElement("span");
+
+                    dots.className =
+                        "flex h-8 w-8 items-center justify-center text-xs text-slate-700";
+
+                    dots.textContent = "...";
+
+                    paginationButtons.appendChild(dots);
+
+                    return;
+
+                }
+
+
+                const button =
+                    document.createElement("button");
+
+                button.type = "button";
+
+                button.className =
+                    "page-btn flex h-8 min-w-8 items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50 px-2 text-[10px] font-medium text-slate-500";
+
+                if (
+                    page === currentPage
+                ) {
+                    button.classList.add("active");
+                }
+
+                button.textContent =
+                    page;
+
+                button.onclick = function() {
+
+                    currentPage = page;
+
+                    renderFiles();
+
+                    scrollToFilesTop();
+
+                };
+
+                paginationButtons.appendChild(button);
+
+            });
+
+
+            // Next
+            const next =
+                document.createElement("button");
+
+            next.type = "button";
+
+            next.className =
+                "page-btn flex h-8 w-8 items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50 text-slate-500";
+
+            next.disabled =
+                currentPage >= totalPages;
+
+            next.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            `;
+
+            next.onclick = function() {
+
+                if (currentPage < totalPages) {
+
+                    currentPage++;
+
+                    renderFiles();
+
+                    scrollToFilesTop();
+
+                }
+
+            };
+
+            paginationButtons.appendChild(next);
+
+        }
+
+
+        function getPaginationPages(
+            current,
+            total
+        ) {
+
+            if (total <= 7) {
+
+                return Array.from(
+                    { length: total },
+                    function(_, index) {
+                        return index + 1;
+                    }
+                );
+
+            }
+
+            const pages = [1];
+
+            if (current > 4) {
+                pages.push("...");
+            }
+
+            const start =
+                Math.max(2, current - 1);
+
+            const end =
+                Math.min(total - 1, current + 1);
+
+            for (
+                let i = start;
+                i <= end;
+                i++
+            ) {
+                pages.push(i);
+            }
+
+            if (current < total - 3) {
+                pages.push("...");
+            }
+
+            pages.push(total);
+
+            return pages;
+
+        }
+
+
+        function scrollToFilesTop() {
+
+            const section =
+                document.querySelector(
+                    "section.glass"
+                );
+
+            if (!section) return;
+
+            const top =
+                section.getBoundingClientRect().top +
+                window.scrollY -
+                90;
+
+            window.scrollTo({
+                top,
+                behavior: "smooth"
+            });
+
+        }
+
+
+        /* =========================================================
+           STATES
+        ========================================================= */
+
+        function hideAllStates() {
+
+            loadingState.classList.add("hidden");
+            errorState.classList.add("hidden");
+            emptyState.classList.add("hidden");
+
+        }
+
+
+        function setLoadingState() {
+
+            hideAllStates();
+
+            desktopFiles.classList.add("hidden");
+            mobileFiles.classList.add("hidden");
+            pagination.classList.add("hidden");
+
+            loadingState.classList.remove("hidden");
+
+        }
+
+
+        function showError(message) {
+
+            hideAllStates();
+
+            desktopFiles.classList.add("hidden");
+            mobileFiles.classList.add("hidden");
+            pagination.classList.add("hidden");
+
+            document.getElementById(
+                "errorMessage"
+            ).textContent =
+                message;
+
+            errorState.classList.remove("hidden");
+
+        }
+
+
+        function showEmptyState() {
+
+            hideAllStates();
+
+            desktopFiles.classList.add("hidden");
+            mobileFiles.classList.add("hidden");
+            pagination.classList.add("hidden");
+
+            const hasSearch =
+                String(
+                    searchInput.value || ""
+                ).trim().length > 0;
+
+            document.getElementById(
+                "emptyTitle"
+            ).textContent =
+                hasSearch
+                    ? "No matching files"
+                    : "No files found";
+
+            document.getElementById(
+                "emptyDescription"
+            ).textContent =
+                hasSearch
+                    ? "Try another file name, ID or search term."
+                    : "Upload your first file to start earning.";
+
+            document.getElementById(
+                "emptyUploadButton"
+            ).classList.toggle(
+                "hidden",
+                hasSearch
+            );
+
+            emptyState.classList.remove("hidden");
+
+        }
+
+
+        /* =========================================================
+           STATS
+        ========================================================= */
+
+        function updateStats() {
+
+            const total =
+                allFiles.length;
+
+            const active =
+                allFiles.filter(function(file) {
+
+                    return (
+                        String(
+                            file.status || ""
+                        ).toLowerCase() ===
+                        "active"
+                    );
+
+                }).length;
+
+            const deleted =
+                allFiles.filter(function(file) {
+
+                    return (
+                        String(
+                            file.status || ""
+                        ).toLowerCase() ===
+                        "deleted"
+                    );
+
+                }).length;
+
+            const views =
+                allFiles.reduce(
+                    function(sum, file) {
+
+                        return (
+                            sum +
+                            Number(
+                                file.views || 0
+                            )
+                        );
+
+                    },
+                    0
+                );
+
+            document.getElementById(
+                "totalFiles"
+            ).textContent =
+                formatNumber(total);
+
+            document.getElementById(
+                "activeFiles"
+            ).textContent =
+                formatNumber(active);
+
+            document.getElementById(
+                "deletedFiles"
+            ).textContent =
+                formatNumber(deleted);
+
+            document.getElementById(
+                "totalViews"
+            ).textContent =
+                formatNumber(views);
+
+        }
+
+
+        /* =========================================================
+           FIND FILE
+        ========================================================= */
+
+        function findFile(fileId) {
+
+            const target =
+                String(fileId || "");
+
+            return allFiles.find(
+                function(file) {
+
+                    return (
+                        String(file.short_id || "") === target ||
+                        String(file.id || "") === target
+                    );
+
+                }
+            ) || null;
+
+        }
+
+
+        /* =========================================================
+           DATE / NUMBER
+        ========================================================= */
+
+        function getTimestamp(value) {
+
+            if (!value) return 0;
+
+            if (
+                typeof value === "number"
+            ) {
+                return value;
+            }
+
+            let text =
+                String(value).trim();
+
+            if (!text) return 0;
+
+            // SQLite CURRENT_TIMESTAMP:
+            // "2026-09-19 12:30:00"
+            if (
+                /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
+                    .test(text)
+            ) {
+
+                text =
+                    text.replace(
+                        " ",
+                        "T"
+                    ) + "Z";
+
+            }
+
+            const timestamp =
+                Date.parse(text);
+
+            return Number.isNaN(timestamp)
+                ? 0
+                : timestamp;
+
+        }
+
+
+        function formatDate(value) {
+
+            const timestamp =
+                getTimestamp(value);
+
+            if (!timestamp) {
+                return "Unknown date";
+            }
+
+            const date =
+                new Date(timestamp);
+
+            return date.toLocaleDateString(
+                "en-IN",
+                {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric"
+                }
+            );
+
+        }
+
+
+        function formatNumber(number) {
+
+            const value =
+                Number(number || 0);
+
+            return new Intl.NumberFormat(
+                "en-IN"
+            ).format(value);
+
+        }
+
+
+        /* =========================================================
+           ESCAPE HELPERS
+        ========================================================= */
+
+        function escapeHtml(value) {
+
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+
+        }
+
+
+        function escapeAttribute(value) {
+
+            return escapeHtml(value);
+
+        }
+
+
+        function escapeJs(value) {
+
+            return String(value ?? "")
+                .replace(/\\/g, "\\\\")
+                .replace(/'/g, "\\'")
+                .replace(/\r/g, "\\r")
+                .replace(/\n/g, "\\n");
+
+        }
+
+
+        /* =========================================================
+           MODAL BACKDROP / ESCAPE
+        ========================================================= */
+
+        document
+            .getElementById("renameModal")
+            .addEventListener(
+                "click",
+                function(event) {
+
+                    if (
+                        event.target ===
+                        this
+                    ) {
+                        closeRenameModal();
+                    }
+
+                }
+            );
+
+
+        document
+            .getElementById("deleteModal")
+            .addEventListener(
+                "click",
+                function(event) {
+
+                    if (
+                        event.target ===
+                        this
+                    ) {
+                        closeDeleteModal();
+                    }
+
+                }
+            );
+
+
+        document.addEventListener(
+            "keydown",
+            function(event) {
+
+                if (
+                    event.key === "Escape"
+                ) {
+
+                    closeActionMenu();
+                    closeRenameModal();
+                    closeDeleteModal();
+                    closeSidebar();
+
+                }
+
+            }
+        );
+
+
+        /* =========================================================
+           INITIAL LOAD
+        ========================================================= */
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            async function() {
+
+                await loadUser();
+
+                await loadFiles();
+
+            }
+        );
+
+    </script>
+
+</body>
+</html>

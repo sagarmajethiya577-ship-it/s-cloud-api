@@ -1,0 +1,2717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Upload File | S-CLOUD</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Poppins", sans-serif;
+            background:
+                radial-gradient(
+                    circle at 20% 10%,
+                    rgba(37, 99, 235, .12),
+                    transparent 32%
+                ),
+                radial-gradient(
+                    circle at 85% 15%,
+                    rgba(124, 58, 237, .10),
+                    transparent 30%
+                ),
+                #0b0f19;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        .glass {
+            background: rgba(17, 24, 39, .72);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(71, 85, 105, .28);
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, .22);
+        }
+
+        .sidebar {
+            background: rgba(13, 19, 32, .96);
+            border-right: 1px solid rgba(71, 85, 105, .22);
+        }
+
+        .gradient-text {
+            background: linear-gradient(
+                90deg,
+                #60a5fa,
+                #818cf8,
+                #c084fc
+            );
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .logo-box {
+            background: linear-gradient(
+                135deg,
+                #2563eb,
+                #4f46e5,
+                #9333ea
+            );
+            box-shadow:
+                0 10px 30px rgba(79, 70, 229, .28);
+        }
+
+        .sidebar-link {
+            transition:
+                background .2s ease,
+                color .2s ease,
+                border-color .2s ease;
+        }
+
+        .sidebar-link:hover {
+            background: rgba(30, 41, 59, .65);
+            color: #f8fafc;
+        }
+
+        .sidebar-link.active {
+            background:
+                linear-gradient(
+                    90deg,
+                    rgba(37, 99, 235, .18),
+                    rgba(99, 102, 241, .12)
+                );
+            color: #fff;
+            border-color: rgba(96, 165, 250, .18);
+        }
+
+        .input-box {
+            background: rgba(15, 23, 42, .64);
+            border: 1px solid rgba(71, 85, 105, .35);
+            transition:
+                border-color .2s ease,
+                box-shadow .2s ease;
+        }
+
+        .input-box:focus-within {
+            border-color: rgba(96, 165, 250, .55);
+            box-shadow:
+                0 0 0 3px rgba(59, 130, 246, .08);
+        }
+
+        textarea,
+        input {
+            outline: none;
+        }
+
+        .tab-button {
+            transition: all .2s ease;
+        }
+
+        .tab-button.active {
+            background: rgba(37, 99, 235, .16);
+            color: #93c5fd;
+            border-color: rgba(96, 165, 250, .18);
+        }
+
+        .upload-button {
+            background:
+                linear-gradient(
+                    135deg,
+                    #2563eb,
+                    #4f46e5,
+                    #7c3aed
+                );
+            box-shadow:
+                0 12px 35px rgba(79, 70, 229, .22);
+            transition:
+                transform .2s ease,
+                opacity .2s ease,
+                box-shadow .2s ease;
+        }
+
+        .upload-button:hover {
+            transform: translateY(-1px);
+            box-shadow:
+                0 16px 40px rgba(79, 70, 229, .30);
+        }
+
+        .upload-button:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .mobile-overlay {
+            display: none;
+        }
+
+        @media (max-width: 1023px) {
+            .desktop-sidebar {
+                transform: translateX(-100%);
+                transition: transform .25s ease;
+                z-index: 60;
+            }
+
+            .desktop-sidebar.open {
+                transform: translateX(0);
+            }
+
+            .mobile-overlay.show {
+                display: block;
+                position: fixed;
+                inset: 0;
+                z-index: 50;
+                background: rgba(0, 0, 0, .55);
+            }
+
+            .main-content {
+                margin-left: 0 !important;
+            }
+        }
+
+        .toast {
+            transition:
+                opacity .25s ease,
+                transform .25s ease;
+        }
+
+        .toast.hidden-toast {
+            opacity: 0;
+            transform: translateY(10px);
+            pointer-events: none;
+        }
+
+        .link-result {
+            word-break: break-all;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- MOBILE OVERLAY -->
+    <div
+        id="mobileOverlay"
+        class="mobile-overlay"
+        onclick="closeSidebar()"
+    ></div>
+
+
+    <!-- ======================================================
+         SIDEBAR
+    ======================================================= -->
+
+    <aside
+        id="sidebar"
+        class="desktop-sidebar sidebar fixed left-0 top-0 bottom-0 w-64 flex flex-col"
+    >
+
+        <!-- BRAND -->
+        <div class="h-20 px-5 flex items-center">
+
+            <a
+                href="/dashboard"
+                class="flex items-center gap-3"
+            >
+
+                <div
+                    class="logo-box w-10 h-10 rounded-xl flex items-center justify-center"
+                >
+
+                    <svg
+                        width="23"
+                        height="23"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                    >
+                        <path
+                            d="M7.5 18.5H17a4 4 0 0 0 .5-7.97A5.5 5.5 0 0 0 7 9.5a4.5 4.5 0 0 0 .5 9Z"
+                            stroke="white"
+                            stroke-width="1.7"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+
+                        <path
+                            d="M12 11v6"
+                            stroke="white"
+                            stroke-width="1.7"
+                            stroke-linecap="round"
+                        />
+
+                        <path
+                            d="m9.8 14 2.2 2.2 2.2-2.2"
+                            stroke="white"
+                            stroke-width="1.7"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+
+                </div>
+
+
+                <div>
+
+                    <div class="text-lg font-semibold tracking-wide text-white">
+                        S-<span class="gradient-text">CLOUD</span>
+                    </div>
+
+                    <div class="text-[9px] text-slate-500 -mt-1">
+                        Publisher Network
+                    </div>
+
+                </div>
+
+            </a>
+
+        </div>
+
+
+        <!-- NAV -->
+        <nav class="px-3 pt-3 space-y-1 flex-1">
+
+            <a
+                href="/dashboard"
+                class="sidebar-link flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-400 border border-transparent"
+            >
+
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path
+                        d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+
+                Analytics
+
+            </a>
+
+
+            <a
+                href="/upload"
+                class="sidebar-link active flex items-center gap-3 px-3 py-3 rounded-xl text-sm border"
+            >
+
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path
+                        d="M12 16V4"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                    />
+
+                    <path
+                        d="m7.5 8.5 4.5-4.5 4.5 4.5"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+
+                    <path
+                        d="M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5V14"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                    />
+                </svg>
+
+                Upload File
+
+            </a>
+
+
+            <a
+                href="/files"
+                class="sidebar-link flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-400 border border-transparent"
+            >
+
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path
+                        d="M4 6.5A2.5 2.5 0 0 1 6.5 4H10l2 2h5.5A2.5 2.5 0 0 1 20 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Z"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+
+                Manage Files
+
+            </a>
+
+
+            <button
+                onclick="comingSoon()"
+                class="sidebar-link w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-400 border border-transparent text-left"
+            >
+
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path
+                        d="M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                    />
+
+                    <path
+                        d="M8 8h8M8 12h8M8 16h5"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                    />
+                </svg>
+
+                API Document
+
+                <span class="ml-auto text-[8px] text-slate-600">
+                    SOON
+                </span>
+
+            </button>
+
+
+            <button
+                onclick="comingSoon()"
+                class="sidebar-link w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-slate-400 border border-transparent text-left"
+            >
+
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path
+                        d="M21 11.5a8.38 8.38 0 0 1-9 8.3 8.7 8.7 0 0 1-4-.9L3 20l1.2-4.2A8.2 8.2 0 0 1 3.8 12 8.4 8.4 0 1 1 21 11.5Z"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linejoin="round"
+                    />
+
+                    <path
+                        d="M8 12h.01M12 12h.01M16 12h.01"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                    />
+                </svg>
+
+                Telegram Support
+
+                <span class="ml-auto text-[8px] text-slate-600">
+                    SOON
+                </span>
+
+            </button>
+
+        </nav>
+
+
+        <!-- START EARNING -->
+        <div class="p-3">
+
+            <div class="rounded-2xl p-4 border border-blue-500/10 bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-purple-500/10">
+
+                <div class="text-xl mb-2">
+                    💰
+                </div>
+
+                <p class="text-xs font-semibold text-slate-200">
+                    Start Earning
+                </p>
+
+                <p class="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                    Upload your files and earn from valid downloads.
+                </p>
+
+                <div class="mt-3 h-1 rounded-full bg-slate-800 overflow-hidden">
+
+                    <div class="h-full w-2/3 rounded-full bg-gradient-to-r from-blue-500 to-purple-500"></div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- ======================================================
+         MAIN
+    ======================================================= -->
+
+    <main class="main-content ml-64 min-h-screen">
+
+        <!-- TOP BAR -->
+        <header class="sticky top-0 z-40 px-4 sm:px-6 py-4">
+
+            <div class="glass rounded-2xl px-4 sm:px-5 h-14 flex items-center justify-between">
+
+                <div class="flex items-center gap-3">
+
+                    <button
+                        onclick="openSidebar()"
+                        class="lg:hidden w-9 h-9 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-center text-slate-300"
+                    >
+
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M4 7h16M4 12h16M4 17h16"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linecap="round"
+                            />
+                        </svg>
+
+                    </button>
+
+
+                    <div class="lg:hidden flex items-center gap-2">
+
+                        <div class="logo-box w-8 h-8 rounded-lg flex items-center justify-center">
+
+                            <svg
+                                width="18"
+                                height="18"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                            >
+                                <path
+                                    d="M7.5 18.5H17a4 4 0 0 0 .5-7.97A5.5 5.5 0 0 0 7 9.5a4.5 4.5 0 0 0 .5 9Z"
+                                    stroke="white"
+                                    stroke-width="1.7"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
+
+                        </div>
+
+                        <span class="font-semibold text-sm">
+                            S-<span class="gradient-text">CLOUD</span>
+                        </span>
+
+                    </div>
+
+
+                    <div class="hidden lg:block">
+
+                        <p class="text-xs text-slate-500">
+                            Publisher Panel
+                        </p>
+
+                        <p class="text-sm font-medium text-slate-200">
+                            Upload File
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <!-- PROFILE -->
+                <div class="relative">
+
+                    <button
+                        id="profileButton"
+                        onclick="toggleProfile()"
+                        class="flex items-center gap-3"
+                    >
+
+                        <div
+                            id="profileAvatar"
+                            class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-semibold text-white"
+                        >
+                            SC
+                        </div>
+
+                        <div class="hidden sm:block text-left">
+
+                            <p
+                                id="profileName"
+                                class="text-xs font-medium text-slate-200"
+                            >
+                                Publisher
+                            </p>
+
+                            <p class="text-[9px] text-slate-600">
+                                Publisher
+                            </p>
+
+                        </div>
+
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            class="text-slate-500"
+                        >
+                            <path
+                                d="m7 10 5 5 5-5"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+
+                    </button>
+
+
+                    <div
+                        id="profileMenu"
+                        class="hidden absolute right-0 top-12 w-48 glass rounded-xl p-2"
+                    >
+
+                        <a
+                            href="/settings"
+                            class="flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs text-slate-400 hover:bg-slate-800/60 hover:text-white"
+                        >
+                            Account Settings
+                        </a>
+
+                        <a
+                            href="/withdraw"
+                            class="flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs text-slate-400 hover:bg-slate-800/60 hover:text-white"
+                        >
+                            Withdraw Funds
+                        </a>
+
+                        <div class="my-1 border-t border-slate-800/70"></div>
+
+                        <button
+                            onclick="logout()"
+                            class="w-full text-left px-3 py-2.5 rounded-lg text-xs text-red-400 hover:bg-red-500/5"
+                        >
+                            Logout
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </header>
+
+
+        <!-- CONTENT -->
+        <section class="px-4 sm:px-6 pb-10">
+
+            <div class="max-w-7xl mx-auto">
+
+
+                <!-- PAGE HEADING -->
+                <div class="mb-6">
+
+                    <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+
+                        <div>
+
+                            <p class="text-[10px] uppercase tracking-[.18em] text-blue-400/80 mb-2">
+                                Publisher Workspace
+                            </p>
+
+                            <h1 class="text-2xl sm:text-3xl font-semibold text-white">
+                                Upload File
+                            </h1>
+
+                            <p class="text-xs text-slate-500 mt-2">
+                                Add your Google Drive files and start earning from valid downloads.
+                            </p>
+
+                        </div>
+
+
+                        <div class="flex items-center gap-2">
+
+                            <div class="px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+
+                                <div class="flex items-center gap-2">
+
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+
+                                    <span class="text-[10px] text-emerald-400">
+                                        Secure Upload
+                                    </span>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- EARN BANNER -->
+                <div class="glass rounded-2xl p-5 sm:p-6 mb-6 overflow-hidden relative">
+
+                    <div class="absolute -right-12 -top-16 w-40 h-40 rounded-full bg-blue-600/10 blur-3xl"></div>
+                    <div class="absolute right-20 -bottom-20 w-48 h-48 rounded-full bg-purple-600/10 blur-3xl"></div>
+
+                    <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+
+                        <div class="flex items-start gap-4">
+
+                            <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-blue-400/10 flex items-center justify-center text-2xl flex-shrink-0">
+                                💰
+                            </div>
+
+                            <div>
+
+                                <p class="text-sm font-semibold text-white">
+                                    Upload & Earn Money 🤑
+                                </p>
+
+                                <p class="text-xs text-slate-500 mt-1 max-w-xl">
+                                    Upload your files through S-CLOUD and earn from valid downloads generated through your files.
+                                </p>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="text-left md:text-right">
+
+                            <p class="text-[9px] uppercase tracking-wider text-slate-600">
+                                Your uploads
+                            </p>
+
+                            <p class="text-lg font-semibold text-slate-200 mt-1">
+                                Ready to earn
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- WORKSPACE GRID -->
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+
+                    <!-- LEFT -->
+                    <div class="xl:col-span-2 space-y-6">
+
+
+                        <!-- UPLOAD CARD -->
+                        <div class="glass rounded-2xl overflow-hidden">
+
+                            <div class="p-5 sm:p-6 border-b border-slate-800/60">
+
+                                <div class="flex items-center justify-between gap-4">
+
+                                    <div>
+
+                                        <h2 class="text-sm font-semibold text-slate-100">
+                                            Add Google Drive Files
+                                        </h2>
+
+                                        <p class="text-[10px] text-slate-500 mt-1">
+                                            Paste one or multiple Google Drive URLs.
+                                        </p>
+
+                                    </div>
+
+
+                                    <div class="hidden sm:flex items-center gap-2 text-[9px] text-slate-600">
+
+                                        <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+
+                                        Drive API
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="p-5 sm:p-6">
+
+                                <!-- TABS -->
+                                <div class="flex gap-2 mb-5">
+
+                                    <button
+                                        id="linksTab"
+                                        onclick="switchSource('links')"
+                                        class="tab-button active px-4 py-2.5 rounded-xl border border-transparent text-[11px] font-medium text-slate-300"
+                                    >
+                                        Drive Links
+                                    </button>
+
+                                    <button
+                                        id="folderTab"
+                                        onclick="switchSource('folder')"
+                                        class="tab-button px-4 py-2.5 rounded-xl border border-transparent text-[11px] font-medium text-slate-500"
+                                    >
+                                        Drive Folder
+                                    </button>
+
+                                </div>
+
+
+                                <!-- LINKS SOURCE -->
+                                <div id="linksPanel">
+
+                                    <label class="block text-[10px] text-slate-500 mb-2">
+                                        Google Drive URLs
+                                    </label>
+
+                                    <div class="input-box rounded-2xl p-3">
+
+                                        <textarea
+                                            id="driveLinks"
+                                            rows="7"
+                                            placeholder="https://drive.google.com/file/d/...
+https://drive.google.com/file/d/...
+https://drive.google.com/file/d/..."
+                                            class="w-full resize-none bg-transparent text-xs text-slate-200 placeholder:text-slate-700"
+                                        ></textarea>
+
+
+                                        <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-800/60">
+
+                                            <span
+                                                id="linkCount"
+                                                class="text-[9px] text-slate-600"
+                                            >
+                                                0 links
+                                            </span>
+
+
+                                            <button
+                                                onclick="pasteFromClipboard()"
+                                                class="px-3 py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-800 text-[9px] text-slate-400 hover:text-slate-200"
+                                            >
+                                                Paste from Clipboard
+                                            </button>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+
+                                <!-- FOLDER SOURCE -->
+                                <div
+                                    id="folderPanel"
+                                    class="hidden"
+                                >
+
+                                    <label class="block text-[10px] text-slate-500 mb-2">
+                                        Google Drive Folder URL
+                                    </label>
+
+                                    <div class="input-box rounded-2xl px-4 py-3">
+
+                                        <input
+                                            id="folderUrl"
+                                            type="url"
+                                            placeholder="https://drive.google.com/drive/folders/..."
+                                            class="w-full bg-transparent text-xs text-slate-200 placeholder:text-slate-700"
+                                        >
+
+                                    </div>
+
+
+                                    <p class="text-[9px] text-amber-500/70 mt-2">
+                                        Current backend processes the first file found inside the folder.
+                                    </p>
+
+                                </div>
+
+
+                                <!-- OPTIONAL LABEL -->
+                                <div class="mt-5">
+
+                                    <label class="block text-[10px] text-slate-500 mb-2">
+                                        Upload Label
+                                        <span class="text-slate-700">(optional)</span>
+                                    </label>
+
+                                    <div class="input-box rounded-xl px-4 py-3">
+
+                                        <input
+                                            id="uploadLabel"
+                                            type="text"
+                                            maxlength="120"
+                                            placeholder="Example: Movie Pack 2026"
+                                            class="w-full bg-transparent text-xs text-slate-200 placeholder:text-slate-700"
+                                        >
+
+                                    </div>
+
+                                    <p class="text-[9px] text-slate-700 mt-2">
+                                        This label is used only as a queue display name.
+                                    </p>
+
+                                </div>
+
+
+                                <!-- ACTION -->
+                                <div class="mt-6 flex flex-col sm:flex-row sm:items-center gap-3">
+
+                                    <button
+                                        id="startUploadButton"
+                                        onclick="startUpload()"
+                                        class="upload-button w-full sm:w-auto px-6 py-3 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-2"
+                                    >
+
+                                        <svg
+                                            width="17"
+                                            height="17"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                        >
+                                            <path
+                                                d="M12 16V4"
+                                                stroke="currentColor"
+                                                stroke-width="1.8"
+                                                stroke-linecap="round"
+                                            />
+
+                                            <path
+                                                d="m7.5 8.5 4.5-4.5 4.5 4.5"
+                                                stroke="currentColor"
+                                                stroke-width="1.8"
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                            />
+
+                                            <path
+                                                d="M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5V14"
+                                                stroke="currentColor"
+                                                stroke-width="1.8"
+                                                stroke-linecap="round"
+                                            />
+                                        </svg>
+
+                                        Start Upload
+
+                                    </button>
+
+
+                                    <p class="text-[9px] text-slate-600">
+                                        Your Google Drive file remains on your account. S-CLOUD processes a copy.
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <!-- QUEUE -->
+                        <div class="glass rounded-2xl overflow-hidden">
+
+                            <div class="p-5 sm:p-6 border-b border-slate-800/60 flex items-center justify-between gap-4">
+
+                                <div>
+
+                                    <h2 class="text-sm font-semibold text-slate-100">
+                                        Upload Queue
+                                    </h2>
+
+                                    <p class="text-[10px] text-slate-500 mt-1">
+                                        Track verification and link processing.
+                                    </p>
+
+                                </div>
+
+
+                                <span
+                                    id="queueCount"
+                                    class="text-[9px] px-2.5 py-1 rounded-lg bg-slate-800/60 text-slate-500"
+                                >
+                                    0 files
+                                </span>
+
+                            </div>
+
+
+                            <div
+                                id="queueList"
+                                class="p-5 sm:p-6"
+                            >
+
+                                <div
+                                    id="queueEmpty"
+                                    class="py-12 text-center"
+                                >
+
+                                    <div class="w-12 h-12 rounded-2xl bg-slate-900/70 border border-slate-800/70 mx-auto flex items-center justify-center mb-4">
+
+                                        <svg
+                                            width="22"
+                                            height="22"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            class="text-slate-600"
+                                        >
+                                            <path
+                                                d="M4 7.5A2.5 2.5 0 0 1 6.5 5h3l2 2h6A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z"
+                                                stroke="currentColor"
+                                                stroke-width="1.5"
+                                            />
+                                        </svg>
+
+                                    </div>
+
+                                    <p class="text-xs text-slate-500">
+                                        No files in queue
+                                    </p>
+
+                                    <p class="text-[9px] text-slate-700 mt-1">
+                                        Add a Google Drive URL above to begin.
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                    </div>
+
+
+                    <!-- RIGHT -->
+                    <div class="space-y-6">
+
+
+                        <!-- SUPPORTED -->
+                        <div class="glass rounded-2xl p-5">
+
+                            <h3 class="text-xs font-semibold text-slate-200">
+                                Supported Source
+                            </h3>
+
+                            <div class="mt-4 space-y-3">
+
+                                <div class="flex items-center gap-3">
+
+                                    <div class="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+
+                                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                                            <path
+                                                d="M7.5 18.5H17a4 4 0 0 0 .5-7.97A5.5 5.5 0 0 0 7 9.5a4.5 4.5 0 0 0 .5 9Z"
+                                                stroke="currentColor"
+                                                stroke-width="1.6"
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                            />
+                                        </svg>
+
+                                    </div>
+
+                                    <div>
+
+                                        <p class="text-[10px] text-slate-300">
+                                            Google Drive
+                                        </p>
+
+                                        <p class="text-[9px] text-slate-600">
+                                            Files and folder URLs
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+
+                                <div class="flex items-center gap-3">
+
+                                    <div class="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+
+                                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                                            <path
+                                                d="M12 3v18M3 12h18"
+                                                stroke="currentColor"
+                                                stroke-width="1.6"
+                                                stroke-linecap="round"
+                                            />
+                                        </svg>
+
+                                    </div>
+
+                                    <div>
+
+                                        <p class="text-[10px] text-slate-300">
+                                            Automatic Processing
+                                        </p>
+
+                                        <p class="text-[9px] text-slate-600">
+                                            DriveTot + download links
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <!-- TIPS -->
+                        <div class="glass rounded-2xl p-5">
+
+                            <h3 class="text-xs font-semibold text-slate-200">
+                                Upload Tips
+                            </h3>
+
+                            <div class="mt-4 space-y-4">
+
+                                <div class="flex gap-3">
+
+                                    <span class="text-blue-400 text-xs">
+                                        01
+                                    </span>
+
+                                    <p class="text-[10px] leading-relaxed text-slate-500">
+                                        Make sure the Google Drive file is accessible through the configured Drive account.
+                                    </p>
+
+                                </div>
+
+
+                                <div class="flex gap-3">
+
+                                    <span class="text-indigo-400 text-xs">
+                                        02
+                                    </span>
+
+                                    <p class="text-[10px] leading-relaxed text-slate-500">
+                                        You can paste multiple Drive file URLs, one per line.
+                                    </p>
+
+                                </div>
+
+
+                                <div class="flex gap-3">
+
+                                    <span class="text-purple-400 text-xs">
+                                        03
+                                    </span>
+
+                                    <p class="text-[10px] leading-relaxed text-slate-500">
+                                        After verification, S-CLOUD continues link processing in the background.
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <!-- PROCESS -->
+                        <div class="glass rounded-2xl p-5">
+
+                            <h3 class="text-xs font-semibold text-slate-200">
+                                Processing Flow
+                            </h3>
+
+
+                            <div class="mt-4 space-y-3">
+
+                                <div class="flex items-center gap-3">
+
+                                    <div class="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center text-[9px]">
+                                        01
+                                    </div>
+
+                                    <div>
+
+                                        <p class="text-[10px] text-slate-300">
+                                            Verify
+                                        </p>
+
+                                        <p class="text-[8px] text-slate-600">
+                                            Google Drive metadata
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+
+                                <div class="h-px bg-slate-800/70 ml-3.5"></div>
+
+
+                                <div class="flex items-center gap-3">
+
+                                    <div class="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-[9px]">
+                                        02
+                                    </div>
+
+                                    <div>
+
+                                        <p class="text-[10px] text-slate-300">
+                                            S-CLOUD
+                                        </p>
+
+                                        <p class="text-[8px] text-slate-600">
+                                            File copy processing
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+
+                                <div class="h-px bg-slate-800/70 ml-3.5"></div>
+
+
+                                <div class="flex items-center gap-3">
+
+                                    <div class="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center text-[9px]">
+                                        03
+                                    </div>
+
+                                    <div>
+
+                                        <p class="text-[10px] text-slate-300">
+                                            Links
+                                        </p>
+
+                                        <p class="text-[8px] text-slate-600">
+                                            HubCloud / GDFlix
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+
+                                <div class="h-px bg-slate-800/70 ml-3.5"></div>
+
+
+                                <div class="flex items-center gap-3">
+
+                                    <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-[9px]">
+                                        04
+                                    </div>
+
+                                    <div>
+
+                                        <p class="text-[10px] text-slate-300">
+                                            Earnings
+                                        </p>
+
+                                        <p class="text-[8px] text-slate-600">
+                                            Valid downloads
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- ======================================================
+         TOAST
+    ======================================================= -->
+
+    <div
+        id="toast"
+        class="toast hidden-toast fixed right-4 bottom-4 z-[100] w-[calc(100%-2rem)] sm:w-96"
+    >
+
+        <div class="glass rounded-2xl p-4 flex items-start gap-3">
+
+            <div
+                id="toastIcon"
+                class="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-500/10 text-emerald-400 flex-shrink-0"
+            >
+                ✓
+            </div>
+
+            <div class="min-w-0">
+
+                <p
+                    id="toastTitle"
+                    class="text-xs font-medium text-slate-200"
+                >
+                    Success
+                </p>
+
+                <p
+                    id="toastMessage"
+                    class="text-[10px] text-slate-500 mt-1 leading-relaxed"
+                >
+                    Done.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+<script>
+
+    /* ========================================================
+       STATE
+    ======================================================== */
+
+    let currentSource = "links";
+
+    let queueItems = [];
+
+    let activeUploads = 0;
+
+
+    /* ========================================================
+       SIDEBAR
+    ======================================================== */
+
+    function openSidebar() {
+
+        document
+            .getElementById("sidebar")
+            .classList.add("open");
+
+        document
+            .getElementById("mobileOverlay")
+            .classList.add("show");
+
+    }
+
+
+    function closeSidebar() {
+
+        document
+            .getElementById("sidebar")
+            .classList.remove("open");
+
+        document
+            .getElementById("mobileOverlay")
+            .classList.remove("show");
+
+    }
+
+
+    /* ========================================================
+       PROFILE
+    ======================================================== */
+
+    function toggleProfile() {
+
+        document
+            .getElementById("profileMenu")
+            .classList.toggle("hidden");
+
+    }
+
+
+    document.addEventListener("click", function(event) {
+
+        const button =
+            document.getElementById("profileButton");
+
+        const menu =
+            document.getElementById("profileMenu");
+
+        if (
+            button &&
+            menu &&
+            !button.contains(event.target) &&
+            !menu.contains(event.target)
+        ) {
+            menu.classList.add("hidden");
+        }
+
+    });
+
+
+    /* ========================================================
+       SOURCE TABS
+    ======================================================== */
+
+    function switchSource(source) {
+
+        currentSource = source;
+
+        const linksTab =
+            document.getElementById("linksTab");
+
+        const folderTab =
+            document.getElementById("folderTab");
+
+        const linksPanel =
+            document.getElementById("linksPanel");
+
+        const folderPanel =
+            document.getElementById("folderPanel");
+
+
+        linksTab.classList.remove("active");
+        folderTab.classList.remove("active");
+
+
+        if (source === "links") {
+
+            linksTab.classList.add("active");
+
+            linksPanel.classList.remove("hidden");
+            folderPanel.classList.add("hidden");
+
+        } else {
+
+            folderTab.classList.add("active");
+
+            linksPanel.classList.add("hidden");
+            folderPanel.classList.remove("hidden");
+
+        }
+
+    }
+
+
+    /* ========================================================
+       LINK COUNT
+    ======================================================== */
+
+    function getDriveLinks() {
+
+        const value =
+            document
+                .getElementById("driveLinks")
+                .value
+                .trim();
+
+        if (!value) {
+            return [];
+        }
+
+        return value
+            .split(/\r?\n/)
+            .map(link => link.trim())
+            .filter(Boolean);
+
+    }
+
+
+    function updateLinkCount() {
+
+        const links =
+            getDriveLinks();
+
+        const count =
+            document.getElementById("linkCount");
+
+        count.textContent =
+            `${links.length} ${
+                links.length === 1
+                    ? "link"
+                    : "links"
+            }`;
+
+    }
+
+
+    document
+        .getElementById("driveLinks")
+        .addEventListener(
+            "input",
+            updateLinkCount
+        );
+
+
+    /* ========================================================
+       CLIPBOARD
+    ======================================================== */
+
+    async function pasteFromClipboard() {
+
+        try {
+
+            const text =
+                await navigator.clipboard.readText();
+
+            if (!text) {
+
+                showToast(
+                    "Clipboard empty",
+                    "No text was found in your clipboard.",
+                    "warning"
+                );
+
+                return;
+            }
+
+
+            const textarea =
+                document.getElementById("driveLinks");
+
+            textarea.value =
+                textarea.value.trim()
+                    ? textarea.value.trim() + "\n" + text
+                    : text;
+
+
+            updateLinkCount();
+
+            showToast(
+                "Pasted",
+                "Clipboard content added.",
+                "success"
+            );
+
+        } catch {
+
+            showToast(
+                "Clipboard blocked",
+                "Please paste the links manually.",
+                "warning"
+            );
+
+        }
+
+    }
+
+
+    /* ========================================================
+       DRIVE URL CHECK
+    ======================================================== */
+
+    function isDriveUrl(url) {
+
+        return (
+            url.includes("drive.google.com") ||
+            url.includes("docs.google.com")
+        );
+
+    }
+
+
+    /* ========================================================
+       START UPLOAD
+    ======================================================== */
+
+    async function startUpload() {
+
+        if (activeUploads > 0) {
+
+            showToast(
+                "Upload in progress",
+                "Please wait for the current upload request.",
+                "warning"
+            );
+
+            return;
+        }
+
+
+        let links = [];
+
+
+        if (currentSource === "links") {
+
+            links =
+                getDriveLinks();
+
+            if (!links.length) {
+
+                showToast(
+                    "Add a Drive link",
+                    "Please enter at least one Google Drive URL.",
+                    "warning"
+                );
+
+                return;
+            }
+
+
+        } else {
+
+            const folderUrl =
+                document
+                    .getElementById("folderUrl")
+                    .value
+                    .trim();
+
+
+            if (!folderUrl) {
+
+                showToast(
+                    "Add folder URL",
+                    "Please enter a Google Drive folder URL.",
+                    "warning"
+                );
+
+                return;
+            }
+
+
+            links = [folderUrl];
+
+        }
+
+
+        const invalid =
+            links.filter(
+                link => !isDriveUrl(link)
+            );
+
+
+        if (invalid.length) {
+
+            showToast(
+                "Invalid Drive link",
+                "Please check your Google Drive URLs.",
+                "warning"
+            );
+
+            return;
+        }
+
+
+        const uniqueLinks =
+            [...new Set(links)];
+
+
+        const label =
+            document
+                .getElementById("uploadLabel")
+                .value
+                .trim();
+
+
+        document
+            .getElementById("driveLinks")
+            .value = "";
+
+        document
+            .getElementById("folderUrl")
+            .value = "";
+
+        document
+            .getElementById("uploadLabel")
+            .value = "";
+
+        updateLinkCount();
+
+
+        for (
+            let i = 0;
+            i < uniqueLinks.length;
+            i++
+        ) {
+
+            await uploadSingleFile(
+                uniqueLinks[i],
+                label,
+                i + 1,
+                uniqueLinks.length
+            );
+
+        }
+
+    }
+
+
+    /* ========================================================
+       REAL API UPLOAD
+    ======================================================== */
+
+    async function uploadSingleFile(
+        driveUrl,
+        label,
+        position,
+        total
+    ) {
+
+        const item = {
+
+            id:
+                Date.now().toString() +
+                Math.random()
+                    .toString(36)
+                    .substring(2, 8),
+
+            url: driveUrl,
+
+            name:
+                label ||
+                extractFileName(driveUrl) ||
+                `Drive File ${position}`,
+
+            status: "Verifying",
+
+            progress: 10,
+
+            shortLink: "",
+
+            shortId: "",
+
+            error: ""
+
+        };
+
+
+        queueItems.unshift(item);
+
+        renderQueue();
+
+
+        activeUploads++;
+
+        setUploadButtonState(true);
+
+
+        try {
+
+            item.status = "Verifying Drive";
+
+            item.progress = 20;
+
+            renderQueue();
+
+
+            const response =
+                await fetch(
+                    "/api/upload",
+                    {
+                        method: "POST",
+
+                        credentials: "include",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body:
+                            JSON.stringify({
+                                drive_url:
+                                    driveUrl
+                            })
+                    }
+                );
+
+
+            let result = null;
+
+
+            try {
+
+                result =
+                    await response.json();
+
+            } catch {
+
+                throw new Error(
+                    "Invalid server response."
+                );
+
+            }
+
+
+            if (
+                response.status === 401
+            ) {
+
+                window.location.href = "/";
+
+                return;
+
+            }
+
+
+            if (
+                !response.ok ||
+                !result ||
+                result.status !== "success"
+            ) {
+
+                throw new Error(
+                    result?.message ||
+                    `Upload failed (${response.status})`
+                );
+
+            }
+
+
+            const data =
+                result.data || {};
+
+
+            item.name =
+                data.file_name ||
+                item.name;
+
+
+            item.shortId =
+                data.short_id ||
+                "";
+
+
+            item.shortLink =
+                data.short_link ||
+                "";
+
+
+            item.status =
+                "Uploaded";
+
+            item.progress =
+                60;
+
+
+            renderQueue();
+
+
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        350
+                    )
+            );
+
+
+            item.status =
+                "Processing Links";
+
+            item.progress =
+                82;
+
+            renderQueue();
+
+
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        500
+                    )
+            );
+
+
+            /*
+             * IMPORTANT:
+             *
+             * The worker returns immediately and performs
+             * DriveTot / HubCloud / GDFlix processing in
+             * ctx.waitUntil().
+             *
+             * Therefore 100% here means that the S-CLOUD
+             * upload request itself completed successfully.
+             *
+             * It does NOT claim that HubCloud/GDFlix
+             * processing has finished.
+             */
+
+            item.status =
+                "Uploaded Successfully";
+
+            item.progress =
+                100;
+
+
+            renderQueue();
+
+
+            showToast(
+                "Upload successful",
+                `${item.name} was accepted by S-CLOUD.`,
+                "success"
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "Upload error:",
+                error
+            );
+
+
+            item.status =
+                "Failed";
+
+            item.progress =
+                100;
+
+            item.error =
+                error?.message ||
+                "Upload failed.";
+
+
+            renderQueue();
+
+
+            showToast(
+                "Upload failed",
+                item.error,
+                "warning"
+            );
+
+        } finally {
+
+            activeUploads--;
+
+            setUploadButtonState(
+                activeUploads > 0
+            );
+
+        }
+
+    }
+
+
+    /* ========================================================
+       BUTTON STATE
+    ======================================================== */
+
+    function setUploadButtonState(disabled) {
+
+        const button =
+            document.getElementById(
+                "startUploadButton"
+            );
+
+
+        if (!button) {
+            return;
+        }
+
+
+        button.disabled =
+            disabled;
+
+
+        if (disabled) {
+
+            button.innerHTML = `
+
+                <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    class="spin"
+                >
+                    <circle
+                        cx="12"
+                        cy="12"
+                        r="8"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-dasharray="35 20"
+                        stroke-linecap="round"
+                    />
+                </svg>
+
+                Processing...
+
+            `;
+
+        } else {
+
+            button.innerHTML = `
+
+                <svg
+                    width="17"
+                    height="17"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                >
+                    <path
+                        d="M12 16V4"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                    />
+
+                    <path
+                        d="m7.5 8.5 4.5-4.5 4.5 4.5"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+
+                    <path
+                        d="M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5V14"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                    />
+                </svg>
+
+                Start Upload
+
+            `;
+
+        }
+
+    }
+
+
+    /* ========================================================
+       FILE NAME
+    ======================================================== */
+
+    function extractFileName(url) {
+
+        try {
+
+            if (
+                url.includes("/folders/")
+            ) {
+
+                return "Google Drive Folder";
+
+            }
+
+
+            const match =
+                url.match(
+                    /\/file\/d\/([^/]+)/
+                );
+
+
+            if (match) {
+
+                return "Google Drive File";
+
+            }
+
+
+            return "Google Drive File";
+
+        } catch {
+
+            return "Google Drive File";
+
+        }
+
+    }
+
+
+    /* ========================================================
+       RENDER QUEUE
+    ======================================================== */
+
+    function renderQueue() {
+
+        const container =
+            document.getElementById(
+                "queueList"
+            );
+
+        const empty =
+            document.getElementById(
+                "queueEmpty"
+            );
+
+        const count =
+            document.getElementById(
+                "queueCount"
+            );
+
+
+        count.textContent =
+            `${queueItems.length} ${
+                queueItems.length === 1
+                    ? "file"
+                    : "files"
+            }`;
+
+
+        if (!queueItems.length) {
+
+            container.innerHTML = "";
+
+            container.appendChild(
+                empty
+            );
+
+            return;
+
+        }
+
+
+        container.innerHTML = "";
+
+
+        queueItems.forEach(
+            item => {
+
+                const failed =
+                    item.status === "Failed";
+
+
+                const success =
+                    item.status ===
+                        "Uploaded Successfully";
+
+
+                const wrapper =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                wrapper.className =
+                    "queue-item rounded-xl bg-slate-900/40 border border-slate-800/60 p-4 mb-3 last:mb-0";
+
+
+                let icon = "";
+
+
+                if (success) {
+
+                    icon = `
+
+                        <svg
+                            width="19"
+                            height="19"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                        >
+                            <path
+                                d="M5 12.5L9.5 17L19 7.5"
+                                stroke="#34D399"
+                                stroke-width="1.8"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+
+                    `;
+
+                } else if (failed) {
+
+                    icon = `
+
+                        <span class="text-red-400 text-sm font-semibold">
+                            !
+                        </span>
+
+                    `;
+
+                } else {
+
+                    icon = `
+
+                        <svg
+                            width="19"
+                            height="19"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            class="spin"
+                        >
+                            <circle
+                                cx="12"
+                                cy="12"
+                                r="8"
+                                stroke="#60A5FA"
+                                stroke-width="2"
+                                stroke-dasharray="35 20"
+                                stroke-linecap="round"
+                            />
+                        </svg>
+
+                    `;
+
+                }
+
+
+                let iconBackground =
+                    success
+                        ? "bg-emerald-500/10"
+                        : failed
+                            ? "bg-red-500/10"
+                            : "bg-blue-500/10";
+
+
+                let statusClass =
+                    success
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : failed
+                            ? "bg-red-500/10 text-red-400"
+                            : "bg-blue-500/10 text-blue-400";
+
+
+                let linkHtml = "";
+
+
+                if (
+                    item.shortLink
+                ) {
+
+                    linkHtml = `
+
+                        <div class="mt-3 p-3 rounded-xl bg-slate-950/50 border border-slate-800/60">
+
+                            <p class="text-[9px] text-slate-600 mb-1">
+                                S-CLOUD File Link
+                            </p>
+
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+
+                                <a
+                                    href="${escapeAttribute(item.shortLink)}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="link-result text-[10px] text-blue-400 hover:text-blue-300 flex-1"
+                                >
+                                    ${escapeHtml(item.shortLink)}
+                                </a>
+
+                                <button
+                                    onclick="copyLink('${escapeJsString(item.shortLink)}')"
+                                    class="flex-shrink-0 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[9px] text-slate-300"
+                                >
+                                    Copy
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    `;
+
+                }
+
+
+                let errorHtml = "";
+
+
+                if (
+                    item.error
+                ) {
+
+                    errorHtml = `
+
+                        <p class="mt-2 text-[9px] text-red-400/80">
+                            ${escapeHtml(item.error)}
+                        </p>
+
+                    `;
+
+                }
+
+
+                wrapper.innerHTML = `
+
+                    <div class="flex items-start gap-3">
+
+                        <div
+                            class="w-10 h-10 rounded-xl ${iconBackground} flex-shrink-0 flex items-center justify-center"
+                        >
+                            ${icon}
+                        </div>
+
+
+                        <div class="flex-1 min-w-0">
+
+                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+
+                                <div class="min-w-0">
+
+                                    <p class="text-xs font-medium text-slate-300 truncate">
+                                        ${escapeHtml(item.name)}
+                                    </p>
+
+                                    <p class="text-[9px] text-slate-600 truncate mt-1">
+                                        ${escapeHtml(item.url)}
+                                    </p>
+
+                                </div>
+
+
+                                <span class="
+                                    text-[9px]
+                                    px-2
+                                    py-1
+                                    rounded-lg
+                                    self-start
+                                    ${statusClass}
+                                ">
+                                    ${escapeHtml(item.status)}
+                                </span>
+
+                            </div>
+
+
+                            <div class="mt-3">
+
+                                <div class="flex items-center justify-between mb-1.5">
+
+                                    <span class="text-[9px] text-slate-600">
+                                        Request status
+                                    </span>
+
+                                    <span class="text-[9px] text-slate-500">
+                                        ${item.progress}%
+                                    </span>
+
+                                </div>
+
+
+                                <div class="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+
+                                    <div
+                                        class="
+                                            h-full
+                                            rounded-full
+                                            bg-gradient-to-r
+                                            from-blue-500
+                                            to-purple-500
+                                        "
+                                        style="width:${item.progress}%"
+                                    ></div>
+
+                                </div>
+
+                            </div>
+
+
+                            ${linkHtml}
+
+                            ${errorHtml}
+
+                        </div>
+
+                    </div>
+
+                `;
+
+
+                container.appendChild(
+                    wrapper
+                );
+
+            }
+        );
+
+    }
+
+
+    /* ========================================================
+       COPY LINK
+    ======================================================== */
+
+    async function copyLink(link) {
+
+        try {
+
+            await navigator.clipboard.writeText(
+                link
+            );
+
+
+            showToast(
+                "Link copied",
+                "S-CLOUD file link copied to clipboard.",
+                "success"
+            );
+
+        } catch {
+
+            showToast(
+                "Copy failed",
+                "Please copy the link manually.",
+                "warning"
+            );
+
+        }
+
+    }
+
+
+    /* ========================================================
+       ESCAPE HTML
+    ======================================================== */
+
+    function escapeHtml(value) {
+
+        return String(value)
+            .replaceAll(
+                "&",
+                "&amp;"
+            )
+            .replaceAll(
+                "<",
+                "&lt;"
+            )
+            .replaceAll(
+                ">",
+                "&gt;"
+            )
+            .replaceAll(
+                '"',
+                "&quot;"
+            )
+            .replaceAll(
+                "'",
+                "&#039;"
+            );
+
+    }
+
+
+    function escapeAttribute(value) {
+
+        return escapeHtml(value);
+
+    }
+
+
+    function escapeJsString(value) {
+
+        return String(value)
+            .replaceAll(
+                "\\",
+                "\\\\"
+            )
+            .replaceAll(
+                "'",
+                "\\'"
+            )
+            .replaceAll(
+                "\n",
+                "\\n"
+            )
+            .replaceAll(
+                "\r",
+                "\\r"
+            );
+
+    }
+
+
+    /* ========================================================
+       COMING SOON
+    ======================================================== */
+
+    function comingSoon() {
+
+        showToast(
+            "Coming soon",
+            "This section will be available soon.",
+            "warning"
+        );
+
+    }
+
+
+    /* ========================================================
+       TOAST
+    ======================================================== */
+
+    let toastTimer;
+
+
+    function showToast(
+        title,
+        message,
+        type = "success"
+    ) {
+
+        const toast =
+            document.getElementById(
+                "toast"
+            );
+
+        const icon =
+            document.getElementById(
+                "toastIcon"
+            );
+
+
+        document.getElementById(
+            "toastTitle"
+        ).textContent =
+            title;
+
+
+        document.getElementById(
+            "toastMessage"
+        ).textContent =
+            message;
+
+
+        if (
+            type === "success"
+        ) {
+
+            icon.textContent = "✓";
+
+            icon.className =
+                "w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-500/10 text-emerald-400";
+
+        } else {
+
+            icon.textContent = "!";
+
+            icon.className =
+                "w-8 h-8 rounded-lg flex items-center justify-center bg-amber-500/10 text-amber-400";
+
+        }
+
+
+        toast.classList.remove(
+            "hidden-toast"
+        );
+
+
+        clearTimeout(
+            toastTimer
+        );
+
+
+        toastTimer =
+            setTimeout(
+                () => {
+
+                    toast.classList.add(
+                        "hidden-toast"
+                    );
+
+                },
+                3500
+            );
+
+    }
+
+
+    /* ========================================================
+       AUTH / USER
+    ======================================================== */
+
+    async function loadUser() {
+
+        try {
+
+            const response =
+                await fetch(
+                    "/api/me",
+                    {
+                        method: "GET",
+                        credentials: "include"
+                    }
+                );
+
+
+            if (
+                !response.ok
+            ) {
+
+                window.location.href =
+                    "/";
+
+                return;
+
+            }
+
+
+            const data =
+                await response.json();
+
+
+            if (
+                data.status !==
+                    "success"
+            ) {
+
+                window.location.href =
+                    "/";
+
+                return;
+
+            }
+
+
+            const user =
+                data.user ||
+                data.data ||
+                {};
+
+
+            const name =
+                user.name ||
+                user.email ||
+                "Publisher";
+
+
+            const profileName =
+                document.getElementById(
+                    "profileName"
+                );
+
+
+            const avatar =
+                document.getElementById(
+                    "profileAvatar"
+                );
+
+
+            profileName.textContent =
+                name;
+
+
+            const initials =
+                getInitials(
+                    name
+                );
+
+
+            avatar.textContent =
+                initials;
+
+
+        } catch (error) {
+
+            console.error(
+                "Auth error:",
+                error
+            );
+
+
+            window.location.href =
+                "/";
+
+        }
+
+    }
+
+
+    function getInitials(name) {
+
+        const value =
+            String(name || "")
+                .trim();
+
+
+        if (!value) {
+            return "SC";
+        }
+
+
+        const parts =
+            value
+                .split(/\s+/)
+                .filter(Boolean);
+
+
+        if (
+            parts.length === 1
+        ) {
+
+            return parts[0]
+                .substring(0, 2)
+                .toUpperCase();
+
+        }
+
+
+        return (
+            parts[0][0] +
+            parts[parts.length - 1][0]
+        ).toUpperCase();
+
+    }
+
+
+    /* ========================================================
+       LOGOUT
+    ======================================================== */
+
+    async function logout() {
+
+        try {
+
+            await fetch(
+                "/api/logout",
+                {
+                    method: "POST",
+                    credentials: "include"
+                }
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Logout error:",
+                error
+            );
+
+        }
+
+
+        window.location.href =
+            "/";
+
+    }
+
+
+    /* ========================================================
+       INITIALIZE
+    ======================================================== */
+
+    loadUser();
+
+    updateLinkCount();
+
+    renderQueue();
+
+</script>
+
+</body>
+</html>
