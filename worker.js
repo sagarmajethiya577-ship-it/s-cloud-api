@@ -206,7 +206,7 @@ function safeEqual(
 // ==================================================
 
 const PBKDF2_ITERATIONS =
-    150000;
+    100000;
 
 const PBKDF2_SALT_BYTES =
     16;
