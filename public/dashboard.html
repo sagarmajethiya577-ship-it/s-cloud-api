@@ -55,10 +55,6 @@
             pointer-events: none;
         }
 
-        /* ================================
-           GLASS
-        ================================= */
-
         .glass {
             background: rgba(15, 22, 36, .78);
             backdrop-filter: blur(20px);
@@ -67,15 +63,6 @@
             box-shadow:
                 0 20px 55px -35px rgba(0,0,0,.95);
         }
-
-        .glass-soft {
-            background: rgba(18, 25, 40, .58);
-            border: 1px solid rgba(148,163,184,.07);
-        }
-
-        /* ================================
-           SIDEBAR
-        ================================= */
 
         .sidebar {
             background: rgba(10, 15, 27, .97);
@@ -88,8 +75,7 @@
             transition:
                 background .2s ease,
                 color .2s ease,
-                border-color .2s ease,
-                transform .2s ease;
+                border-color .2s ease;
         }
 
         .menu-item:hover {
@@ -120,10 +106,6 @@
             background: #818cf8;
         }
 
-        /* ================================
-           OVERLAY
-        ================================= */
-
         .overlay {
             background: rgba(0,0,0,.68);
             backdrop-filter: blur(5px);
@@ -137,10 +119,6 @@
         .mobile-sidebar-visible {
             transform: translateX(0);
         }
-
-        /* ================================
-           STAT CARDS
-        ================================= */
 
         .stat-card {
             position: relative;
@@ -170,10 +148,6 @@
             background: rgba(18,25,42,.86);
         }
 
-        /* ================================
-           PROFILE
-        ================================= */
-
         .profile-menu {
             opacity: 0;
             visibility: hidden;
@@ -189,65 +163,18 @@
             pointer-events: auto;
         }
 
-        /* ================================
-           UPLOAD BANNER
-        ================================= */
-
-        .earn-banner {
-            position: relative;
-            overflow: hidden;
-        }
-
-        .earn-banner::before {
-            content: "";
-            position: absolute;
-            width: 260px;
-            height: 260px;
-            right: -90px;
-            top: -130px;
-            border-radius: 50%;
-            background: rgba(99,102,241,.09);
-            filter: blur(35px);
-            pointer-events: none;
-        }
-
-        .earn-banner::after {
-            content: "";
-            position: absolute;
-            width: 170px;
-            height: 170px;
-            left: 35%;
-            bottom: -130px;
-            border-radius: 50%;
-            background: rgba(59,130,246,.045);
-            filter: blur(35px);
-            pointer-events: none;
-        }
-
-        .earn-icon {
-            box-shadow:
-                inset 0 0 25px rgba(99,102,241,.04),
-                0 12px 35px -22px rgba(99,102,241,.45);
-        }
-
-        /* ================================
-           SMALL METRIC BOX
-        ================================= */
-
         .metric-box {
             background: rgba(5,10,18,.28);
             border: 1px solid rgba(148,163,184,.07);
-            transition: border-color .2s ease, background .2s ease;
+            transition:
+                border-color .2s ease,
+                background .2s ease;
         }
 
         .metric-box:hover {
             background: rgba(255,255,255,.025);
             border-color: rgba(148,163,184,.12);
         }
-
-        /* ================================
-           TABLE
-        ================================= */
 
         .file-row {
             transition: background .18s ease;
@@ -256,10 +183,6 @@
         .file-row:hover {
             background: rgba(255,255,255,.025);
         }
-
-        /* ================================
-           SCROLLBAR
-        ================================= */
 
         .scrollbar::-webkit-scrollbar {
             width: 5px;
@@ -273,10 +196,6 @@
             background: rgba(148,163,184,.18);
             border-radius: 10px;
         }
-
-        /* ================================
-           RESPONSIVE
-        ================================= */
 
         @media (min-width: 1024px) {
 
@@ -432,7 +351,7 @@
         </a>
 
 
-        <!-- MANAGE -->
+        <!-- MANAGE FILES -->
 
         <a
             href="/files"
@@ -459,7 +378,7 @@
         </a>
 
 
-        <!-- API -->
+        <!-- API DOCUMENTATION -->
 
         <a
             href="#"
@@ -515,37 +434,6 @@
         </a>
 
     </nav>
-
-
-    <!-- SIDEBAR BOTTOM -->
-
-    <div class="p-4 border-t border-gray-800/60">
-
-        <div class="rounded-2xl bg-gradient-to-br from-indigo-500/[0.08] to-blue-500/[0.04] border border-indigo-500/[0.10] p-4">
-
-            <div class="flex items-center gap-2.5 mb-2">
-
-                <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-
-                    <span class="text-lg">
-                        💰
-                    </span>
-
-                </div>
-
-                <span class="text-sm font-semibold text-gray-200">
-                    Start Earning
-                </span>
-
-            </div>
-
-            <p class="text-xs text-gray-500 leading-relaxed">
-                Upload files and earn from valid downloads.
-            </p>
-
-        </div>
-
-    </div>
 
 </aside>
 
@@ -656,7 +544,6 @@
 
             <div class="flex items-center gap-2 sm:gap-3">
 
-
                 <!-- NOTIFICATION -->
 
                 <button
@@ -757,7 +644,7 @@
                                         stroke-linecap="round"
                                         stroke-linejoin="round"
                                         stroke-width="2"
-                                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.065 2.573c.94 1.543-.827 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.572-1.065c-1.543.94-3.31-.827-2.37-2.37a1.724 1.724 0 00-1.065-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.065-2.572c-.94-1.544.827-3.31 2.37-2.37.996.608 2.296.07 2.572-1.066z"/>
+                                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.065 2.573c.94 1.543-.827 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.065c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.572-1.065c-1.543.94-3.31-.827-2.37-2.37a1.724 1.724 0 001.065-2.573c.94-1.543-.827-3.31-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-.94-1.544.827-3.31 2.37-2.37.996.608 2.296.07 2.572-1.066z"/>
 
                                     <path
                                         stroke-linecap="round"
@@ -815,115 +702,183 @@
 
 
         <!-- =================================================
-             WELCOME
+             ANALYTICS
         ================================================== -->
 
-        <section class="mb-7">
+        <div class="mb-5">
 
-            <p class="text-sm text-gray-500 mb-1">
-                Welcome back,
-            </p>
-
-            <h2
-                id="welcomeName"
-                class="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                Publisher 👋
+            <h2 class="text-xl sm:text-2xl font-bold text-white">
+                Analytics
             </h2>
 
-            <p class="text-sm text-gray-500 mt-2">
-                Here's what's happening with your S-Cloud account.
+            <p class="text-sm text-gray-500 mt-1">
+                Track your files, views and earnings
             </p>
 
-        </section>
+        </div>
 
 
         <!-- =================================================
-             UPLOAD & EARN
+             DAILY + MONTHLY
         ================================================== -->
 
-        <section
-            class="earn-banner glass rounded-3xl p-5 sm:p-7 mb-9">
-
-            <div class="relative z-10">
-
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-
-                    <div class="flex items-start gap-4">
-
-                        <div
-                            class="earn-icon w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-indigo-500/15 to-purple-500/10 border border-indigo-500/10 flex items-center justify-center shrink-0">
-
-                            <span class="text-3xl sm:text-4xl">
-                                💰
-                            </span>
-
-                        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
 
 
-                        <div>
+            <!-- DAILY -->
 
-                            <div class="flex flex-wrap items-center gap-2">
+            <div class="glass rounded-2xl p-5 sm:p-6">
 
-                                <h3 class="text-xl sm:text-2xl font-bold text-white">
-                                    Upload & Earn Money 🤑
-                                </h3>
+                <div class="flex items-center justify-between mb-6">
 
-                                <span class="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/10">
-                                    Publisher
-                                </span>
+                    <div>
 
-                            </div>
+                        <h3 class="font-semibold text-white">
+                            Daily Analytics
+                        </h3>
 
-                            <p class="text-sm sm:text-base text-gray-400 mt-1.5 max-w-xl">
-                                Upload your files and earn from every valid download.
-                            </p>
+                        <p class="text-xs text-gray-500 mt-1">
+                            Today
+                        </p>
 
-                        </div>
+                    </div>
+
+                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/10 flex items-center justify-center text-lg">
+                        📊
+                    </div>
+
+                </div>
+
+
+                <div class="grid grid-cols-3 gap-3">
+
+                    <div class="metric-box rounded-xl p-3">
+
+                        <p class="text-xs text-gray-500">
+                            Uploaded
+                        </p>
+
+                        <p
+                            id="dailyFiles"
+                            class="text-xl font-bold text-white mt-2">
+                            0
+                        </p>
 
                     </div>
 
 
-                    <a
-                        href="/upload"
-                        class="w-full md:w-auto inline-flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 px-7 py-3.5 rounded-xl font-semibold shadow-lg shadow-indigo-600/20 transition shrink-0">
+                    <div class="metric-box rounded-xl p-3">
 
-                        <svg
-                            class="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
+                        <p class="text-xs text-gray-500">
+                            Views
+                        </p>
 
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                        <p
+                            id="dailyViews"
+                            class="text-xl font-bold text-white mt-2">
+                            0
+                        </p>
 
-                        </svg>
+                    </div>
 
-                        Upload File
 
-                        <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
+                    <div class="metric-box rounded-xl p-3">
 
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M9 5l7 7-7 7"/>
+                        <p class="text-xs text-gray-500">
+                            Earnings
+                        </p>
 
-                        </svg>
+                        <p
+                            id="dailyEarnings"
+                            class="text-xl font-bold text-emerald-400 mt-2">
+                            $0.00
+                        </p>
 
-                    </a>
+                    </div>
 
                 </div>
 
             </div>
 
-        </section>
+
+            <!-- MONTHLY -->
+
+            <div class="glass rounded-2xl p-5 sm:p-6">
+
+                <div class="flex items-center justify-between mb-6">
+
+                    <div>
+
+                        <h3 class="font-semibold text-white">
+                            Monthly Analytics
+                        </h3>
+
+                        <p
+                            id="currentMonth"
+                            class="text-xs text-gray-500 mt-1">
+                            This Month
+                        </p>
+
+                    </div>
+
+                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/10 flex items-center justify-center text-lg">
+                        📈
+                    </div>
+
+                </div>
+
+
+                <div class="grid grid-cols-3 gap-3">
+
+                    <div class="metric-box rounded-xl p-3">
+
+                        <p class="text-xs text-gray-500">
+                            Files
+                        </p>
+
+                        <p
+                            id="monthlyFiles"
+                            class="text-xl font-bold text-white mt-2">
+                            0
+                        </p>
+
+                    </div>
+
+
+                    <div class="metric-box rounded-xl p-3">
+
+                        <p class="text-xs text-gray-500">
+                            Views
+                        </p>
+
+                        <p
+                            id="monthlyViews"
+                            class="text-xl font-bold text-white mt-2">
+                            0
+                        </p>
+
+                    </div>
+
+
+                    <div class="metric-box rounded-xl p-3">
+
+                        <p class="text-xs text-gray-500">
+                            Earnings
+                        </p>
+
+                        <p
+                            id="monthlyEarnings"
+                            class="text-xl font-bold text-emerald-400 mt-2">
+                            $0.00
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
 
 
         <!-- =================================================
@@ -1126,186 +1081,6 @@
 
 
         <!-- =================================================
-             ANALYTICS HEADER
-        ================================================== -->
-
-        <div class="mb-5">
-
-            <h2 class="text-xl sm:text-2xl font-bold text-white">
-                Analytics
-            </h2>
-
-            <p class="text-sm text-gray-500 mt-1">
-                Track your files, views and earnings
-            </p>
-
-        </div>
-
-
-        <!-- =================================================
-             DAILY + MONTHLY
-        ================================================== -->
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-
-
-            <!-- DAILY -->
-
-            <div class="glass rounded-2xl p-5 sm:p-6">
-
-                <div class="flex items-center justify-between mb-6">
-
-                    <div>
-
-                        <h3 class="font-semibold text-white">
-                            Daily Analytics
-                        </h3>
-
-                        <p class="text-xs text-gray-500 mt-1">
-                            Today
-                        </p>
-
-                    </div>
-
-                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/10 flex items-center justify-center text-lg">
-                        📊
-                    </div>
-
-                </div>
-
-
-                <div class="grid grid-cols-3 gap-3">
-
-                    <div class="metric-box rounded-xl p-3">
-
-                        <p class="text-xs text-gray-500">
-                            Uploaded
-                        </p>
-
-                        <p
-                            id="dailyFiles"
-                            class="text-xl font-bold text-white mt-2">
-                            0
-                        </p>
-
-                    </div>
-
-
-                    <div class="metric-box rounded-xl p-3">
-
-                        <p class="text-xs text-gray-500">
-                            Views
-                        </p>
-
-                        <p
-                            id="dailyViews"
-                            class="text-xl font-bold text-white mt-2">
-                            0
-                        </p>
-
-                    </div>
-
-
-                    <div class="metric-box rounded-xl p-3">
-
-                        <p class="text-xs text-gray-500">
-                            Earnings
-                        </p>
-
-                        <p
-                            id="dailyEarnings"
-                            class="text-xl font-bold text-emerald-400 mt-2">
-                            $0.00
-                        </p>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <!-- MONTHLY -->
-
-            <div class="glass rounded-2xl p-5 sm:p-6">
-
-                <div class="flex items-center justify-between mb-6">
-
-                    <div>
-
-                        <h3 class="font-semibold text-white">
-                            Monthly Analytics
-                        </h3>
-
-                        <p
-                            id="currentMonth"
-                            class="text-xs text-gray-500 mt-1">
-                            This Month
-                        </p>
-
-                    </div>
-
-                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/10 flex items-center justify-center text-lg">
-                        📈
-                    </div>
-
-                </div>
-
-
-                <div class="grid grid-cols-3 gap-3">
-
-                    <div class="metric-box rounded-xl p-3">
-
-                        <p class="text-xs text-gray-500">
-                            Files
-                        </p>
-
-                        <p
-                            id="monthlyFiles"
-                            class="text-xl font-bold text-white mt-2">
-                            0
-                        </p>
-
-                    </div>
-
-
-                    <div class="metric-box rounded-xl p-3">
-
-                        <p class="text-xs text-gray-500">
-                            Views
-                        </p>
-
-                        <p
-                            id="monthlyViews"
-                            class="text-xl font-bold text-white mt-2">
-                            0
-                        </p>
-
-                    </div>
-
-
-                    <div class="metric-box rounded-xl p-3">
-
-                        <p class="text-xs text-gray-500">
-                            Earnings
-                        </p>
-
-                        <p
-                            id="monthlyEarnings"
-                            class="text-xl font-bold text-emerald-400 mt-2">
-                            $0.00
-                        </p>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <!-- =================================================
              CHART
         ================================================== -->
 
@@ -1387,7 +1162,7 @@
             </div>
 
 
-            <!-- DESKTOP -->
+            <!-- DESKTOP TABLE -->
 
             <div class="hidden md:block overflow-x-auto">
 
@@ -1473,7 +1248,6 @@
 
         </div>
 
-
     </main>
 
 </div>
@@ -1529,10 +1303,6 @@
     }
 
 
-    /* ========================================================
-       CLOSE SIDEBAR AFTER MOBILE NAVIGATION
-    ======================================================== */
-
     document.querySelectorAll("#sidebar a").forEach(link => {
 
         link.addEventListener("click", function() {
@@ -1547,7 +1317,7 @@
 
 
     /* ========================================================
-       PROFILE DROPDOWN
+       PROFILE
     ======================================================== */
 
     function toggleProfile(event) {
@@ -1557,6 +1327,7 @@
         document
             .getElementById("profileContainer")
             .classList.toggle("active");
+
     }
 
 
@@ -1588,6 +1359,7 @@
         alert(
             "This section will be available soon."
         );
+
     }
 
 
@@ -1688,12 +1460,6 @@
 
 
             document.getElementById(
-                "welcomeName"
-            ).innerText =
-                name + " 👋";
-
-
-            document.getElementById(
                 "topUserName"
             ).innerText =
                 name;
@@ -1746,9 +1512,6 @@
 
     /* ========================================================
        DEMO STATS
-       -----------------------------------------------
-       Temporary UI preview values.
-       These will later be replaced with real D1 data.
     ======================================================== */
 
     function loadDemoStats() {
