@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Dashboard | S-Cloud</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -16,10 +20,15 @@
             box-sizing: border-box;
         }
 
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
             font-family: 'Poppins', sans-serif;
-            background: #0b0f19;
-            color: white;
+            background: #090d16;
+            color: #fff;
+            overflow-x: hidden;
         }
 
         body::before {
@@ -27,72 +36,98 @@
             position: fixed;
             inset: 0;
             background:
-                radial-gradient(circle at 15% 0%, rgba(59,130,246,.13), transparent 30%),
-                radial-gradient(circle at 90% 8%, rgba(139,92,246,.10), transparent 27%),
-                radial-gradient(circle at 50% 100%, rgba(6,182,212,.055), transparent 32%);
+                radial-gradient(
+                    circle at 8% 0%,
+                    rgba(59,130,246,.12),
+                    transparent 28%
+                ),
+                radial-gradient(
+                    circle at 92% 5%,
+                    rgba(124,58,237,.09),
+                    transparent 27%
+                ),
+                radial-gradient(
+                    circle at 50% 100%,
+                    rgba(6,182,212,.035),
+                    transparent 32%
+                );
             z-index: -1;
             pointer-events: none;
         }
 
+        /* ================================
+           GLASS
+        ================================= */
+
         .glass {
-            background: rgba(17, 24, 39, .72);
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-            border: 1px solid rgba(148,163,184,.09);
-            box-shadow: 0 18px 50px -30px rgba(0,0,0,.9);
+            background: rgba(15, 22, 36, .78);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(148,163,184,.085);
+            box-shadow:
+                0 20px 55px -35px rgba(0,0,0,.95);
         }
 
+        .glass-soft {
+            background: rgba(18, 25, 40, .58);
+            border: 1px solid rgba(148,163,184,.07);
+        }
+
+        /* ================================
+           SIDEBAR
+        ================================= */
+
         .sidebar {
-            background: rgba(13, 19, 32, .96);
-            border-right: 1px solid rgba(148,163,184,.10);
+            background: rgba(10, 15, 27, .97);
+            border-right: 1px solid rgba(148,163,184,.09);
             transition: transform .3s ease;
         }
 
-        .overlay {
-            background: rgba(0,0,0,.65);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-        }
-
         .menu-item {
-            transition: all .2s ease;
+            position: relative;
+            transition:
+                background .2s ease,
+                color .2s ease,
+                border-color .2s ease,
+                transform .2s ease;
         }
 
         .menu-item:hover {
-            background: rgba(255,255,255,.055);
-            color: white;
+            background: rgba(255,255,255,.045);
+            color: #fff;
         }
 
         .menu-active {
-            background: linear-gradient(
-                135deg,
-                rgba(99,102,241,.18),
-                rgba(59,130,246,.10)
-            );
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(99,102,241,.17),
+                    rgba(59,130,246,.07)
+                );
             color: #a5b4fc;
             border: 1px solid rgba(99,102,241,.12);
         }
 
-        .stat-card {
-            transition: transform .2s ease, border-color .2s ease;
+        .menu-active::before {
+            content: "";
+            position: absolute;
+            left: -1px;
+            top: 50%;
+            width: 3px;
+            height: 22px;
+            transform: translateY(-50%);
+            border-radius: 0 5px 5px 0;
+            background: #818cf8;
         }
 
-        .stat-card:hover {
-            transform: translateY(-2px);
-            border-color: rgba(99,102,241,.20);
-        }
+        /* ================================
+           OVERLAY
+        ================================= */
 
-        .profile-menu {
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-5px);
-            transition: all .18s ease;
-        }
-
-        .profile-container.active .profile-menu {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
+        .overlay {
+            background: rgba(0,0,0,.68);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
         }
 
         .mobile-sidebar-hidden {
@@ -102,6 +137,129 @@
         .mobile-sidebar-visible {
             transform: translateX(0);
         }
+
+        /* ================================
+           STAT CARDS
+        ================================= */
+
+        .stat-card {
+            position: relative;
+            overflow: hidden;
+            transition:
+                transform .22s ease,
+                border-color .22s ease,
+                background .22s ease;
+        }
+
+        .stat-card::after {
+            content: "";
+            position: absolute;
+            width: 90px;
+            height: 90px;
+            right: -45px;
+            top: -45px;
+            border-radius: 999px;
+            background: rgba(99,102,241,.055);
+            filter: blur(18px);
+            pointer-events: none;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(129,140,248,.18);
+            background: rgba(18,25,42,.86);
+        }
+
+        /* ================================
+           PROFILE
+        ================================= */
+
+        .profile-menu {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-6px);
+            pointer-events: none;
+            transition: all .18s ease;
+        }
+
+        .profile-container.active .profile-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        /* ================================
+           UPLOAD BANNER
+        ================================= */
+
+        .earn-banner {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .earn-banner::before {
+            content: "";
+            position: absolute;
+            width: 260px;
+            height: 260px;
+            right: -90px;
+            top: -130px;
+            border-radius: 50%;
+            background: rgba(99,102,241,.09);
+            filter: blur(35px);
+            pointer-events: none;
+        }
+
+        .earn-banner::after {
+            content: "";
+            position: absolute;
+            width: 170px;
+            height: 170px;
+            left: 35%;
+            bottom: -130px;
+            border-radius: 50%;
+            background: rgba(59,130,246,.045);
+            filter: blur(35px);
+            pointer-events: none;
+        }
+
+        .earn-icon {
+            box-shadow:
+                inset 0 0 25px rgba(99,102,241,.04),
+                0 12px 35px -22px rgba(99,102,241,.45);
+        }
+
+        /* ================================
+           SMALL METRIC BOX
+        ================================= */
+
+        .metric-box {
+            background: rgba(5,10,18,.28);
+            border: 1px solid rgba(148,163,184,.07);
+            transition: border-color .2s ease, background .2s ease;
+        }
+
+        .metric-box:hover {
+            background: rgba(255,255,255,.025);
+            border-color: rgba(148,163,184,.12);
+        }
+
+        /* ================================
+           TABLE
+        ================================= */
+
+        .file-row {
+            transition: background .18s ease;
+        }
+
+        .file-row:hover {
+            background: rgba(255,255,255,.025);
+        }
+
+        /* ================================
+           SCROLLBAR
+        ================================= */
 
         .scrollbar::-webkit-scrollbar {
             width: 5px;
@@ -116,7 +274,12 @@
             border-radius: 10px;
         }
 
+        /* ================================
+           RESPONSIVE
+        ================================= */
+
         @media (min-width: 1024px) {
+
             .sidebar {
                 transform: translateX(0) !important;
             }
@@ -129,6 +292,17 @@
                 display: none !important;
             }
         }
+
+        @media (max-width: 640px) {
+
+            .main-content {
+                padding-top: 1.5rem;
+            }
+
+            .stat-card:hover {
+                transform: none;
+            }
+        }
     </style>
 </head>
 
@@ -137,6 +311,7 @@
 <!-- =========================================================
      MOBILE SIDEBAR OVERLAY
 ========================================================= -->
+
 <div
     id="sidebarOverlay"
     onclick="closeSidebar()"
@@ -147,16 +322,17 @@
 <!-- =========================================================
      SIDEBAR
 ========================================================= -->
+
 <aside
     id="sidebar"
     class="sidebar fixed left-0 top-0 bottom-0 w-64 z-50 mobile-sidebar-hidden lg:translate-x-0 flex flex-col">
 
     <!-- BRAND -->
-    <div class="h-20 px-6 flex items-center border-b border-gray-800/70">
+
+    <div class="h-20 px-6 flex items-center border-b border-gray-800/60">
 
         <div class="flex items-center gap-3">
 
-            <!-- SAME S-CLOUD STYLE LOGO -->
             <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
 
                 <svg
@@ -182,10 +358,15 @@
             </div>
 
             <span class="text-xl font-extrabold tracking-tight">
-                <span class="text-white">S-</span>
+
+                <span class="text-white">
+                    S-
+                </span>
+
                 <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">
                     CLOUD
                 </span>
+
             </span>
 
         </div>
@@ -194,15 +375,17 @@
 
 
     <!-- MENU -->
+
     <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar">
 
         <!-- ANALYTICS -->
+
         <a
             href="/dashboard"
             class="menu-item menu-active flex items-center gap-3 px-4 py-3 rounded-xl font-medium">
 
             <svg
-                class="w-5 h-5"
+                class="w-5 h-5 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -215,18 +398,21 @@
 
             </svg>
 
-            <span>Analytics</span>
+            <span>
+                Analytics
+            </span>
 
         </a>
 
 
         <!-- UPLOAD -->
+
         <a
             href="/upload"
             class="menu-item flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-medium">
 
             <svg
-                class="w-5 h-5"
+                class="w-5 h-5 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -239,18 +425,21 @@
 
             </svg>
 
-            <span>Upload File</span>
+            <span>
+                Upload File
+            </span>
 
         </a>
 
 
-        <!-- MANAGE FILES -->
+        <!-- MANAGE -->
+
         <a
             href="/files"
             class="menu-item flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-medium">
 
             <svg
-                class="w-5 h-5"
+                class="w-5 h-5 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -263,19 +452,22 @@
 
             </svg>
 
-            <span>Manage Files</span>
+            <span>
+                Manage Files
+            </span>
 
         </a>
 
 
-        <!-- API DOCUMENTATION -->
+        <!-- API -->
+
         <a
             href="#"
             onclick="comingSoon(event)"
             class="menu-item flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-medium">
 
             <svg
-                class="w-5 h-5"
+                class="w-5 h-5 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -288,19 +480,22 @@
 
             </svg>
 
-            <span>API Document</span>
+            <span>
+                API Document
+            </span>
 
         </a>
 
 
         <!-- TELEGRAM -->
+
         <a
             href="#"
             onclick="comingSoon(event)"
             class="menu-item flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-medium">
 
             <svg
-                class="w-5 h-5"
+                class="w-5 h-5 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -313,7 +508,9 @@
 
             </svg>
 
-            <span>Telegram Support</span>
+            <span>
+                Telegram Support
+            </span>
 
         </a>
 
@@ -321,14 +518,19 @@
 
 
     <!-- SIDEBAR BOTTOM -->
-    <div class="p-4 border-t border-gray-800/70">
 
-        <div class="rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-indigo-500/10 p-4">
+    <div class="p-4 border-t border-gray-800/60">
 
-            <div class="flex items-center gap-2 mb-2">
+        <div class="rounded-2xl bg-gradient-to-br from-indigo-500/[0.08] to-blue-500/[0.04] border border-indigo-500/[0.10] p-4">
+
+            <div class="flex items-center gap-2.5 mb-2">
 
                 <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-                    <span class="text-lg">💰</span>
+
+                    <span class="text-lg">
+                        💰
+                    </span>
+
                 </div>
 
                 <span class="text-sm font-semibold text-gray-200">
@@ -351,23 +553,27 @@
 <!-- =========================================================
      MAIN AREA
 ========================================================= -->
+
 <div class="desktop-main min-h-screen">
 
 
     <!-- =====================================================
          TOP NAVBAR
     ====================================================== -->
+
     <header class="glass sticky top-0 z-30 border-t-0 border-l-0 border-r-0">
 
         <div class="h-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
 
             <!-- LEFT -->
-            <div class="flex items-center gap-4">
+
+            <div class="flex items-center gap-4 min-w-0">
 
                 <!-- MOBILE MENU -->
+
                 <button
                     onclick="toggleSidebar()"
-                    class="lg:hidden w-11 h-11 rounded-xl bg-gray-800/60 border border-gray-700/60 flex items-center justify-center text-gray-300 hover:text-white transition">
+                    class="lg:hidden w-11 h-11 shrink-0 rounded-xl bg-gray-800/60 border border-gray-700/60 flex items-center justify-center text-gray-300 hover:text-white transition">
 
                     <svg
                         class="w-6 h-6"
@@ -387,9 +593,10 @@
 
 
                 <!-- MOBILE BRAND -->
-                <div class="flex items-center gap-2.5 lg:hidden">
 
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center">
+                <div class="flex items-center gap-2.5 lg:hidden min-w-0">
+
+                    <div class="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center">
 
                         <svg
                             class="w-5 h-5 text-white"
@@ -413,17 +620,23 @@
 
                     </div>
 
-                    <span class="font-extrabold tracking-tight">
-                        <span class="text-white">S-</span>
+                    <span class="font-extrabold tracking-tight truncate">
+
+                        <span class="text-white">
+                            S-
+                        </span>
+
                         <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">
                             CLOUD
                         </span>
+
                     </span>
 
                 </div>
 
 
-                <!-- DESKTOP PAGE TITLE -->
+                <!-- DESKTOP TITLE -->
+
                 <div class="hidden lg:block">
 
                     <h1 class="text-xl font-semibold text-white">
@@ -440,12 +653,16 @@
 
 
             <!-- RIGHT -->
-            <div class="flex items-center gap-3">
+
+            <div class="flex items-center gap-2 sm:gap-3">
 
 
                 <!-- NOTIFICATION -->
+
                 <button
-                    class="relative w-11 h-11 rounded-xl bg-gray-800/50 border border-gray-700/60 flex items-center justify-center text-gray-300 hover:text-white transition">
+                    onclick="showNotification()"
+                    aria-label="Notifications"
+                    class="relative w-11 h-11 rounded-xl bg-gray-800/50 border border-gray-700/60 flex items-center justify-center text-gray-300 hover:text-white hover:border-gray-600 transition">
 
                     <svg
                         class="w-5 h-5"
@@ -467,19 +684,20 @@
 
 
                 <!-- PROFILE -->
+
                 <div
                     id="profileContainer"
                     class="profile-container relative">
 
                     <button
                         onclick="toggleProfile(event)"
-                        class="flex items-center gap-3">
+                        class="flex items-center gap-2 sm:gap-3">
 
                         <div class="hidden sm:block text-right">
 
                             <p
                                 id="topUserName"
-                                class="text-sm font-semibold text-white">
+                                class="text-sm font-semibold text-white max-w-[140px] truncate">
                                 Publisher
                             </p>
 
@@ -492,7 +710,7 @@
 
                         <div
                             id="avatar"
-                            class="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+                            class="w-11 h-11 shrink-0 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
 
                             SM
 
@@ -502,6 +720,7 @@
 
 
                     <!-- PROFILE DROPDOWN -->
+
                     <div
                         class="profile-menu absolute right-0 top-14 w-52 z-50">
 
@@ -511,7 +730,7 @@
 
                                 <p
                                     id="dropdownName"
-                                    class="text-sm font-semibold text-white">
+                                    class="text-sm font-semibold text-white truncate">
                                     Publisher
                                 </p>
 
@@ -591,13 +810,15 @@
     <!-- =====================================================
          PAGE CONTENT
     ====================================================== -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <main class="main-content max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-8">
 
 
         <!-- =================================================
              WELCOME
         ================================================== -->
-        <div class="mb-7">
+
+        <section class="mb-7">
 
             <p class="text-sm text-gray-500 mb-1">
                 Welcome back,
@@ -605,7 +826,7 @@
 
             <h2
                 id="welcomeName"
-                class="text-2xl sm:text-3xl font-bold text-white">
+                class="text-2xl sm:text-3xl font-bold text-white tracking-tight">
                 Publisher 👋
             </h2>
 
@@ -613,26 +834,24 @@
                 Here's what's happening with your S-Cloud account.
             </p>
 
-        </div>
+        </section>
 
 
         <!-- =================================================
-             UPLOAD & EARN BANNER
+             UPLOAD & EARN
         ================================================== -->
+
         <section
-            class="glass rounded-3xl p-5 sm:p-7 mb-8 relative overflow-hidden">
+            class="earn-banner glass rounded-3xl p-5 sm:p-7 mb-9">
 
-            <!-- Decorative glow -->
-            <div class="absolute -right-20 -top-20 w-64 h-64 rounded-full bg-indigo-600/10 blur-3xl"></div>
-
-            <div class="relative">
+            <div class="relative z-10">
 
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
 
                     <div class="flex items-start gap-4">
 
-                        <!-- MONEY ICON -->
-                        <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-indigo-500/15 to-purple-500/10 border border-indigo-500/10 flex items-center justify-center shrink-0">
+                        <div
+                            class="earn-icon w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-indigo-500/15 to-purple-500/10 border border-indigo-500/10 flex items-center justify-center shrink-0">
 
                             <span class="text-3xl sm:text-4xl">
                                 💰
@@ -643,11 +862,19 @@
 
                         <div>
 
-                            <h3 class="text-xl sm:text-2xl font-bold text-white">
-                                Upload & Earn Money 🤑
-                            </h3>
+                            <div class="flex flex-wrap items-center gap-2">
 
-                            <p class="text-sm sm:text-base text-gray-400 mt-1 max-w-xl">
+                                <h3 class="text-xl sm:text-2xl font-bold text-white">
+                                    Upload & Earn Money 🤑
+                                </h3>
+
+                                <span class="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/10">
+                                    Publisher
+                                </span>
+
+                            </div>
+
+                            <p class="text-sm sm:text-base text-gray-400 mt-1.5 max-w-xl">
                                 Upload your files and earn from every valid download.
                             </p>
 
@@ -656,7 +883,6 @@
                     </div>
 
 
-                    <!-- UPLOAD BUTTON -->
                     <a
                         href="/upload"
                         class="w-full md:w-auto inline-flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 px-7 py-3.5 rounded-xl font-semibold shadow-lg shadow-indigo-600/20 transition shrink-0">
@@ -703,6 +929,7 @@
         <!-- =================================================
              REVENUE HEADER
         ================================================== -->
+
         <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
 
             <div>
@@ -746,10 +973,12 @@
         <!-- =================================================
              REVENUE CARDS
         ================================================== -->
+
         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-9">
 
 
             <!-- TOTAL -->
+
             <div class="stat-card glass rounded-2xl p-5">
 
                 <div class="flex items-start justify-between">
@@ -768,7 +997,7 @@
 
                     </div>
 
-                    <div class="w-11 h-11 rounded-xl bg-indigo-500/10 flex items-center justify-center text-xl">
+                    <div class="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/10 flex items-center justify-center text-xl">
                         💵
                     </div>
 
@@ -782,6 +1011,7 @@
 
 
             <!-- PAID -->
+
             <div class="stat-card glass rounded-2xl p-5">
 
                 <div class="flex items-start justify-between">
@@ -800,7 +1030,7 @@
 
                     </div>
 
-                    <div class="w-11 h-11 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                    <div class="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/10 flex items-center justify-center">
 
                         <svg
                             class="w-6 h-6 text-emerald-400"
@@ -828,6 +1058,7 @@
 
 
             <!-- AVAILABLE -->
+
             <div class="stat-card glass rounded-2xl p-5">
 
                 <div class="flex items-start justify-between">
@@ -846,7 +1077,7 @@
 
                     </div>
 
-                    <div class="w-11 h-11 rounded-xl bg-purple-500/10 flex items-center justify-center text-xl">
+                    <div class="w-11 h-11 rounded-xl bg-purple-500/10 border border-purple-500/10 flex items-center justify-center text-xl">
                         💳
                     </div>
 
@@ -860,6 +1091,7 @@
 
 
             <!-- PENDING -->
+
             <div class="stat-card glass rounded-2xl p-5">
 
                 <div class="flex items-start justify-between">
@@ -878,7 +1110,7 @@
 
                     </div>
 
-                    <div class="w-11 h-11 rounded-xl bg-amber-500/10 flex items-center justify-center text-xl">
+                    <div class="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/10 flex items-center justify-center text-xl">
                         ⏳
                     </div>
 
@@ -894,30 +1126,31 @@
 
 
         <!-- =================================================
-             ANALYTICS
+             ANALYTICS HEADER
         ================================================== -->
-        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
 
-            <div>
+        <div class="mb-5">
 
-                <h2 class="text-xl sm:text-2xl font-bold text-white">
-                    Analytics
-                </h2>
+            <h2 class="text-xl sm:text-2xl font-bold text-white">
+                Analytics
+            </h2>
 
-                <p class="text-sm text-gray-500 mt-1">
-                    Track your files, views and earnings
-                </p>
-
-            </div>
+            <p class="text-sm text-gray-500 mt-1">
+                Track your files, views and earnings
+            </p>
 
         </div>
 
 
-        <!-- DAILY + MONTHLY -->
+        <!-- =================================================
+             DAILY + MONTHLY
+        ================================================== -->
+
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
 
 
             <!-- DAILY -->
+
             <div class="glass rounded-2xl p-5 sm:p-6">
 
                 <div class="flex items-center justify-between mb-6">
@@ -934,7 +1167,7 @@
 
                     </div>
 
-                    <div class="text-xl">
+                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/10 flex items-center justify-center text-lg">
                         📊
                     </div>
 
@@ -943,8 +1176,7 @@
 
                 <div class="grid grid-cols-3 gap-3">
 
-
-                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
+                    <div class="metric-box rounded-xl p-3">
 
                         <p class="text-xs text-gray-500">
                             Uploaded
@@ -959,7 +1191,7 @@
                     </div>
 
 
-                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
+                    <div class="metric-box rounded-xl p-3">
 
                         <p class="text-xs text-gray-500">
                             Views
@@ -974,7 +1206,7 @@
                     </div>
 
 
-                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
+                    <div class="metric-box rounded-xl p-3">
 
                         <p class="text-xs text-gray-500">
                             Earnings
@@ -994,6 +1226,7 @@
 
 
             <!-- MONTHLY -->
+
             <div class="glass rounded-2xl p-5 sm:p-6">
 
                 <div class="flex items-center justify-between mb-6">
@@ -1012,7 +1245,7 @@
 
                     </div>
 
-                    <div class="text-xl">
+                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/10 flex items-center justify-center text-lg">
                         📈
                     </div>
 
@@ -1021,8 +1254,7 @@
 
                 <div class="grid grid-cols-3 gap-3">
 
-
-                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
+                    <div class="metric-box rounded-xl p-3">
 
                         <p class="text-xs text-gray-500">
                             Files
@@ -1037,7 +1269,7 @@
                     </div>
 
 
-                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
+                    <div class="metric-box rounded-xl p-3">
 
                         <p class="text-xs text-gray-500">
                             Views
@@ -1052,7 +1284,7 @@
                     </div>
 
 
-                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
+                    <div class="metric-box rounded-xl p-3">
 
                         <p class="text-xs text-gray-500">
                             Earnings
@@ -1076,6 +1308,7 @@
         <!-- =================================================
              CHART
         ================================================== -->
+
         <div class="glass rounded-2xl p-5 sm:p-6 mb-8">
 
             <div class="flex items-center justify-between mb-5">
@@ -1092,7 +1325,7 @@
 
                 </div>
 
-                <div class="text-xs text-indigo-400 bg-indigo-500/10 px-3 py-1.5 rounded-lg">
+                <div class="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/10 px-3 py-1.5 rounded-lg">
                     Last 7 Days
                 </div>
 
@@ -1111,6 +1344,7 @@
         <!-- =================================================
              RECENT FILES
         ================================================== -->
+
         <div class="glass rounded-2xl overflow-hidden">
 
             <div class="p-5 sm:p-6 border-b border-gray-800/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1130,14 +1364,31 @@
 
                 <a
                     href="/files"
-                    class="text-sm text-indigo-400 hover:text-indigo-300">
-                    View All →
+                    class="inline-flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition">
+
+                    View All
+
+                    <svg
+                        class="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M9 5l7 7-7 7"/>
+
+                    </svg>
+
                 </a>
 
             </div>
 
 
-            <!-- DESKTOP TABLE -->
+            <!-- DESKTOP -->
+
             <div class="hidden md:block overflow-x-auto">
 
                 <table class="w-full text-left">
@@ -1175,8 +1426,22 @@
 
                         <tr>
 
-                            <td colspan="5" class="px-6 py-10 text-center text-gray-500 text-sm">
-                                No files uploaded yet.
+                            <td
+                                colspan="5"
+                                class="px-6 py-12 text-center text-gray-500 text-sm">
+
+                                <div class="flex flex-col items-center">
+
+                                    <div class="w-11 h-11 rounded-xl bg-gray-800/40 border border-gray-700/40 flex items-center justify-center mb-3 text-lg">
+                                        📁
+                                    </div>
+
+                                    <span>
+                                        No files uploaded yet.
+                                    </span>
+
+                                </div>
+
                             </td>
 
                         </tr>
@@ -1189,12 +1454,19 @@
 
 
             <!-- MOBILE -->
+
             <div
                 id="recentFilesMobile"
                 class="md:hidden divide-y divide-gray-800/70">
 
-                <div class="p-5 text-center text-sm text-gray-500">
+                <div class="p-7 text-center text-sm text-gray-500">
+
+                    <div class="w-11 h-11 mx-auto rounded-xl bg-gray-800/40 border border-gray-700/40 flex items-center justify-center mb-3 text-lg">
+                        📁
+                    </div>
+
                     No files uploaded yet.
+
                 </div>
 
             </div>
@@ -1210,6 +1482,7 @@
 <!-- =========================================================
      JAVASCRIPT
 ========================================================= -->
+
 <script>
 
     /* ========================================================
@@ -1218,11 +1491,19 @@
 
     function toggleSidebar() {
 
-        const sidebar = document.getElementById("sidebar");
-        const overlay = document.getElementById("sidebarOverlay");
+        const sidebar =
+            document.getElementById("sidebar");
 
-        sidebar.classList.remove("mobile-sidebar-hidden");
-        sidebar.classList.add("mobile-sidebar-visible");
+        const overlay =
+            document.getElementById("sidebarOverlay");
+
+        sidebar.classList.remove(
+            "mobile-sidebar-hidden"
+        );
+
+        sidebar.classList.add(
+            "mobile-sidebar-visible"
+        );
 
         overlay.classList.remove("hidden");
     }
@@ -1230,14 +1511,39 @@
 
     function closeSidebar() {
 
-        const sidebar = document.getElementById("sidebar");
-        const overlay = document.getElementById("sidebarOverlay");
+        const sidebar =
+            document.getElementById("sidebar");
 
-        sidebar.classList.remove("mobile-sidebar-visible");
-        sidebar.classList.add("mobile-sidebar-hidden");
+        const overlay =
+            document.getElementById("sidebarOverlay");
+
+        sidebar.classList.remove(
+            "mobile-sidebar-visible"
+        );
+
+        sidebar.classList.add(
+            "mobile-sidebar-hidden"
+        );
 
         overlay.classList.add("hidden");
     }
+
+
+    /* ========================================================
+       CLOSE SIDEBAR AFTER MOBILE NAVIGATION
+    ======================================================== */
+
+    document.querySelectorAll("#sidebar a").forEach(link => {
+
+        link.addEventListener("click", function() {
+
+            if (window.innerWidth < 1024) {
+                closeSidebar();
+            }
+
+        });
+
+    });
 
 
     /* ========================================================
@@ -1263,7 +1569,9 @@
             container &&
             !container.contains(event.target)
         ) {
+
             container.classList.remove("active");
+
         }
 
     });
@@ -1277,7 +1585,22 @@
 
         event.preventDefault();
 
-        alert("This section will be available soon.");
+        alert(
+            "This section will be available soon."
+        );
+    }
+
+
+    /* ========================================================
+       NOTIFICATION
+    ======================================================== */
+
+    function showNotification() {
+
+        alert(
+            "No new notifications."
+        );
+
     }
 
 
@@ -1289,18 +1612,24 @@
 
         try {
 
-            const response = await fetch("/api/logout", {
-                method: "POST",
-                credentials: "include"
-            });
-
-            window.location.href = "/";
+            await fetch(
+                "/api/logout",
+                {
+                    method: "POST",
+                    credentials: "include"
+                }
+            );
 
         } catch (error) {
 
-            window.location.href = "/";
+            console.error(
+                "Logout error:",
+                error
+            );
 
         }
+
+        window.location.href = "/";
 
     }
 
@@ -1313,10 +1642,15 @@
 
         try {
 
-            const response = await fetch("/api/me", {
-                method: "GET",
-                credentials: "include"
-            });
+            const response =
+                await fetch(
+                    "/api/me",
+                    {
+                        method: "GET",
+                        credentials: "include"
+                    }
+                );
+
 
             if (!response.ok) {
 
@@ -1325,9 +1659,14 @@
 
             }
 
-            const data = await response.json();
 
-            const user = data.user || data;
+            const data =
+                await response.json();
+
+
+            const user =
+                data.user || data;
+
 
             if (!user) {
 
@@ -1342,39 +1681,61 @@
                 user.email?.split("@")[0] ||
                 "Publisher";
 
+
             const email =
                 user.email ||
                 "-";
 
 
-            document.getElementById("welcomeName").innerText =
+            document.getElementById(
+                "welcomeName"
+            ).innerText =
                 name + " 👋";
 
-            document.getElementById("topUserName").innerText =
+
+            document.getElementById(
+                "topUserName"
+            ).innerText =
                 name;
 
-            document.getElementById("dropdownName").innerText =
+
+            document.getElementById(
+                "dropdownName"
+            ).innerText =
                 name;
 
-            document.getElementById("dropdownEmail").innerText =
+
+            document.getElementById(
+                "dropdownEmail"
+            ).innerText =
                 email;
 
 
-            const initials = name
-                .split(" ")
-                .map(part => part.charAt(0))
-                .join("")
-                .substring(0, 2)
-                .toUpperCase();
+            const initials =
+                name
+                    .split(" ")
+                    .filter(Boolean)
+                    .map(
+                        part =>
+                            part.charAt(0)
+                    )
+                    .join("")
+                    .substring(0, 2)
+                    .toUpperCase();
 
 
-            document.getElementById("avatar").innerText =
+            document.getElementById(
+                "avatar"
+            ).innerText =
                 initials || "SM";
 
 
         } catch (error) {
 
-            console.error("User load error:", error);
+            console.error(
+                "User load error:",
+                error
+            );
 
             window.location.href = "/";
 
@@ -1386,52 +1747,86 @@
     /* ========================================================
        DEMO STATS
        -----------------------------------------------
-       These values are only UI preview values.
-       Later we will connect them to real D1 data.
+       Temporary UI preview values.
+       These will later be replaced with real D1 data.
     ======================================================== */
 
     function loadDemoStats() {
 
-        document.getElementById("totalRevenue").innerText =
+        document.getElementById(
+            "totalRevenue"
+        ).innerText =
             "$750.694";
 
-        document.getElementById("paidRevenue").innerText =
+
+        document.getElementById(
+            "paidRevenue"
+        ).innerText =
             "$725.052";
 
-        document.getElementById("availableRevenue").innerText =
+
+        document.getElementById(
+            "availableRevenue"
+        ).innerText =
             "$25.641";
 
-        document.getElementById("pendingRevenue").innerText =
+
+        document.getElementById(
+            "pendingRevenue"
+        ).innerText =
             "$0.000";
 
 
-        document.getElementById("dailyFiles").innerText =
+        document.getElementById(
+            "dailyFiles"
+        ).innerText =
             "61";
 
-        document.getElementById("dailyViews").innerText =
+
+        document.getElementById(
+            "dailyViews"
+        ).innerText =
             "113";
 
-        document.getElementById("dailyEarnings").innerText =
+
+        document.getElementById(
+            "dailyEarnings"
+        ).innerText =
             "$0.11";
 
 
-        document.getElementById("monthlyFiles").innerText =
+        document.getElementById(
+            "monthlyFiles"
+        ).innerText =
             "541";
 
-        document.getElementById("monthlyViews").innerText =
+
+        document.getElementById(
+            "monthlyViews"
+        ).innerText =
             "1,902";
 
-        document.getElementById("monthlyEarnings").innerText =
+
+        document.getElementById(
+            "monthlyEarnings"
+        ).innerText =
             "$71.82";
 
 
-        const now = new Date();
+        const now =
+            new Date();
 
-        document.getElementById("currentMonth").innerText =
-            now.toLocaleDateString("en-US", {
-                month: "long",
-                year: "numeric"
-            });
+
+        document.getElementById(
+            "currentMonth"
+        ).innerText =
+            now.toLocaleDateString(
+                "en-US",
+                {
+                    month: "long",
+                    year: "numeric"
+                }
+            );
 
     }
 
@@ -1443,103 +1838,189 @@
     function createChart() {
 
         const canvas =
-            document.getElementById("viewsChart");
-
-        if (!canvas) return;
-
-
-        const ctx = canvas.getContext("2d");
+            document.getElementById(
+                "viewsChart"
+            );
 
 
-        new Chart(ctx, {
+        if (!canvas) {
+            return;
+        }
 
-            type: "line",
 
-            data: {
+        const ctx =
+            canvas.getContext("2d");
 
-                labels: [
-                    "Mon",
-                    "Tue",
-                    "Wed",
-                    "Thu",
-                    "Fri",
-                    "Sat",
-                    "Sun"
-                ],
 
-                datasets: [
+        const existingChart =
+            Chart.getChart(canvas);
 
-                    {
-                        label: "Views",
 
-                        data: [
-                            18,
-                            27,
-                            22,
-                            41,
-                            35,
-                            51,
-                            44
-                        ],
+        if (existingChart) {
+            existingChart.destroy();
+        }
 
-                        borderColor: "#818cf8",
 
-                        backgroundColor: "rgba(129,140,248,.08)",
+        new Chart(
+            ctx,
+            {
 
-                        borderWidth: 2,
+                type: "line",
 
-                        fill: true,
+                data: {
 
-                        tension: .4,
+                    labels: [
+                        "Mon",
+                        "Tue",
+                        "Wed",
+                        "Thu",
+                        "Fri",
+                        "Sat",
+                        "Sun"
+                    ],
 
-                        pointRadius: 3,
+                    datasets: [
 
-                        pointHoverRadius: 5
+                        {
+                            label: "Views",
 
-                    }
+                            data: [
+                                18,
+                                27,
+                                22,
+                                41,
+                                35,
+                                51,
+                                44
+                            ],
 
-                ]
+                            borderColor:
+                                "#818cf8",
 
-            },
+                            backgroundColor:
+                                "rgba(129,140,248,.07)",
 
-            options: {
+                            borderWidth: 2,
 
-                responsive: true,
+                            fill: true,
 
-                maintainAspectRatio: false,
+                            tension: .4,
 
-                plugins: {
+                            pointRadius: 3,
 
-                    legend: {
-                        display: false
-                    }
+                            pointHoverRadius: 5,
+
+                            pointBackgroundColor:
+                                "#818cf8",
+
+                            pointBorderWidth: 0
+
+                        }
+
+                    ]
 
                 },
 
-                scales: {
 
-                    x: {
+                options: {
 
-                        grid: {
+                    responsive: true,
+
+                    maintainAspectRatio: false,
+
+                    interaction: {
+
+                        intersect: false,
+
+                        mode: "index"
+
+                    },
+
+
+                    plugins: {
+
+                        legend: {
                             display: false
                         },
 
-                        ticks: {
-                            color: "#64748b"
+
+                        tooltip: {
+
+                            backgroundColor:
+                                "rgba(9,13,22,.95)",
+
+                            borderColor:
+                                "rgba(148,163,184,.12)",
+
+                            borderWidth: 1,
+
+                            titleColor: "#fff",
+
+                            bodyColor: "#cbd5e1",
+
+                            padding: 10,
+
+                            displayColors: false
+
                         }
 
                     },
 
-                    y: {
 
-                        beginAtZero: true,
+                    scales: {
 
-                        grid: {
-                            color: "rgba(148,163,184,.06)"
+                        x: {
+
+                            grid: {
+                                display: false
+                            },
+
+                            border: {
+                                display: false
+                            },
+
+                            ticks: {
+
+                                color:
+                                    "#64748b",
+
+                                font: {
+                                    size: 11
+                                }
+
+                            }
+
                         },
 
-                        ticks: {
-                            color: "#64748b"
+
+                        y: {
+
+                            beginAtZero: true,
+
+                            border: {
+                                display: false
+                            },
+
+                            grid: {
+
+                                color:
+                                    "rgba(148,163,184,.055)"
+
+                            },
+
+                            ticks: {
+
+                                color:
+                                    "#64748b",
+
+                                font: {
+                                    size: 11
+                                },
+
+                                padding: 8
+
+                            }
+
                         }
 
                     }
@@ -1547,8 +2028,7 @@
                 }
 
             }
-
-        });
+        );
 
     }
 
@@ -1557,15 +2037,18 @@
        INIT
     ======================================================== */
 
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener(
+        "DOMContentLoaded",
+        function() {
 
-        loadUser();
+            loadUser();
 
-        loadDemoStats();
+            loadDemoStats();
 
-        createChart();
+            createChart();
 
-    });
+        }
+    );
 
 </script>
 
