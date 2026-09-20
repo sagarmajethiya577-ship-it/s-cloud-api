@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Dashboard | S-Cloud</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
 
     <link
         href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet"
-    >
+        rel="stylesheet">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -20,15 +18,10 @@
             box-sizing: border-box;
         }
 
-        html {
-            scroll-behavior: smooth;
-        }
-
         body {
             font-family: 'Poppins', sans-serif;
-            background: #090d16;
-            color: #fff;
-            overflow-x: hidden;
+            background: #0b0f19;
+            color: white;
         }
 
         body::before {
@@ -36,80 +29,72 @@
             position: fixed;
             inset: 0;
             background:
-                radial-gradient(
-                    circle at 8% 0%,
-                    rgba(59,130,246,.12),
-                    transparent 28%
-                ),
-                radial-gradient(
-                    circle at 92% 5%,
-                    rgba(124,58,237,.09),
-                    transparent 27%
-                ),
-                radial-gradient(
-                    circle at 50% 100%,
-                    rgba(6,182,212,.035),
-                    transparent 32%
-                );
+                radial-gradient(circle at 15% 0%, rgba(59,130,246,.13), transparent 30%),
+                radial-gradient(circle at 90% 8%, rgba(139,92,246,.10), transparent 27%),
+                radial-gradient(circle at 50% 100%, rgba(6,182,212,.055), transparent 32%);
             z-index: -1;
             pointer-events: none;
         }
 
         .glass {
-            background: rgba(15, 22, 36, .78);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(148,163,184,.085);
-            box-shadow:
-                0 20px 55px -35px rgba(0,0,0,.95);
+            background: rgba(17, 24, 39, .72);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(148,163,184,.09);
+            box-shadow: 0 18px 50px -30px rgba(0,0,0,.9);
         }
 
         .sidebar {
-            background: rgba(10, 15, 27, .97);
-            border-right: 1px solid rgba(148,163,184,.09);
+            background: rgba(13, 19, 32, .96);
+            border-right: 1px solid rgba(148,163,184,.10);
             transition: transform .3s ease;
         }
 
+        .overlay {
+            background: rgba(0,0,0,.65);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
         .menu-item {
-            position: relative;
-            transition:
-                background .2s ease,
-                color .2s ease,
-                border-color .2s ease;
+            transition: all .2s ease;
         }
 
         .menu-item:hover {
-            background: rgba(255,255,255,.045);
-            color: #fff;
+            background: rgba(255,255,255,.055);
+            color: white;
         }
 
         .menu-active {
-            background:
-                linear-gradient(
-                    135deg,
-                    rgba(99,102,241,.17),
-                    rgba(59,130,246,.07)
-                );
+            background: linear-gradient(
+                135deg,
+                rgba(99,102,241,.18),
+                rgba(59,130,246,.10)
+            );
             color: #a5b4fc;
             border: 1px solid rgba(99,102,241,.12);
         }
 
-        .menu-active::before {
-            content: "";
-            position: absolute;
-            left: -1px;
-            top: 50%;
-            width: 3px;
-            height: 22px;
-            transform: translateY(-50%);
-            border-radius: 0 5px 5px 0;
-            background: #818cf8;
+        .stat-card {
+            transition: transform .2s ease, border-color .2s ease;
         }
 
-        .overlay {
-            background: rgba(0,0,0,.68);
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(99,102,241,.20);
+        }
+
+        .profile-menu {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-5px);
+            transition: all .18s ease;
+        }
+
+        .profile-container.active .profile-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
         }
 
         .mobile-sidebar-hidden {
@@ -118,70 +103,6 @@
 
         .mobile-sidebar-visible {
             transform: translateX(0);
-        }
-
-        .stat-card {
-            position: relative;
-            overflow: hidden;
-            transition:
-                transform .22s ease,
-                border-color .22s ease,
-                background .22s ease;
-        }
-
-        .stat-card::after {
-            content: "";
-            position: absolute;
-            width: 90px;
-            height: 90px;
-            right: -45px;
-            top: -45px;
-            border-radius: 999px;
-            background: rgba(99,102,241,.055);
-            filter: blur(18px);
-            pointer-events: none;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-            border-color: rgba(129,140,248,.18);
-            background: rgba(18,25,42,.86);
-        }
-
-        .profile-menu {
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-6px);
-            pointer-events: none;
-            transition: all .18s ease;
-        }
-
-        .profile-container.active .profile-menu {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-            pointer-events: auto;
-        }
-
-        .metric-box {
-            background: rgba(5,10,18,.28);
-            border: 1px solid rgba(148,163,184,.07);
-            transition:
-                border-color .2s ease,
-                background .2s ease;
-        }
-
-        .metric-box:hover {
-            background: rgba(255,255,255,.025);
-            border-color: rgba(148,163,184,.12);
-        }
-
-        .file-row {
-            transition: background .18s ease;
-        }
-
-        .file-row:hover {
-            background: rgba(255,255,255,.025);
         }
 
         .scrollbar::-webkit-scrollbar {
@@ -197,6 +118,32 @@
             border-radius: 10px;
         }
 
+        /* =====================================================
+           CUSTOM MODAL
+        ===================================================== */
+
+        .notice-modal {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity .22s ease, visibility .22s ease;
+        }
+
+        .notice-modal.show {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .notice-box {
+            transform: translateY(12px) scale(.97);
+            transition: transform .22s ease;
+        }
+
+        .notice-modal.show .notice-box {
+            transform: translateY(0) scale(1);
+        }
+
         @media (min-width: 1024px) {
 
             .sidebar {
@@ -210,22 +157,13 @@
             #sidebarOverlay {
                 display: none !important;
             }
-        }
 
-        @media (max-width: 640px) {
-
-            .main-content {
-                padding-top: 1.5rem;
-            }
-
-            .stat-card:hover {
-                transform: none;
-            }
         }
     </style>
 </head>
 
 <body class="min-h-screen">
+
 
 <!-- =========================================================
      MOBILE SIDEBAR OVERLAY
@@ -246,9 +184,10 @@
     id="sidebar"
     class="sidebar fixed left-0 top-0 bottom-0 w-64 z-50 mobile-sidebar-hidden lg:translate-x-0 flex flex-col">
 
+
     <!-- BRAND -->
 
-    <div class="h-20 px-6 flex items-center border-b border-gray-800/60">
+    <div class="h-20 px-6 flex items-center border-b border-gray-800/70">
 
         <div class="flex items-center gap-3">
 
@@ -297,6 +236,7 @@
 
     <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar">
 
+
         <!-- ANALYTICS -->
 
         <a
@@ -304,7 +244,7 @@
             class="menu-item menu-active flex items-center gap-3 px-4 py-3 rounded-xl font-medium">
 
             <svg
-                class="w-5 h-5 shrink-0"
+                class="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -331,7 +271,7 @@
             class="menu-item flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-medium">
 
             <svg
-                class="w-5 h-5 shrink-0"
+                class="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -358,7 +298,7 @@
             class="menu-item flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-medium">
 
             <svg
-                class="w-5 h-5 shrink-0"
+                class="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -386,7 +326,7 @@
             class="menu-item flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-medium">
 
             <svg
-                class="w-5 h-5 shrink-0"
+                class="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -414,7 +354,7 @@
             class="menu-item flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 font-medium">
 
             <svg
-                class="w-5 h-5 shrink-0"
+                class="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -439,6 +379,100 @@
 
 
 <!-- =========================================================
+     CUSTOM NOTICE MODAL
+========================================================= -->
+
+<div
+    id="noticeModal"
+    class="notice-modal fixed inset-0 z-[100] flex items-center justify-center px-5">
+
+    <div
+        class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        onclick="closeNotice()">
+    </div>
+
+
+    <div
+        class="notice-box relative w-full max-w-sm glass rounded-3xl p-6 border border-gray-700/50 shadow-2xl">
+
+        <div class="flex items-start gap-4">
+
+            <div
+                id="noticeIcon"
+                class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/10 flex items-center justify-center shrink-0">
+
+                <svg
+                    class="w-6 h-6 text-indigo-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+
+                    <path
+                        stroke-linecap="round"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13 16h-1v-4h-1m1-4h.01M12 22a10 10 0 100-20 10 10 0 000 20z"/>
+
+                </svg>
+
+            </div>
+
+
+            <div class="flex-1">
+
+                <h3
+                    id="noticeTitle"
+                    class="text-lg font-semibold text-white">
+                    Notification
+                </h3>
+
+                <p
+                    id="noticeMessage"
+                    class="text-sm text-gray-400 mt-1 leading-relaxed">
+                    No new notifications.
+                </p>
+
+            </div>
+
+
+            <button
+                onclick="closeNotice()"
+                class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/5 transition">
+
+                <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12"/>
+
+                </svg>
+
+            </button>
+
+        </div>
+
+
+        <button
+            onclick="closeNotice()"
+            class="w-full mt-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition">
+
+            Okay
+
+        </button>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
      MAIN AREA
 ========================================================= -->
 
@@ -453,15 +487,17 @@
 
         <div class="h-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
 
+
             <!-- LEFT -->
 
-            <div class="flex items-center gap-4 min-w-0">
+            <div class="flex items-center gap-4">
+
 
                 <!-- MOBILE MENU -->
 
                 <button
                     onclick="toggleSidebar()"
-                    class="lg:hidden w-11 h-11 shrink-0 rounded-xl bg-gray-800/60 border border-gray-700/60 flex items-center justify-center text-gray-300 hover:text-white transition">
+                    class="lg:hidden w-11 h-11 rounded-xl bg-gray-800/60 border border-gray-700/60 flex items-center justify-center text-gray-300 hover:text-white transition">
 
                     <svg
                         class="w-6 h-6"
@@ -482,9 +518,9 @@
 
                 <!-- MOBILE BRAND -->
 
-                <div class="flex items-center gap-2.5 lg:hidden min-w-0">
+                <div class="flex items-center gap-2.5 lg:hidden">
 
-                    <div class="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center">
 
                         <svg
                             class="w-5 h-5 text-white"
@@ -508,7 +544,8 @@
 
                     </div>
 
-                    <span class="font-extrabold tracking-tight truncate">
+
+                    <span class="font-extrabold tracking-tight">
 
                         <span class="text-white">
                             S-
@@ -523,7 +560,7 @@
                 </div>
 
 
-                <!-- DESKTOP TITLE -->
+                <!-- DESKTOP PAGE TITLE -->
 
                 <div class="hidden lg:block">
 
@@ -542,14 +579,15 @@
 
             <!-- RIGHT -->
 
-            <div class="flex items-center gap-2 sm:gap-3">
+            <div class="flex items-center gap-3">
+
 
                 <!-- NOTIFICATION -->
 
                 <button
-                    onclick="showNotification()"
+                    onclick="showNotifications()"
                     aria-label="Notifications"
-                    class="relative w-11 h-11 rounded-xl bg-gray-800/50 border border-gray-700/60 flex items-center justify-center text-gray-300 hover:text-white hover:border-gray-600 transition">
+                    class="relative w-11 h-11 rounded-xl bg-gray-800/50 border border-gray-700/60 flex items-center justify-center text-gray-300 hover:text-white transition">
 
                     <svg
                         class="w-5 h-5"
@@ -578,13 +616,13 @@
 
                     <button
                         onclick="toggleProfile(event)"
-                        class="flex items-center gap-2 sm:gap-3">
+                        class="flex items-center gap-3">
 
                         <div class="hidden sm:block text-right">
 
                             <p
                                 id="topUserName"
-                                class="text-sm font-semibold text-white max-w-[140px] truncate">
+                                class="text-sm font-semibold text-white">
                                 Publisher
                             </p>
 
@@ -597,7 +635,7 @@
 
                         <div
                             id="avatar"
-                            class="w-11 h-11 shrink-0 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+                            class="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
 
                             SM
 
@@ -617,7 +655,7 @@
 
                                 <p
                                     id="dropdownName"
-                                    class="text-sm font-semibold text-white truncate">
+                                    class="text-sm font-semibold text-white">
                                     Publisher
                                 </p>
 
@@ -630,38 +668,47 @@
                             </div>
 
 
+                            <!-- SETTINGS -->
+
                             <a
                                 href="/settings"
-                                class="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-gray-300 hover:bg-white/5">
+                                class="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-gray-300 hover:bg-white/5 transition">
 
-                                <svg
-                                    class="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24">
+                                <span class="w-5 h-5 flex items-center justify-center shrink-0">
 
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.065 2.573c.94 1.543-.827 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.065c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.572-1.065c-1.543.94-3.31-.827-2.37-2.37a1.724 1.724 0 001.065-2.573c.94-1.543-.827-3.31-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-.94-1.544.827-3.31 2.37-2.37.996.608 2.296.07 2.572-1.066z"/>
+                                    <svg
+                                        class="w-[18px] h-[18px] text-gray-400"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                        aria-hidden="true">
 
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="1.8"
+                                            d="M9.594 3.94a2.25 2.25 0 014.812 0l.18.77a1.75 1.75 0 002.12 1.3l.77-.18a2.25 2.25 0 013.406 3.406l-.18.77a1.75 1.75 0 001.3 2.12l.77.18a2.25 2.25 0 010 4.812l-.77.18a1.75 1.75 0 00-1.3 2.12l.18.77a2.25 2.25 0 01-3.406 3.406l-.77-.18a1.75 1.75 0 00-2.12 1.3l-.18.77a2.25 2.25 0 01-4.812 0l-.18-.77a1.75 1.75 0 00-2.12-1.3l-.77.18a2.25 2.25 0 01-3.406-3.406l.18-.77a1.75 1.75 0 00-1.3-2.12l-.77-.18a2.25 2.25 0 010-4.812l.77-.18a1.75 1.75 0 001.3-2.12l-.18-.77A2.25 2.25 0 016.524 5.83l.77.18a1.75 1.75 0 002.12-1.3l.18-.77z"/>
 
-                                </svg>
+                                        <circle
+                                            cx="12"
+                                            cy="12"
+                                            r="3"
+                                            stroke-width="1.8"/>
+
+                                    </svg>
+
+                                </span>
 
                                 Settings
 
                             </a>
 
 
+                            <!-- LOGOUT -->
+
                             <button
                                 onclick="logout()"
-                                class="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-red-400 hover:bg-red-500/10">
+                                class="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition">
 
                                 <svg
                                     class="w-4 h-4"
@@ -698,22 +745,26 @@
          PAGE CONTENT
     ====================================================== -->
 
-    <main class="main-content max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-8">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
 
         <!-- =================================================
              ANALYTICS
         ================================================== -->
 
-        <div class="mb-5">
+        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
 
-            <h2 class="text-xl sm:text-2xl font-bold text-white">
-                Analytics
-            </h2>
+            <div>
 
-            <p class="text-sm text-gray-500 mt-1">
-                Track your files, views and earnings
-            </p>
+                <h2 class="text-xl sm:text-2xl font-bold text-white">
+                    Analytics
+                </h2>
+
+                <p class="text-sm text-gray-500 mt-1">
+                    Track your files, views and earnings
+                </p>
+
+            </div>
 
         </div>
 
@@ -722,7 +773,7 @@
              DAILY + MONTHLY
         ================================================== -->
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-9">
 
 
             <!-- DAILY -->
@@ -743,7 +794,7 @@
 
                     </div>
 
-                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/10 flex items-center justify-center text-lg">
+                    <div class="text-xl">
                         📊
                     </div>
 
@@ -752,7 +803,8 @@
 
                 <div class="grid grid-cols-3 gap-3">
 
-                    <div class="metric-box rounded-xl p-3">
+
+                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
 
                         <p class="text-xs text-gray-500">
                             Uploaded
@@ -767,7 +819,7 @@
                     </div>
 
 
-                    <div class="metric-box rounded-xl p-3">
+                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
 
                         <p class="text-xs text-gray-500">
                             Views
@@ -782,7 +834,7 @@
                     </div>
 
 
-                    <div class="metric-box rounded-xl p-3">
+                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
 
                         <p class="text-xs text-gray-500">
                             Earnings
@@ -821,7 +873,7 @@
 
                     </div>
 
-                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/10 flex items-center justify-center text-lg">
+                    <div class="text-xl">
                         📈
                     </div>
 
@@ -830,7 +882,8 @@
 
                 <div class="grid grid-cols-3 gap-3">
 
-                    <div class="metric-box rounded-xl p-3">
+
+                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
 
                         <p class="text-xs text-gray-500">
                             Files
@@ -845,7 +898,7 @@
                     </div>
 
 
-                    <div class="metric-box rounded-xl p-3">
+                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
 
                         <p class="text-xs text-gray-500">
                             Views
@@ -860,7 +913,7 @@
                     </div>
 
 
-                    <div class="metric-box rounded-xl p-3">
+                    <div class="rounded-xl bg-black/15 border border-gray-800/70 p-3">
 
                         <p class="text-xs text-gray-500">
                             Earnings
@@ -952,7 +1005,7 @@
 
                     </div>
 
-                    <div class="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/10 flex items-center justify-center text-xl">
+                    <div class="w-11 h-11 rounded-xl bg-indigo-500/10 flex items-center justify-center text-xl">
                         💵
                     </div>
 
@@ -985,7 +1038,7 @@
 
                     </div>
 
-                    <div class="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/10 flex items-center justify-center">
+                    <div class="w-11 h-11 rounded-xl bg-emerald-500/10 flex items-center justify-center">
 
                         <svg
                             class="w-6 h-6 text-emerald-400"
@@ -1032,7 +1085,7 @@
 
                     </div>
 
-                    <div class="w-11 h-11 rounded-xl bg-purple-500/10 border border-purple-500/10 flex items-center justify-center text-xl">
+                    <div class="w-11 h-11 rounded-xl bg-purple-500/10 flex items-center justify-center text-xl">
                         💳
                     </div>
 
@@ -1065,7 +1118,7 @@
 
                     </div>
 
-                    <div class="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/10 flex items-center justify-center text-xl">
+                    <div class="w-11 h-11 rounded-xl bg-amber-500/10 flex items-center justify-center text-xl">
                         ⏳
                     </div>
 
@@ -1100,7 +1153,7 @@
 
                 </div>
 
-                <div class="text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/10 px-3 py-1.5 rounded-lg">
+                <div class="text-xs text-indigo-400 bg-indigo-500/10 px-3 py-1.5 rounded-lg">
                     Last 7 Days
                 </div>
 
@@ -1139,24 +1192,8 @@
 
                 <a
                     href="/files"
-                    class="inline-flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition">
-
-                    View All
-
-                    <svg
-                        class="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24">
-
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M9 5l7 7-7 7"/>
-
-                    </svg>
-
+                    class="text-sm text-indigo-400 hover:text-indigo-300">
+                    View All →
                 </a>
 
             </div>
@@ -1203,19 +1240,9 @@
 
                             <td
                                 colspan="5"
-                                class="px-6 py-12 text-center text-gray-500 text-sm">
+                                class="px-6 py-10 text-center text-gray-500 text-sm">
 
-                                <div class="flex flex-col items-center">
-
-                                    <div class="w-11 h-11 rounded-xl bg-gray-800/40 border border-gray-700/40 flex items-center justify-center mb-3 text-lg">
-                                        📁
-                                    </div>
-
-                                    <span>
-                                        No files uploaded yet.
-                                    </span>
-
-                                </div>
+                                No files uploaded yet.
 
                             </td>
 
@@ -1234,11 +1261,7 @@
                 id="recentFilesMobile"
                 class="md:hidden divide-y divide-gray-800/70">
 
-                <div class="p-7 text-center text-sm text-gray-500">
-
-                    <div class="w-11 h-11 mx-auto rounded-xl bg-gray-800/40 border border-gray-700/40 flex items-center justify-center mb-3 text-lg">
-                        📁
-                    </div>
+                <div class="p-5 text-center text-sm text-gray-500">
 
                     No files uploaded yet.
 
@@ -1247,6 +1270,7 @@
             </div>
 
         </div>
+
 
     </main>
 
@@ -1259,531 +1283,499 @@
 
 <script>
 
-    /* ========================================================
-       SIDEBAR
-    ======================================================== */
 
-    function toggleSidebar() {
+/* =========================================================
+   SIDEBAR
+========================================================= */
 
-        const sidebar =
-            document.getElementById("sidebar");
+function toggleSidebar() {
 
-        const overlay =
-            document.getElementById("sidebarOverlay");
+    const sidebar =
+        document.getElementById("sidebar");
 
-        sidebar.classList.remove(
-            "mobile-sidebar-hidden"
-        );
+    const overlay =
+        document.getElementById("sidebarOverlay");
 
-        sidebar.classList.add(
-            "mobile-sidebar-visible"
-        );
+    sidebar.classList.remove(
+        "mobile-sidebar-hidden"
+    );
 
-        overlay.classList.remove("hidden");
-    }
+    sidebar.classList.add(
+        "mobile-sidebar-visible"
+    );
 
+    overlay.classList.remove("hidden");
 
-    function closeSidebar() {
-
-        const sidebar =
-            document.getElementById("sidebar");
-
-        const overlay =
-            document.getElementById("sidebarOverlay");
-
-        sidebar.classList.remove(
-            "mobile-sidebar-visible"
-        );
-
-        sidebar.classList.add(
-            "mobile-sidebar-hidden"
-        );
-
-        overlay.classList.add("hidden");
-    }
+}
 
 
-    document.querySelectorAll("#sidebar a").forEach(link => {
+function closeSidebar() {
 
-        link.addEventListener("click", function() {
+    const sidebar =
+        document.getElementById("sidebar");
 
-            if (window.innerWidth < 1024) {
-                closeSidebar();
-            }
+    const overlay =
+        document.getElementById("sidebarOverlay");
 
-        });
+    sidebar.classList.remove(
+        "mobile-sidebar-visible"
+    );
 
-    });
+    sidebar.classList.add(
+        "mobile-sidebar-hidden"
+    );
 
+    overlay.classList.add("hidden");
 
-    /* ========================================================
-       PROFILE
-    ======================================================== */
-
-    function toggleProfile(event) {
-
-        event.stopPropagation();
-
-        document
-            .getElementById("profileContainer")
-            .classList.toggle("active");
-
-    }
+}
 
 
-    document.addEventListener("click", function(event) {
+/* =========================================================
+   PROFILE DROPDOWN
+========================================================= */
+
+function toggleProfile(event) {
+
+    event.stopPropagation();
+
+    document
+        .getElementById("profileContainer")
+        .classList.toggle("active");
+
+}
+
+
+document.addEventListener(
+    "click",
+    function(event) {
 
         const container =
-            document.getElementById("profileContainer");
+            document.getElementById(
+                "profileContainer"
+            );
 
         if (
             container &&
             !container.contains(event.target)
         ) {
 
-            container.classList.remove("active");
-
-        }
-
-    });
-
-
-    /* ========================================================
-       COMING SOON
-    ======================================================== */
-
-    function comingSoon(event) {
-
-        event.preventDefault();
-
-        alert(
-            "This section will be available soon."
-        );
-
-    }
-
-
-    /* ========================================================
-       NOTIFICATION
-    ======================================================== */
-
-    function showNotification() {
-
-        alert(
-            "No new notifications."
-        );
-
-    }
-
-
-    /* ========================================================
-       LOGOUT
-    ======================================================== */
-
-    async function logout() {
-
-        try {
-
-            await fetch(
-                "/api/logout",
-                {
-                    method: "POST",
-                    credentials: "include"
-                }
-            );
-
-        } catch (error) {
-
-            console.error(
-                "Logout error:",
-                error
+            container.classList.remove(
+                "active"
             );
 
         }
+
+    }
+);
+
+
+/* =========================================================
+   CUSTOM NOTICE
+========================================================= */
+
+function showNotice(
+    title,
+    message
+) {
+
+    document.getElementById(
+        "noticeTitle"
+    ).innerText = title;
+
+    document.getElementById(
+        "noticeMessage"
+    ).innerText = message;
+
+    document
+        .getElementById("noticeModal")
+        .classList.add("show");
+
+}
+
+
+function closeNotice() {
+
+    document
+        .getElementById("noticeModal")
+        .classList.remove("show");
+
+}
+
+
+function showNotifications() {
+
+    showNotice(
+        "Notifications",
+        "No new notifications."
+    );
+
+}
+
+
+/* =========================================================
+   COMING SOON
+========================================================= */
+
+function comingSoon(event) {
+
+    event.preventDefault();
+
+    showNotice(
+        "Coming Soon",
+        "This section will be available soon."
+    );
+
+}
+
+
+/* =========================================================
+   ESC KEY FOR MODAL
+========================================================= */
+
+document.addEventListener(
+    "keydown",
+    function(event) {
+
+        if (event.key === "Escape") {
+
+            closeNotice();
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   LOGOUT
+========================================================= */
+
+async function logout() {
+
+    try {
+
+        await fetch(
+            "/api/logout",
+            {
+                method: "POST",
+                credentials: "include"
+            }
+        );
+
+        window.location.href = "/";
+
+    } catch (error) {
 
         window.location.href = "/";
 
     }
 
-
-    /* ========================================================
-       LOAD USER
-    ======================================================== */
-
-    async function loadUser() {
-
-        try {
-
-            const response =
-                await fetch(
-                    "/api/me",
-                    {
-                        method: "GET",
-                        credentials: "include"
-                    }
-                );
+}
 
 
-            if (!response.ok) {
+/* =========================================================
+   LOAD USER
+========================================================= */
 
-                window.location.href = "/";
-                return;
+async function loadUser() {
 
-            }
+    try {
 
-
-            const data =
-                await response.json();
-
-
-            const user =
-                data.user || data;
-
-
-            if (!user) {
-
-                window.location.href = "/";
-                return;
-
-            }
-
-
-            const name =
-                user.name ||
-                user.email?.split("@")[0] ||
-                "Publisher";
-
-
-            const email =
-                user.email ||
-                "-";
-
-
-            document.getElementById(
-                "topUserName"
-            ).innerText =
-                name;
-
-
-            document.getElementById(
-                "dropdownName"
-            ).innerText =
-                name;
-
-
-            document.getElementById(
-                "dropdownEmail"
-            ).innerText =
-                email;
-
-
-            const initials =
-                name
-                    .split(" ")
-                    .filter(Boolean)
-                    .map(
-                        part =>
-                            part.charAt(0)
-                    )
-                    .join("")
-                    .substring(0, 2)
-                    .toUpperCase();
-
-
-            document.getElementById(
-                "avatar"
-            ).innerText =
-                initials || "SM";
-
-
-        } catch (error) {
-
-            console.error(
-                "User load error:",
-                error
+        const response =
+            await fetch(
+                "/api/me",
+                {
+                    method: "GET",
+                    credentials: "include"
+                }
             );
+
+
+        if (!response.ok) {
 
             window.location.href = "/";
 
-        }
-
-    }
-
-
-    /* ========================================================
-       DEMO STATS
-    ======================================================== */
-
-    function loadDemoStats() {
-
-        document.getElementById(
-            "totalRevenue"
-        ).innerText =
-            "$750.694";
-
-
-        document.getElementById(
-            "paidRevenue"
-        ).innerText =
-            "$725.052";
-
-
-        document.getElementById(
-            "availableRevenue"
-        ).innerText =
-            "$25.641";
-
-
-        document.getElementById(
-            "pendingRevenue"
-        ).innerText =
-            "$0.000";
-
-
-        document.getElementById(
-            "dailyFiles"
-        ).innerText =
-            "61";
-
-
-        document.getElementById(
-            "dailyViews"
-        ).innerText =
-            "113";
-
-
-        document.getElementById(
-            "dailyEarnings"
-        ).innerText =
-            "$0.11";
-
-
-        document.getElementById(
-            "monthlyFiles"
-        ).innerText =
-            "541";
-
-
-        document.getElementById(
-            "monthlyViews"
-        ).innerText =
-            "1,902";
-
-
-        document.getElementById(
-            "monthlyEarnings"
-        ).innerText =
-            "$71.82";
-
-
-        const now =
-            new Date();
-
-
-        document.getElementById(
-            "currentMonth"
-        ).innerText =
-            now.toLocaleDateString(
-                "en-US",
-                {
-                    month: "long",
-                    year: "numeric"
-                }
-            );
-
-    }
-
-
-    /* ========================================================
-       CHART
-    ======================================================== */
-
-    function createChart() {
-
-        const canvas =
-            document.getElementById(
-                "viewsChart"
-            );
-
-
-        if (!canvas) {
             return;
+
         }
 
 
-        const ctx =
-            canvas.getContext("2d");
+        const data =
+            await response.json();
+
+        const user =
+            data.user || data;
 
 
-        const existingChart =
-            Chart.getChart(canvas);
+        if (!user) {
 
+            window.location.href = "/";
 
-        if (existingChart) {
-            existingChart.destroy();
+            return;
+
         }
 
 
-        new Chart(
-            ctx,
+        const name =
+            user.name ||
+            user.email?.split("@")[0] ||
+            "Publisher";
+
+
+        const email =
+            user.email ||
+            "-";
+
+
+        document.getElementById(
+            "topUserName"
+        ).innerText = name;
+
+
+        document.getElementById(
+            "dropdownName"
+        ).innerText = name;
+
+
+        document.getElementById(
+            "dropdownEmail"
+        ).innerText = email;
+
+
+        const initials =
+            name
+                .split(" ")
+                .map(
+                    part =>
+                        part.charAt(0)
+                )
+                .join("")
+                .substring(0, 2)
+                .toUpperCase();
+
+
+        document.getElementById(
+            "avatar"
+        ).innerText =
+            initials || "SM";
+
+
+    } catch (error) {
+
+        console.error(
+            "User load error:",
+            error
+        );
+
+        window.location.href = "/";
+
+    }
+
+}
+
+
+/* =========================================================
+   DEMO STATS
+   -----------------------------------------------
+   Temporary UI values.
+   Later connect these to real D1 data.
+========================================================= */
+
+function loadDemoStats() {
+
+
+    document.getElementById(
+        "totalRevenue"
+    ).innerText =
+        "$750.694";
+
+
+    document.getElementById(
+        "paidRevenue"
+    ).innerText =
+        "$725.052";
+
+
+    document.getElementById(
+        "availableRevenue"
+    ).innerText =
+        "$25.641";
+
+
+    document.getElementById(
+        "pendingRevenue"
+    ).innerText =
+        "$0.000";
+
+
+    document.getElementById(
+        "dailyFiles"
+    ).innerText =
+        "61";
+
+
+    document.getElementById(
+        "dailyViews"
+    ).innerText =
+        "113";
+
+
+    document.getElementById(
+        "dailyEarnings"
+    ).innerText =
+        "$0.11";
+
+
+    document.getElementById(
+        "monthlyFiles"
+    ).innerText =
+        "541";
+
+
+    document.getElementById(
+        "monthlyViews"
+    ).innerText =
+        "1,902";
+
+
+    document.getElementById(
+        "monthlyEarnings"
+    ).innerText =
+        "$71.82";
+
+
+    const now =
+        new Date();
+
+
+    document.getElementById(
+        "currentMonth"
+    ).innerText =
+        now.toLocaleDateString(
+            "en-US",
             {
+                month: "long",
+                year: "numeric"
+            }
+        );
 
-                type: "line",
+}
 
-                data: {
 
-                    labels: [
-                        "Mon",
-                        "Tue",
-                        "Wed",
-                        "Thu",
-                        "Fri",
-                        "Sat",
-                        "Sun"
-                    ],
+/* =========================================================
+   CHART
+========================================================= */
 
-                    datasets: [
+function createChart() {
 
-                        {
-                            label: "Views",
+    const canvas =
+        document.getElementById(
+            "viewsChart"
+        );
 
-                            data: [
-                                18,
-                                27,
-                                22,
-                                41,
-                                35,
-                                51,
-                                44
-                            ],
 
-                            borderColor:
-                                "#818cf8",
+    if (!canvas) return;
 
-                            backgroundColor:
-                                "rgba(129,140,248,.07)",
 
-                            borderWidth: 2,
+    const ctx =
+        canvas.getContext("2d");
 
-                            fill: true,
 
-                            tension: .4,
+    new Chart(
+        ctx,
+        {
 
-                            pointRadius: 3,
+            type: "line",
 
-                            pointHoverRadius: 5,
+            data: {
 
-                            pointBackgroundColor:
-                                "#818cf8",
+                labels: [
+                    "Mon",
+                    "Tue",
+                    "Wed",
+                    "Thu",
+                    "Fri",
+                    "Sat",
+                    "Sun"
+                ],
 
-                            pointBorderWidth: 0
+                datasets: [
 
-                        }
+                    {
 
-                    ]
+                        label: "Views",
+
+                        data: [
+                            18,
+                            27,
+                            22,
+                            41,
+                            35,
+                            51,
+                            44
+                        ],
+
+                        borderColor:
+                            "#818cf8",
+
+                        backgroundColor:
+                            "rgba(129,140,248,.08)",
+
+                        borderWidth: 2,
+
+                        fill: true,
+
+                        tension: .4,
+
+                        pointRadius: 3,
+
+                        pointHoverRadius: 5
+
+                    }
+
+                ]
+
+            },
+
+            options: {
+
+                responsive: true,
+
+                maintainAspectRatio: false,
+
+                plugins: {
+
+                    legend: {
+                        display: false
+                    }
 
                 },
 
+                scales: {
 
-                options: {
+                    x: {
 
-                    responsive: true,
-
-                    maintainAspectRatio: false,
-
-                    interaction: {
-
-                        intersect: false,
-
-                        mode: "index"
-
-                    },
-
-
-                    plugins: {
-
-                        legend: {
+                        grid: {
                             display: false
                         },
 
-
-                        tooltip: {
-
-                            backgroundColor:
-                                "rgba(9,13,22,.95)",
-
-                            borderColor:
-                                "rgba(148,163,184,.12)",
-
-                            borderWidth: 1,
-
-                            titleColor: "#fff",
-
-                            bodyColor: "#cbd5e1",
-
-                            padding: 10,
-
-                            displayColors: false
-
+                        ticks: {
+                            color: "#64748b"
                         }
 
                     },
 
+                    y: {
 
-                    scales: {
+                        beginAtZero: true,
 
-                        x: {
-
-                            grid: {
-                                display: false
-                            },
-
-                            border: {
-                                display: false
-                            },
-
-                            ticks: {
-
-                                color:
-                                    "#64748b",
-
-                                font: {
-                                    size: 11
-                                }
-
-                            }
-
+                        grid: {
+                            color:
+                                "rgba(148,163,184,.06)"
                         },
 
-
-                        y: {
-
-                            beginAtZero: true,
-
-                            border: {
-                                display: false
-                            },
-
-                            grid: {
-
-                                color:
-                                    "rgba(148,163,184,.055)"
-
-                            },
-
-                            ticks: {
-
-                                color:
-                                    "#64748b",
-
-                                font: {
-                                    size: 11
-                                },
-
-                                padding: 8
-
-                            }
-
+                        ticks: {
+                            color: "#64748b"
                         }
 
                     }
@@ -1791,27 +1783,29 @@
                 }
 
             }
-        );
-
-    }
-
-
-    /* ========================================================
-       INIT
-    ======================================================== */
-
-    document.addEventListener(
-        "DOMContentLoaded",
-        function() {
-
-            loadUser();
-
-            loadDemoStats();
-
-            createChart();
 
         }
     );
+
+}
+
+
+/* =========================================================
+   INIT
+========================================================= */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+        loadUser();
+
+        loadDemoStats();
+
+        createChart();
+
+    }
+);
 
 </script>
 
