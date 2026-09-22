@@ -675,102 +675,6 @@
         </section>
 
 
-        <!-- =========================
-             INFO CARDS
-        ========================== -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-
-            <div class="glass-card p-4">
-
-                <div class="flex items-center gap-2 mb-2">
-
-                    <div class="w-7 h-7 rounded-lg bg-cyan-400/10 flex items-center justify-center text-cyan-400">
-
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M13 10V3L4 14h7v7l9-11h-7z"
-                            />
-                        </svg>
-
-                    </div>
-
-                    <span class="text-xs font-semibold">
-                        Fast Processing
-                    </span>
-
-                </div>
-
-                <p class="text-[10px] leading-4 text-gray-500">
-                    Files are processed automatically after submission.
-                </p>
-
-            </div>
-
-
-            <div class="glass-card p-4">
-
-                <div class="flex items-center gap-2 mb-2">
-
-                    <div class="w-7 h-7 rounded-lg bg-blue-400/10 flex items-center justify-center text-blue-400">
-
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v2h8z"
-                            />
-                        </svg>
-
-                    </div>
-
-                    <span class="text-xs font-semibold">
-                        Secure
-                    </span>
-
-                </div>
-
-                <p class="text-[10px] leading-4 text-gray-500">
-                    Your upload requests are linked to your S-Cloud account.
-                </p>
-
-            </div>
-
-
-            <div class="glass-card p-4">
-
-                <div class="flex items-center gap-2 mb-2">
-
-                    <div class="w-7 h-7 rounded-lg bg-purple-400/10 flex items-center justify-center text-purple-400">
-
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M3 7h18M3 12h18M3 17h18"
-                            />
-                        </svg>
-
-                    </div>
-
-                    <span class="text-xs font-semibold">
-                        Multiple Files
-                    </span>
-
-                </div>
-
-                <p class="text-[10px] leading-4 text-gray-500">
-                    Multiple links and complete Drive folders can be processed.
-                </p>
-
-            </div>
-
-        </div>
-
     </main>
 
 
@@ -1060,7 +964,7 @@
                         <div class="min-w-0">
 
                             <p
-                                class="file-name text-xs font-medium text-gray-300 truncate"
+                                class="file-name text-xs font-medium text-gray-300 truncate" data-file-name
                                 title="${escapeHtml(fileName)}"
                             >
                                 ${escapeHtml(fileName)}
@@ -1309,6 +1213,13 @@
 
 
                     const uploadData = data.data || data;
+
+                    if (uploadData.file_name) {
+                        const nameElement = row.querySelector("[data-file-name]");
+                        if (nameElement) {
+                            nameElement.textContent = uploadData.file_name;
+                        }
+                    }
 
                     const link =
                         uploadData.short_link ||
