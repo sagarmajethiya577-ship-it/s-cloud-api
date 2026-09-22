@@ -1308,14 +1308,17 @@
                     }
 
 
+                    const uploadData = data.data || data;
+
                     const link =
-                        data.short_url ||
-                        data.url ||
-                        data.download_url ||
-                        data.file_url ||
+                        uploadData.short_link ||
+                        uploadData.short_url ||
+                        uploadData.url ||
+                        uploadData.download_url ||
+                        uploadData.file_url ||
                         (
-                            data.short_id
-                                ? `${location.origin}/file/${data.short_id}`
+                            uploadData.short_id
+                                ? `${location.origin}/file/${uploadData.short_id}`
                                 : ""
                         );
 
