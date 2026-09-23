@@ -2427,14 +2427,30 @@ export default {
             url.pathname ===
                 "/api/delete" ||
             url.pathname ===
-                "/api/upload"
+                "/api/upload" ||
+            url.pathname ===
+                "/v1/upload"
         ) {
 
-            currentUser =
-                await getCurrentUser(
-                    request,
-                    env
-                );
+            if (
+                url.pathname ===
+                    "/v1/upload"
+            ) {
+
+                currentUser =
+                    await authenticateApiKey(
+                        request,
+                        env
+                    );
+
+            } else {
+
+                currentUser =
+                    await getCurrentUser(
+                        request,
+                        env
+                    );
+            }
 
             if (
                 !currentUser
@@ -2444,7 +2460,10 @@ export default {
                         status:
                             "error",
                         message:
-                            "Authentication required"
+                            url.pathname ===
+                                "/v1/upload"
+                                ? "Valid API key required"
+                                : "Authentication required"
                     }),
                     {
                         status: 401,
@@ -2827,19 +2846,44 @@ export default {
         // ==================================================
 
         if (
-            url.pathname ===
-                "/api/upload" &&
-            request.method ===
-                "POST"
+            (
+                url.pathname ===
+                    "/api/upload" &&
+                request.method ===
+                    "POST"
+            ) ||
+            (
+                url.pathname ===
+                    "/v1/upload" &&
+                request.method ===
+                    "GET"
+            )
         ) {
             try {
 
-                const body =
-                    await request.json();
+                let drive_url;
 
-                const {
-                    drive_url
-                } = body;
+                if (
+                    url.pathname ===
+                        "/v1/upload"
+                ) {
+
+                    drive_url =
+                        url.searchParams.get(
+                            "url"
+                        ) ||
+                        url.searchParams.get(
+                            "drive_url"
+                        );
+
+                } else {
+
+                    const body =
+                        await request.json();
+
+                    drive_url =
+                        body?.drive_url;
+                }
 
 
                 if (
