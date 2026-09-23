@@ -785,6 +785,444 @@ async function cleanExpiredSessions(
 
 
 // ==================================================
+// API KEY SYSTEM
+// ==================================================
+
+const API_KEY_BYTES =
+    32;
+
+
+// ==================================================
+// API KEY BASE64URL ENCODER
+// ==================================================
+
+function bytesToBase64Url(
+    bytes
+) {
+    let binary = "";
+
+    for (
+        const byte of bytes
+    ) {
+        binary += String.fromCharCode(
+            byte
+        );
+    }
+
+    return btoa(
+        binary
+    )
+        .replace(
+            /\+/g,
+            "-"
+        )
+        .replace(
+            /\//g,
+            "_"
+        )
+        .replace(
+            /=+$/g,
+            ""
+        );
+}
+
+
+// ==================================================
+// GENERATE SECURE API KEY
+// ==================================================
+
+function generateApiKey() {
+    const bytes =
+        new Uint8Array(
+            API_KEY_BYTES
+        );
+
+    crypto.getRandomValues(
+        bytes
+    );
+
+    return (
+        "sc_" +
+        bytesToBase64Url(
+            bytes
+        )
+    );
+}
+
+
+// ==================================================
+// GET API KEY FROM REQUEST
+//
+// Supported:
+// Authorization: Bearer sc_xxxxx
+// X-API-Key: sc_xxxxx
+// ?api=sc_xxxxx
+// ==================================================
+
+function getApiKeyFromRequest(
+    request
+) {
+
+    const authorization =
+        request.headers.get(
+            "Authorization"
+        );
+
+    if (
+        authorization
+    ) {
+
+        const match =
+            authorization.match(
+                /^Bearer\s+(.+)$/i
+            );
+
+        if (
+            match &&
+            match[1]
+        ) {
+            return match[1].trim();
+        }
+    }
+
+
+    const headerKey =
+        request.headers.get(
+            "X-API-Key"
+        );
+
+    if (
+        headerKey
+    ) {
+        return headerKey.trim();
+    }
+
+
+    try {
+
+        const requestUrl =
+            new URL(
+                request.url
+            );
+
+        const queryKey =
+            requestUrl.searchParams.get(
+                "api"
+            );
+
+        if (
+            queryKey
+        ) {
+            return queryKey.trim();
+        }
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            "API key URL parsing error:",
+            error
+        );
+    }
+
+
+    return null;
+}
+
+
+// ==================================================
+// ENSURE API KEY TABLE
+// ==================================================
+
+async function ensureApiKeyTable(
+    env
+) {
+
+    await env.DB.prepare(
+        `CREATE TABLE IF NOT EXISTS api_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            key_hash TEXT NOT NULL UNIQUE,
+            key_prefix TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_used_at TIMESTAMP,
+            revoked_at TIMESTAMP
+        )`
+    ).run();
+
+
+    await env.DB.prepare(
+        `CREATE INDEX IF NOT EXISTS idx_api_keys_user_id
+         ON api_keys(user_id)`
+    ).run();
+
+
+    await env.DB.prepare(
+        `CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash
+         ON api_keys(key_hash)`
+    ).run();
+}
+
+
+// ==================================================
+// GET CURRENT API KEY RECORD
+// ==================================================
+
+async function getUserApiKey(
+    userId,
+    env
+) {
+
+    return await env.DB
+        .prepare(
+            `SELECT
+                id,
+                user_id,
+                key_prefix,
+                status,
+                created_at,
+                last_used_at,
+                revoked_at
+             FROM api_keys
+             WHERE user_id = ?
+             AND status = 'active'
+             ORDER BY id DESC
+             LIMIT 1`
+        )
+        .bind(
+            userId
+        )
+        .first();
+}
+
+
+// ==================================================
+// CREATE NEW API KEY
+// ==================================================
+
+async function createApiKey(
+    userId,
+    env
+) {
+
+    const apiKey =
+        generateApiKey();
+
+    const keyHash =
+        await sha256Hex(
+            apiKey
+        );
+
+    const keyPrefix =
+        apiKey.slice(
+            0,
+            11
+        );
+
+
+    await env.DB
+        .prepare(
+            `INSERT INTO api_keys
+            (
+                user_id,
+                key_hash,
+                key_prefix,
+                status
+            )
+            VALUES (?, ?, ?, 'active')`
+        )
+        .bind(
+            userId,
+            keyHash,
+            keyPrefix
+        )
+        .run();
+
+
+    return {
+        apiKey,
+        keyPrefix
+    };
+}
+
+
+// ==================================================
+// REVOKE CURRENT USER API KEYS
+// ==================================================
+
+async function revokeUserApiKeys(
+    userId,
+    env
+) {
+
+    await env.DB
+        .prepare(
+            `UPDATE api_keys
+             SET
+                status = 'revoked',
+                revoked_at = CURRENT_TIMESTAMP
+             WHERE
+                user_id = ?
+                AND status = 'active'`
+        )
+        .bind(
+            userId
+        )
+        .run();
+}
+
+
+// ==================================================
+// AUTHENTICATE API KEY
+// ==================================================
+
+async function authenticateApiKey(
+    request,
+    env
+) {
+
+    const apiKey =
+        getApiKeyFromRequest(
+            request
+        );
+
+    if (
+        !apiKey
+    ) {
+        return null;
+    }
+
+
+    if (
+        apiKey.length <
+        20
+    ) {
+        return null;
+    }
+
+
+    let keyHash;
+
+    try {
+
+        keyHash =
+            await sha256Hex(
+                apiKey
+            );
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            "API key hashing error:",
+            error
+        );
+
+        return null;
+    }
+
+
+    const record =
+        await env.DB
+            .prepare(
+                `SELECT
+                    k.id AS api_key_id,
+                    k.user_id,
+                    k.key_prefix,
+                    k.status AS key_status,
+                    u.id,
+                    u.name,
+                    u.email,
+                    u.role,
+                    u.balance,
+                    u.custom_cpm,
+                    u.status,
+                    u.last_login_ip,
+                    u.created_at
+                 FROM api_keys k
+                 INNER JOIN users u
+                    ON u.id = k.user_id
+                 WHERE
+                    k.key_hash = ?
+                    AND k.status = 'active'
+                 LIMIT 1`
+            )
+            .bind(
+                keyHash
+            )
+            .first();
+
+
+    if (
+        !record
+    ) {
+        return null;
+    }
+
+
+    if (
+        record.status ===
+        "banned"
+    ) {
+        return null;
+    }
+
+
+    try {
+
+        await env.DB
+            .prepare(
+                `UPDATE api_keys
+                 SET last_used_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`
+            )
+            .bind(
+                record.api_key_id
+            )
+            .run();
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            "API key last-used update error:",
+            error
+        );
+    }
+
+
+    return {
+        id:
+            record.id,
+        name:
+            record.name,
+        email:
+            record.email,
+        role:
+            record.role,
+        balance:
+            record.balance,
+        custom_cpm:
+            record.custom_cpm,
+        status:
+            record.status,
+        last_login_ip:
+            record.last_login_ip,
+        created_at:
+            record.created_at,
+        api_key_id:
+            record.api_key_id,
+        api_key_prefix:
+            record.key_prefix
+    };
+}
+
+
+// ==================================================
 // SAFE JSON HEADERS
 // ==================================================
 
@@ -819,7 +1257,7 @@ export default {
             "Access-Control-Allow-Methods":
                 "GET, POST, OPTIONS",
             "Access-Control-Allow-Headers":
-                "Content-Type"
+                "Content-Type, Authorization, X-API-Key"
         };
 
 
@@ -846,6 +1284,370 @@ export default {
             new URL(
                 request.url
             );
+
+
+        // ==================================================
+        // API KEY MANAGEMENT
+        // ==================================================
+
+
+        // ==================================================
+        // GET API KEY
+        // ==================================================
+
+        if (
+            url.pathname ===
+                "/api/key" &&
+            request.method ===
+                "GET"
+        ) {
+            try {
+
+                const user =
+                    await getCurrentUser(
+                        request,
+                        env
+                    );
+
+                if (
+                    !user
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Authentication required"
+                        }),
+                        {
+                            status: 401,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+
+                await ensureApiKeyTable(
+                    env
+                );
+
+
+                let key =
+                    await getUserApiKey(
+                        user.id,
+                        env
+                    );
+
+
+                // ------------------------------------------
+                // FIRST TIME
+                // ------------------------------------------
+
+                if (
+                    !key
+                ) {
+
+                    const generated =
+                        await createApiKey(
+                            user.id,
+                            env
+                        );
+
+
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "success",
+                            message:
+                                "API key created successfully.",
+                            data: {
+                                api_key:
+                                    generated.apiKey,
+                                key_prefix:
+                                    generated.keyPrefix,
+                                is_new:
+                                    true,
+                                warning:
+                                    "Save this API key now. It will not be shown again."
+                            }
+                        }),
+                        {
+                            status: 200,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "success",
+                        data: {
+                            key_prefix:
+                                key.key_prefix,
+                            status:
+                                key.status,
+                            created_at:
+                                key.created_at,
+                            last_used_at:
+                                key.last_used_at,
+                            is_new:
+                                false,
+                            api_key:
+                                null,
+                            message:
+                                "Your API key is active. The full key is only returned when it is first generated or regenerated."
+                        }
+                    }),
+                    {
+                        status: 200,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Get API Key Error:",
+                    error
+                );
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "error",
+                        message:
+                            "Unable to load API key"
+                    }),
+                    {
+                        status: 500,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+            }
+        }
+
+
+        // ==================================================
+        // REGENERATE API KEY
+        // ==================================================
+
+        if (
+            url.pathname ===
+                "/api/key/regenerate" &&
+            request.method ===
+                "POST"
+        ) {
+            try {
+
+                const user =
+                    await getCurrentUser(
+                        request,
+                        env
+                    );
+
+
+                if (
+                    !user
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Authentication required"
+                        }),
+                        {
+                            status: 401,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+
+                await ensureApiKeyTable(
+                    env
+                );
+
+
+                await revokeUserApiKeys(
+                    user.id,
+                    env
+                );
+
+
+                const generated =
+                    await createApiKey(
+                        user.id,
+                        env
+                    );
+
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "success",
+                        message:
+                            "API key regenerated successfully. Your previous key is now invalid.",
+                        data: {
+                            api_key:
+                                generated.apiKey,
+                            key_prefix:
+                                generated.keyPrefix,
+                            is_new:
+                                true,
+                            warning:
+                                "Save this API key now. It will not be shown again."
+                        }
+                    }),
+                    {
+                        status: 200,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Regenerate API Key Error:",
+                    error
+                );
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "error",
+                        message:
+                            "Unable to regenerate API key"
+                    }),
+                    {
+                        status: 500,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+            }
+        }
+
+
+        // ==================================================
+        // REVOKE API KEY
+        // ==================================================
+
+        if (
+            url.pathname ===
+                "/api/key/revoke" &&
+            request.method ===
+                "POST"
+        ) {
+            try {
+
+                const user =
+                    await getCurrentUser(
+                        request,
+                        env
+                    );
+
+
+                if (
+                    !user
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Authentication required"
+                        }),
+                        {
+                            status: 401,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+
+                await ensureApiKeyTable(
+                    env
+                );
+
+
+                await revokeUserApiKeys(
+                    user.id,
+                    env
+                );
+
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "success",
+                        message:
+                            "API key revoked successfully."
+                    }),
+                    {
+                        status: 200,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Revoke API Key Error:",
+                    error
+                );
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "error",
+                        message:
+                            "Unable to revoke API key"
+                    }),
+                    {
+                        status: 500,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+            }
+        }
 
 
         // ==================================================
