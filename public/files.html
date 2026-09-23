@@ -3,108 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Manage Files | S-CLOUD</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
-        html { scroll-behavior: smooth; }
+        html {
+            scroll-behavior: smooth;
+        }
 
         body {
             margin: 0;
             min-height: 100vh;
             font-family: 'Poppins', sans-serif;
-            background-color: #0b0f19;
+            background:
+                radial-gradient(circle at 15% 10%, rgba(37, 99, 235, 0.12), transparent 28%),
+                radial-gradient(circle at 90% 15%, rgba(124, 58, 237, 0.10), transparent 30%),
+                #0b0f19;
             color: #f8fafc;
         }
 
-        body::before {
-            content: "";
-            position: fixed;
-            inset: 0;
-            background-image:
-                radial-gradient(circle at 15% 0%, rgba(59,130,246,.13), transparent 30%),
-                radial-gradient(circle at 90% 8%, rgba(139,92,246,.10), transparent 27%),
-                radial-gradient(circle at 50% 100%, rgba(6,182,212,.055), transparent 32%);
-            z-index: -1;
-            pointer-events: none;
+        ::-webkit-scrollbar {
+            width: 7px;
+            height: 7px;
         }
 
-        ::-webkit-scrollbar { width: 7px; height: 7px; }
-        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
         ::-webkit-scrollbar-thumb {
-            background: rgba(148,163,184,.24);
-            border-radius: 10px;
+            background: rgba(100, 116, 139, 0.45);
+            border-radius: 20px;
         }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.38); }
 
-        .glass-card,
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(148, 163, 184, 0.55);
+        }
+
         .glass {
-            background: rgba(24,31,45,.68);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(148,163,184,.085);
+            background: rgba(17, 24, 39, 0.72);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(148, 163, 184, 0.10);
             box-shadow:
-                0 16px 45px -24px rgba(0,0,0,.75),
-                inset 0 1px 0 rgba(255,255,255,.02);
-            border-radius: 1.25rem;
+                0 20px 50px rgba(0, 0, 0, 0.18),
+                inset 0 1px 0 rgba(255, 255, 255, 0.025);
         }
 
         .sidebar {
-            background: rgba(17,24,39,.88);
-            border-right: 1px solid rgba(148,163,184,.09);
-            box-shadow: 18px 0 50px -35px rgba(0,0,0,.9);
+            background: rgba(13, 19, 32, 0.96);
+            border-right: 1px solid rgba(148, 163, 184, 0.10);
         }
 
         .gradient-text {
-            background: linear-gradient(90deg,#60a5fa,#818cf8,#a78bfa);
+            background: linear-gradient(
+                90deg,
+                #60a5fa,
+                #818cf8,
+                #a78bfa
+            );
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
         }
 
         .logo-box {
-            background: linear-gradient(135deg,#2563eb,#4f46e5,#7c3aed);
+            background: linear-gradient(
+                135deg,
+                #2563eb,
+                #4f46e5,
+                #7c3aed
+            );
             box-shadow:
-                0 0 28px rgba(79,70,229,.30),
+                0 0 28px rgba(79, 70, 229, 0.30),
                 inset 0 1px 0 rgba(255,255,255,.15);
         }
 
-        .nav-item { transition: all .2s ease; }
+        .nav-item {
+            transition: all .2s ease;
+        }
 
         .nav-item:hover {
-            background: rgba(255,255,255,.045);
+            background: rgba(51, 65, 85, 0.34);
             color: #fff;
         }
 
         .nav-item.active {
-            background: rgba(34,211,238,.10);
-            color: #67e8f9;
-            border: 1px solid rgba(34,211,238,.08);
+            background:
+                linear-gradient(
+                    90deg,
+                    rgba(37, 99, 235, 0.20),
+                    rgba(79, 70, 229, 0.14)
+                );
+            color: #fff;
+            border: 1px solid rgba(96, 165, 250, 0.10);
         }
 
-        .main-content { margin-left: 256px; }
+        .main-content {
+            margin-left: 256px;
+        }
 
         .mobile-overlay {
             display: none;
-            background: rgba(0,0,0,.60);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
         }
 
-        .sidebar-open .mobile-overlay { display: block; }
+        .sidebar-open .mobile-overlay {
+            display: block;
+        }
+
+        .sidebar-open .mobile-sidebar {
+            transform: translateX(0);
+        }
 
         .mobile-sidebar {
             transform: translateX(-100%);
             transition: transform .25s ease;
         }
-
-        .sidebar-open .mobile-sidebar { transform: translateX(0); }
 
         .profile-menu {
             opacity: 0;
@@ -119,65 +143,78 @@
             transform: translateY(0);
         }
 
-        .search-input,
-        .select-box {
-            background: rgba(10,14,23,.78);
-            border: 1px solid rgba(148,163,184,.13);
+        .search-input {
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(148, 163, 184, 0.12);
             outline: none;
             transition: all .2s ease;
         }
 
-        .search-input:focus,
-        .select-box:focus {
-            border-color: rgba(34,211,238,.38);
-            box-shadow: 0 0 0 3px rgba(34,211,238,.055);
+        .search-input:focus {
+            border-color: rgba(96, 165, 250, 0.42);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
         }
 
-        .select-box { color: #cbd5e1; }
+        .select-box {
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            outline: none;
+            color: #cbd5e1;
+        }
 
-        .file-row,
-        .mobile-file-card { transition: background .18s ease; }
+        .select-box:focus {
+            border-color: rgba(96, 165, 250, 0.42);
+        }
 
-        .file-row:hover,
-        .mobile-file-card:hover {
-            background: rgba(34,211,238,.028);
+        .file-row {
+            transition: background .18s ease;
+        }
+
+        .file-row:hover {
+            background: rgba(30, 41, 59, 0.34);
         }
 
         .file-icon {
-            background: linear-gradient(
-                135deg,
-                rgba(37,99,235,.16),
-                rgba(124,58,237,.13)
-            );
-            border: 1px solid rgba(96,165,250,.10);
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(37, 99, 235, 0.18),
+                    rgba(124, 58, 237, 0.15)
+                );
+            border: 1px solid rgba(96, 165, 250, 0.10);
         }
 
         .status-active {
-            background: rgba(16,185,129,.10);
+            background: rgba(16, 185, 129, 0.10);
             color: #6ee7b7;
-            border: 1px solid rgba(16,185,129,.14);
+            border: 1px solid rgba(16, 185, 129, 0.14);
         }
 
         .status-deleted {
-            background: rgba(239,68,68,.09);
+            background: rgba(239, 68, 68, 0.09);
             color: #fca5a5;
-            border: 1px solid rgba(239,68,68,.13);
+            border: 1px solid rgba(239, 68, 68, 0.13);
         }
 
         .status-other {
-            background: rgba(245,158,11,.09);
+            background: rgba(245, 158, 11, 0.09);
             color: #fcd34d;
-            border: 1px solid rgba(245,158,11,.13);
+            border: 1px solid rgba(245, 158, 11, 0.13);
         }
 
-        .table-wrapper { overflow-x: auto; }
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        .table-wrapper::-webkit-scrollbar {
+            height: 5px;
+        }
 
         .dropdown {
-            background: rgba(10,14,23,.98);
-            border: 1px solid rgba(148,163,184,.13);
-            box-shadow: 0 18px 40px rgba(0,0,0,.40);
+            background: rgba(15, 23, 42, 0.98);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.30);
             backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
         }
 
         .action-menu {
@@ -194,40 +231,58 @@
         }
 
         .modal-backdrop {
-            background: rgba(2,6,23,.74);
+            background: rgba(2, 6, 23, 0.72);
             backdrop-filter: blur(7px);
             -webkit-backdrop-filter: blur(7px);
         }
 
-        .modal-box { animation: modalIn .18s ease-out; }
+        .modal-box {
+            animation: modalIn .18s ease-out;
+        }
 
         @keyframes modalIn {
-            from { opacity: 0; transform: scale(.97) translateY(8px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
+            from {
+                opacity: 0;
+                transform: scale(.97) translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
         }
 
         .spinner {
             width: 18px;
             height: 18px;
             border-radius: 50%;
-            border: 2px solid rgba(255,255,255,.20);
+            border: 2px solid rgba(255,255,255,.22);
             border-top-color: white;
             animation: spin .7s linear infinite;
         }
 
-        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
 
-        .page-btn { transition: all .18s ease; }
+        .page-btn {
+            transition: all .18s ease;
+        }
 
         .page-btn:hover:not(:disabled) {
-            background: rgba(51,65,85,.45);
-            color: #e2e8f0;
+            background: rgba(51, 65, 85, 0.45);
         }
 
         .page-btn.active {
-            background: linear-gradient(135deg,#2563eb,#4f46e5);
+            background: linear-gradient(
+                135deg,
+                #2563eb,
+                #4f46e5
+            );
             color: white;
-            border-color: rgba(96,165,250,.30);
+            border-color: rgba(96, 165, 250, 0.30);
         }
 
         .page-btn:disabled {
@@ -248,40 +303,51 @@
             pointer-events: auto;
         }
 
-        .toast-success { border-color: rgba(16,185,129,.20); }
-        .toast-error { border-color: rgba(239,68,68,.20); }
-        .toast-info { border-color: rgba(59,130,246,.20); }
+        .toast-success {
+            border-color: rgba(16,185,129,.20);
+        }
+
+        .toast-error {
+            border-color: rgba(239,68,68,.20);
+        }
+
+        .toast-info {
+            border-color: rgba(59,130,246,.20);
+        }
 
         .empty-icon {
-            background: radial-gradient(
-                circle,
-                rgba(59,130,246,.13),
-                rgba(124,58,237,.06),
-                transparent 70%
-            );
+            background:
+                radial-gradient(
+                    circle,
+                    rgba(59,130,246,.13),
+                    rgba(124,58,237,.06),
+                    transparent 70%
+                );
+        }
+
+        .mobile-file-card {
+            transition: background .18s ease;
+        }
+
+        .mobile-file-card:hover {
+            background: rgba(30, 41, 59, 0.30);
         }
 
         @media (max-width: 1023px) {
-            .desktop-sidebar { display: none; }
-            .main-content { margin-left: 0; }
-
-            .mobile-overlay {
-                position: fixed;
-                inset: 0;
-                z-index: 40;
+            .desktop-sidebar {
+                display: none;
             }
 
-            .mobile-sidebar {
-                position: fixed;
-                inset: 0 auto 0 0;
-                width: 17rem;
-                z-index: 50;
+            .main-content {
+                margin-left: 0;
             }
         }
 
         @media (min-width: 1024px) {
             .mobile-sidebar,
-            .mobile-overlay { display: none !important; }
+            .mobile-overlay {
+                display: none !important;
+            }
         }
 
         @media (max-width: 639px) {
@@ -292,26 +358,37 @@
         }
     </style>
 </head>
-<body class="min-h-screen pb-10">
 
-    <!-- Mobile sidebar overlay -->
-    <div
-        class="mobile-overlay"
-        onclick="closeSidebar()"
-        aria-hidden="true"
-    ></div>
+<body>
 
-    <!-- Desktop sidebar -->
+    <!-- ========================================================= -->
+    <!-- DESKTOP SIDEBAR -->
+    <!-- ========================================================= -->
+
     <aside class="desktop-sidebar sidebar fixed left-0 top-0 z-40 h-screen w-64">
+
         <div class="flex h-full flex-col">
+
+            <!-- Logo -->
             <div class="flex h-20 items-center px-5">
+
                 <a href="/dashboard" class="flex items-center gap-3">
+
                     <div class="logo-box flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
-                        <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+
+                        <svg
+                            width="25"
+                            height="25"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
                             <path
                                 d="M7.2 18.2H17.1C19.37 18.2 21 16.65 21 14.5C21 12.55 19.57 11.12 17.58 10.87C17.25 7.62 14.51 5.2 11.18 5.2C8.31 5.2 5.9 7.01 5.02 9.55C2.73 9.78 1 11.52 1 13.72C1 16.2 2.92 18.2 5.4 18.2H7.2Z"
-                                fill="white" fill-opacity=".96"
+                                fill="white"
+                                fill-opacity=".96"
                             />
+
                             <path
                                 d="M12 9.2V15.3M9.7 12.9L12 15.3L14.3 12.9"
                                 stroke="#4F46E5"
@@ -320,257 +397,655 @@
                                 stroke-linejoin="round"
                             />
                         </svg>
+
                     </div>
+
                     <div class="leading-none">
                         <div class="text-[17px] font-bold tracking-wide text-white">
                             S-<span class="gradient-text">CLOUD</span>
                         </div>
+
                         <div class="mt-1 text-[9px] font-medium tracking-[.16em] text-slate-500">
                             PUBLISHER NETWORK
                         </div>
                     </div>
+
                 </a>
+
             </div>
 
+
+            <!-- Navigation -->
             <nav class="flex-1 px-3 py-4">
+
                 <div class="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-600">
                     Main Menu
                 </div>
 
                 <div class="space-y-1">
-                    <a href="/dashboard" class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400">
+
+                    <a
+                        href="/dashboard"
+                        class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400"
+                    >
                         <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
                             <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
                             <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
                             <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
                             <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
                         </svg>
+
                         <span>Analytics</span>
                     </a>
 
-                    <a href="/upload" class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400">
+
+                    <a
+                        href="/upload"
+                        class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400"
+                    >
                         <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
                             <path d="M12 16V4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                             <path d="M7.5 8.5L12 4L16.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                             <path d="M5 14.5V18.5C5 19.6 5.9 20.5 7 20.5H17C18.1 20.5 19 19.6 19 18.5V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                         </svg>
+
                         <span>Upload File</span>
                     </a>
 
-                    <a href="/files" class="nav-item active flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium">
+
+                    <a
+                        href="/files"
+                        class="nav-item active flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-200"
+                    >
                         <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-                            <path d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                            <path
+                                d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linejoin="round"
+                            />
                         </svg>
+
                         <span>Manage Files</span>
                     </a>
 
-                    <button type="button" onclick="showComingSoon('API Documentation')" class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400">
+
+                    <button
+                        type="button"
+                        onclick="showComingSoon('API Documentation')"
+                        class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400"
+                    >
                         <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-                            <path d="M8 8L4 12L8 16M16 8L20 12L16 16M14 5L10 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M8 8L4 12L8 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M16 8L20 12L16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M14 5L10 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                         </svg>
+
                         <span>API Document</span>
-                        <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">Soon</span>
+
+                        <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+                            Soon
+                        </span>
                     </button>
 
-                    <button type="button" onclick="showComingSoon('Telegram Support')" class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400">
+
+                    <button
+                        type="button"
+                        onclick="showComingSoon('Telegram Support')"
+                        class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400"
+                    >
                         <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-                            <path d="M21 4.8L17.9 19.1C17.67 20.11 17.08 20.36 16.25 19.91L11.57 16.46L9.31 18.64C9.06 18.89 8.85 19.1 8.35 19.1L8.69 14.26L17.49 6.31C17.87 5.97 17.41 5.78 16.9 6.12L6.02 12.98L1.34 11.52C0.32 11.2 0.3 10.51 1.55 10.02L19.86 2.96C20.71 2.65 21.45 3.16 21 4.8Z" fill="currentColor"/>
+                            <path
+                                d="M21 4.8L17.9 19.1C17.67 20.11 17.08 20.36 16.25 19.91L11.57 16.46L9.31 18.64C9.06 18.89 8.85 19.1 8.35 19.1L8.69 14.26L17.49 6.31C17.87 5.97 17.41 5.78 16.9 6.12L6.02 12.98L1.34 11.52C0.32 11.2 0.3 10.51 1.55 10.02L19.86 2.96C20.71 2.65 21.45 3.16 21 4.8Z"
+                                fill="currentColor"
+                            />
                         </svg>
+
                         <span>Telegram Support</span>
-                        <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">Soon</span>
+
+                        <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+                            Soon
+                        </span>
                     </button>
+
                 </div>
+
             </nav>
 
+
+            <!-- Start Earning Card -->
             <div class="px-3 pb-3">
+
                 <div class="overflow-hidden rounded-2xl border border-blue-500/10 bg-gradient-to-br from-blue-600/10 via-indigo-600/10 to-purple-600/10 p-4">
+
                     <div class="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-300">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                             <path d="M12 3V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                             <path d="M16.5 7.2C16.5 5.87 14.71 4.8 12.5 4.8C10.29 4.8 8.5 5.87 8.5 7.2C8.5 8.53 10.29 9.6 12.5 9.6C14.71 9.6 16.5 10.67 16.5 12C16.5 13.33 14.71 14.4 12.5 14.4C10.29 14.4 8.5 13.33 8.5 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                         </svg>
                     </div>
-                    <div class="text-xs font-semibold text-slate-200">Start Earning</div>
-                    <p class="mt-1 text-[10px] leading-relaxed text-slate-500">
-                        Upload files and share your links.
-                    </p>
-                    <a href="/upload" class="mt-3 inline-flex items-center gap-1.5 text-[10px] font-semibold text-blue-400 transition hover:text-blue-300">
-                        Upload now
-                        <span>→</span>
+
+                    <div class="text-xs font-semibold text-slate-200">
+                        Start Earning
+                    </div>
+
+                    <div class="mt-1 text-[10px] leading-relaxed text-slate-500">
+                        Upload files and earn from downloads.
+                    </div>
+
+                    <a
+                        href="/upload"
+                        class="mt-3 flex items-center justify-center rounded-xl bg-blue-600/80 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-blue-600"
+                    >
+                        Upload Now
                     </a>
+
+                </div>
+
+            </div>
+
+
+            <!-- Sidebar Footer -->
+            <div class="border-t border-slate-800/60 px-5 py-4">
+                <div class="text-[10px] text-slate-600">
+                    S-CLOUD Publisher Network
                 </div>
             </div>
+
         </div>
+
     </aside>
 
-    <!-- Mobile sidebar -->
-    <aside class="mobile-sidebar sidebar flex flex-col rounded-r-2xl">
-        <div class="flex h-20 items-center justify-between px-5 border-b border-slate-800/60">
-            <a href="/dashboard" class="flex items-center gap-3">
-                <div class="logo-box flex h-10 w-10 items-center justify-center rounded-xl">
-                    <svg width="23" height="23" viewBox="0 0 24 24" fill="none">
-                        <path d="M7.2 18.2H17.1C19.37 18.2 21 16.65 21 14.5C21 12.55 19.57 11.12 17.58 10.87C17.25 7.62 14.51 5.2 11.18 5.2C8.31 5.2 5.9 7.01 5.02 9.55C2.73 9.78 1 11.52 1 13.72C1 16.2 2.92 18.2 5.4 18.2H7.2Z" fill="white"/>
-                        <path d="M12 9.2V15.3M9.7 12.9L12 15.3L14.3 12.9" stroke="#4F46E5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </div>
-                <div class="text-[17px] font-bold tracking-wide text-white">
-                    S-<span class="gradient-text">CLOUD</span>
-                </div>
-            </a>
-            <button type="button" onclick="closeSidebar()" class="rounded-xl p-2 text-slate-500 transition hover:bg-slate-800 hover:text-white" aria-label="Close menu">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-            </button>
-        </div>
 
-        <nav class="flex-1 px-3 py-5">
-            <div class="space-y-1">
-                <a href="/dashboard" onclick="closeSidebar()" class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400">
-                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-                        <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
-                        <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
-                        <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
-                        <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
-                    </svg>
-                    <span>Analytics</span>
+    <!-- ========================================================= -->
+    <!-- MOBILE SIDEBAR -->
+    <!-- ========================================================= -->
+
+    <div
+        id="mobileOverlay"
+        class="mobile-overlay fixed inset-0 z-40 bg-black/60"
+        onclick="closeSidebar()"
+    ></div>
+
+
+    <aside
+        id="mobileSidebar"
+        class="mobile-sidebar sidebar fixed left-0 top-0 z-50 h-screen w-72"
+    >
+
+        <div class="flex h-full flex-col">
+
+            <div class="flex h-20 items-center justify-between px-5">
+
+                <a href="/dashboard" class="flex items-center gap-3">
+
+                    <div class="logo-box flex h-10 w-10 items-center justify-center rounded-2xl">
+
+                        <svg
+                            width="23"
+                            height="23"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                        >
+                            <path
+                                d="M7.2 18.2H17.1C19.37 18.2 21 16.65 21 14.5C21 12.55 19.57 11.12 17.58 10.87C17.25 7.62 14.51 5.2 11.18 5.2C8.31 5.2 5.9 7.01 5.02 9.55C2.73 9.78 1 11.52 1 13.72C1 16.2 2.92 18.2 5.4 18.2H7.2Z"
+                                fill="white"
+                            />
+
+                            <path
+                                d="M12 9.2V15.3M9.7 12.9L12 15.3L14.3 12.9"
+                                stroke="#4F46E5"
+                                stroke-width="1.8"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+
+                    </div>
+
+                    <div>
+                        <div class="text-[16px] font-bold text-white">
+                            S-<span class="gradient-text">CLOUD</span>
+                        </div>
+                    </div>
+
                 </a>
 
-                <a href="/upload" onclick="closeSidebar()" class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400">
-                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-                        <path d="M12 16V4M7.5 8.5L12 4L16.5 8.5M5 14.5V18.5C5 19.6 5.9 20.5 7 20.5H17C18.1 20.5 19 19.6 19 18.5V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    <span>Upload File</span>
-                </a>
 
-                <a href="/files" onclick="closeSidebar()" class="nav-item active flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium">
-                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-                        <path d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                <button
+                    type="button"
+                    onclick="closeSidebar()"
+                    class="rounded-xl p-2 text-slate-500 hover:bg-slate-800/50 hover:text-white"
+                >
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+                        <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                     </svg>
-                    <span>Manage Files</span>
-                </a>
-
-                <button type="button" onclick="showComingSoon('API Documentation'); closeSidebar()" class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400">
-                    <span class="text-[17px]">&lt;/&gt;</span>
-                    <span>API Document</span>
-                    <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">Soon</span>
                 </button>
 
-                <button type="button" onclick="showComingSoon('Telegram Support'); closeSidebar()" class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400">
-                    <span class="text-blue-400">✈</span>
-                    <span>Telegram Support</span>
-                    <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">Soon</span>
-                </button>
             </div>
-        </nav>
+
+
+            <nav class="flex-1 px-3 py-4">
+
+                <div class="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[.18em] text-slate-600">
+                    Main Menu
+                </div>
+
+                <div class="space-y-1">
+
+                    <a
+                        href="/dashboard"
+                        class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                            <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                            <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                            <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/>
+                        </svg>
+
+                        <span>Analytics</span>
+                    </a>
+
+
+                    <a
+                        href="/upload"
+                        class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 16V4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M7.5 8.5L12 4L16.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 14.5V18.5C5 19.6 5.9 20.5 7 20.5H17C18.1 20.5 19 19.6 19 18.5V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+
+                        <span>Upload File</span>
+                    </a>
+
+
+                    <a
+                        href="/files"
+                        class="nav-item active flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-200"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+
+                        <span>Manage Files</span>
+                    </a>
+
+
+                    <button
+                        type="button"
+                        onclick="showComingSoon('API Documentation')"
+                        class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path d="M8 8L4 12L8 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M16 8L20 12L16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M14 5L10 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+
+                        <span>API Document</span>
+
+                        <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+                            Soon
+                        </span>
+                    </button>
+
+
+                    <button
+                        type="button"
+                        onclick="showComingSoon('Telegram Support')"
+                        class="nav-item flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-400"
+                    >
+                        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M21 4.8L17.9 19.1C17.67 20.11 17.08 20.36 16.25 19.91L11.57 16.46L9.31 18.64C9.06 18.89 8.85 19.1 8.35 19.1L8.69 14.26L17.49 6.31C17.87 5.97 17.41 5.78 16.9 6.12L6.02 12.98L1.34 11.52C0.32 11.2 0.3 10.51 1.55 10.02L19.86 2.96C20.71 2.65 21.45 3.16 21 4.8Z"
+                                fill="currentColor"
+                            />
+                        </svg>
+
+                        <span>Telegram Support</span>
+
+                        <span class="ml-auto rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+                            Soon
+                        </span>
+                    </button>
+
+                </div>
+
+            </nav>
+
+
+            <div class="px-3 pb-4">
+
+                <div class="rounded-2xl border border-blue-500/10 bg-gradient-to-br from-blue-600/10 via-indigo-600/10 to-purple-600/10 p-4">
+
+                    <div class="text-xs font-semibold text-slate-200">
+                        Start Earning
+                    </div>
+
+                    <div class="mt-1 text-[10px] leading-relaxed text-slate-500">
+                        Upload files and earn from downloads.
+                    </div>
+
+                    <a
+                        href="/upload"
+                        class="mt-3 flex items-center justify-center rounded-xl bg-blue-600/80 px-3 py-2 text-[11px] font-semibold text-white"
+                    >
+                        Upload Now
+                    </a>
+
+                </div>
+
+            </div>
+
+        </div>
+
     </aside>
 
-    <div class="main-content min-h-screen">
-        <!-- Top navigation -->
+
+    <!-- ========================================================= -->
+    <!-- MAIN -->
+    <!-- ========================================================= -->
+
+    <main class="main-content min-h-screen">
+
+        <!-- Top Navbar -->
         <header class="sticky top-0 z-30 border-b border-slate-800/60 bg-[#0b0f19]/80 backdrop-blur-xl">
-            <div class="mx-auto flex h-16 max-w-[90rem] items-center justify-between px-4 sm:px-6 lg:px-8">
+
+            <div class="page-container flex h-[72px] items-center justify-between px-4 sm:px-6 lg:px-8">
+
                 <div class="flex items-center gap-3">
+
+                    <!-- Mobile Menu -->
                     <button
                         type="button"
                         onclick="openSidebar()"
-                        class="rounded-xl p-2 text-slate-500 transition hover:bg-slate-800/60 hover:text-cyan-400"
-                        aria-label="Open menu"
+                        class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 text-slate-300 lg:hidden"
                     >
                         <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
-                            <path d="M4 6H20M4 12H20M4 18H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M4 7H20M4 12H20M4 17H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                         </svg>
                     </button>
 
-                    <a href="/dashboard" class="flex items-center gap-2">
-                        <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
-                            <path d="M7.2 18.2H17.1C19.37 18.2 21 16.65 21 14.5C21 12.55 19.57 11.12 17.58 10.87C17.25 7.62 14.51 5.2 11.18 5.2C8.31 5.2 5.9 7.01 5.02 9.55C2.73 9.78 1 11.52 1 13.72C1 16.2 2.92 18.2 5.4 18.2H7.2Z" fill="none" stroke="#22d3ee" stroke-width="1.5"/>
-                            <path d="M12 9.2V15.3M9.7 12.9L12 15.3L14.3 12.9" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        <span class="hidden text-lg font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 sm:inline">
-                            S-CLOUD
+
+                    <!-- Mobile Brand -->
+                    <a href="/dashboard" class="flex items-center gap-2.5 lg:hidden">
+
+                        <div class="logo-box flex h-9 w-9 items-center justify-center rounded-xl">
+
+                            <svg
+                                width="21"
+                                height="21"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                            >
+                                <path
+                                    d="M7.2 18.2H17.1C19.37 18.2 21 16.65 21 14.5C21 12.55 19.57 11.12 17.58 10.87C17.25 7.62 14.51 5.2 11.18 5.2C8.31 5.2 5.9 7.01 5.02 9.55C2.73 9.78 1 11.52 1 13.72C1 16.2 2.92 18.2 5.4 18.2H7.2Z"
+                                    fill="white"
+                                />
+
+                                <path
+                                    d="M12 9.2V15.3M9.7 12.9L12 15.3L14.3 12.9"
+                                    stroke="#4F46E5"
+                                    stroke-width="1.8"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
+
+                        </div>
+
+                        <span class="text-sm font-bold text-white">
+                            S-<span class="gradient-text">CLOUD</span>
                         </span>
+
                     </a>
+
+
+                    <!-- Desktop Page Title -->
+                    <div class="hidden lg:block">
+
+                        <div class="text-sm font-semibold text-white">
+                            Manage Files
+                        </div>
+
+                        <div class="text-[10px] text-slate-500">
+                            Manage and organize your uploaded files
+                        </div>
+
+                    </div>
+
                 </div>
 
+
+                <!-- Right -->
                 <div class="relative">
+
                     <button
                         id="profileButton"
                         type="button"
                         onclick="toggleProfileMenu()"
-                        class="flex items-center gap-2.5 rounded-xl p-1.5 transition hover:bg-white/[.035]"
+                        class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/55 px-2 py-1.5 transition hover:bg-slate-800/60"
                     >
-                        <div class="hidden text-right sm:block">
-                            <div id="profileName" class="text-xs font-semibold text-white">Publisher</div>
-                            <div class="text-[9px] text-slate-600">Publisher Account</div>
-                        </div>
+
                         <div
                             id="profileAvatar"
-                            class="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-500/25 bg-cyan-500/10 text-[11px] font-semibold text-cyan-300"
-                        >U</div>
-                        <svg class="hidden h-4 w-4 text-slate-600 sm:block" viewBox="0 0 24 24" fill="none">
-                            <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                            class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 text-xs font-semibold text-white"
+                        >
+                            U
+                        </div>
+
+                        <div class="hidden text-left sm:block">
+
+                            <div
+                                id="profileName"
+                                class="max-w-[130px] truncate text-xs font-medium text-slate-200"
+                            >
+                                Loading...
+                            </div>
+
+                            <div class="text-[9px] text-slate-500">
+                                Publisher
+                            </div>
+
+                        </div>
+
+                        <svg
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            class="text-slate-500"
+                        >
+                            <path
+                                d="M6 9L12 15L18 9"
+                                stroke="currentColor"
+                                stroke-width="1.7"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
                         </svg>
+
                     </button>
 
-                    <div id="profileMenu" class="profile-menu absolute right-0 top-12 z-50 w-64">
-                        <div class="glass-card overflow-hidden rounded-2xl p-1.5">
-                            <div class="px-3 py-3">
-                                <div id="profileMenuName" class="truncate text-xs font-semibold text-white">Publisher</div>
-                                <div id="profileMenuEmail" class="mt-0.5 truncate text-[10px] text-slate-500">—</div>
+
+                    <!-- Profile Dropdown -->
+                    <div
+                        id="profileMenu"
+                        class="profile-menu dropdown absolute right-0 top-[48px] w-52 rounded-2xl p-2"
+                    >
+
+                        <div class="border-b border-slate-800/70 px-3 py-2.5">
+
+                            <div
+                                id="profileMenuName"
+                                class="truncate text-xs font-semibold text-white"
+                            >
+                                User
                             </div>
-                            <div class="border-t border-slate-800/70"></div>
-                            <a href="/settings" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs text-slate-400 transition hover:bg-white/[.035] hover:text-white">
-                                <span>⚙</span>
+
+                            <div
+                                id="profileMenuEmail"
+                                class="mt-0.5 truncate text-[10px] text-slate-500"
+                            >
+                                —
+                            </div>
+
+                        </div>
+
+
+                        <div class="mt-1">
+
+                            <a
+                                href="/settings"
+                                class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs text-slate-400 transition hover:bg-slate-800/60 hover:text-white"
+                            >
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                                    <path
+                                        d="M12 15.2C13.77 15.2 15.2 13.77 15.2 12C15.2 10.23 13.77 8.8 12 8.8C10.23 8.8 8.8 10.23 8.8 12C8.8 13.77 10.23 15.2 12 15.2Z"
+                                        stroke="currentColor"
+                                        stroke-width="1.6"
+                                    />
+
+                                    <path
+                                        d="M19.4 15C19.62 14.63 19.79 14.23 19.91 13.82L21.45 12.62L20.02 10.15L18.12 10.55C17.5 9.93 16.74 9.45 15.91 9.16L15.45 7.3H12.55L12.09 9.16C11.26 9.45 10.5 9.93 9.88 10.55L7.98 10.15L6.55 12.62L8.09 13.82C8.21 14.23 8.38 14.63 8.6 15L8.09 16.84L10.55 18.27L11.91 17.02C12.35 17.08 12.79 17.08 13.23 17.02L14.59 18.27L17.05 16.84L16.54 15C16.76 14.63 16.93 14.23 17.05 13.82"
+                                        stroke="currentColor"
+                                        stroke-width="1.2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+
                                 <span>Settings</span>
                             </a>
-                            <button type="button" onclick="logout()" class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs text-red-400 transition hover:bg-red-500/10">
-                                <span>↪</span>
+
+
+                            <button
+                                type="button"
+                                onclick="logout()"
+                                class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs text-red-400 transition hover:bg-red-500/10"
+                            >
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                                    <path
+                                        d="M10 17L15 12L10 7"
+                                        stroke="currentColor"
+                                        stroke-width="1.7"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+
+                                    <path
+                                        d="M15 12H3"
+                                        stroke="currentColor"
+                                        stroke-width="1.7"
+                                        stroke-linecap="round"
+                                    />
+
+                                    <path
+                                        d="M14 4H19C20.1 4 21 4.9 21 6V18C21 19.1 20.1 20 19 20H14"
+                                        stroke="currentColor"
+                                        stroke-width="1.7"
+                                        stroke-linecap="round"
+                                    />
+                                </svg>
+
                                 <span>Logout</span>
                             </button>
+
                         </div>
+
                     </div>
+
                 </div>
+
             </div>
+
         </header>
 
-        <!-- Content -->
-        <main class="page-container mx-auto max-w-[90rem] px-4 py-7 sm:px-6 lg:px-8 lg:py-10">
-            <div class="mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                <div>
-                    <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
-                            <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
-                                <path d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z" stroke="currentColor" stroke-width="1.7"/>
-                            </svg>
+
+        <!-- ===================================================== -->
+        <!-- CONTENT -->
+        <!-- ===================================================== -->
+
+        <div class="page-container px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+
+            <!-- Heading -->
+            <div class="mb-6">
+
+                <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+
+                    <div>
+
+                        <div class="flex items-center gap-2.5">
+
+                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
+
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <path d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z" stroke="currentColor" stroke-width="1.7"/>
+                                </svg>
+
+                            </div>
+
+                            <h1 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                                Manage Files
+                            </h1>
+
                         </div>
-                        <h1 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Manage Files</h1>
+
+                        <p class="mt-2 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                            View, edit, and track the performance of your uploaded files.
+                        </p>
+
                     </div>
-                    <p class="mt-2 text-xs leading-relaxed text-slate-500 sm:text-sm">
-                        View, edit, and track the performance of your uploaded files.
-                    </p>
+
+
+                    <a
+                        href="/upload"
+                        class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-900/20 transition hover:from-blue-500 hover:to-indigo-500"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 16V4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M7.5 8.5L12 4L16.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 14.5V18.5C5 19.6 5.9 20.5 7 20.5H17C18.1 20.5 19 19.6 19 18.5V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+
+                        Upload File
+                    </a>
+
                 </div>
 
-                <a
-                    href="/upload"
-                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-900/20 transition hover:from-blue-500 hover:to-indigo-500"
-                >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                        <path d="M12 16V4M7.5 8.5L12 4L16.5 8.5M5 14.5V18.5C5 19.6 5.9 20.5 7 20.5H17C18.1 20.5 19 19.6 19 18.5V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    Upload File
-                </a>
             </div>
 
-            <!-- Real files card -->
-            <section class="glass-card glass overflow-hidden">
+
+            <!-- Main Files Card -->
+            <section class="glass overflow-hidden rounded-2xl border border-slate-800/60 shadow-2xl shadow-black/10">
+
                 <!-- Toolbar -->
-                <div class="border-b border-slate-800/70 bg-slate-950/20 p-4 sm:p-5">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div class="relative w-full sm:max-w-md">
-                            <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" width="17" height="17" viewBox="0 0 24 24" fill="none">
+                <div class="border-b border-slate-800/70 bg-slate-950/10 p-4 sm:p-5">
+
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+                        <!-- Search -->
+                        <div class="relative w-full lg:max-w-md">
+
+                            <svg
+                                class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-600"
+                                width="17"
+                                height="17"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                            >
                                 <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7"/>
                                 <path d="M16.2 16.2L21 21" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
                             </svg>
+
                             <input
                                 id="searchInput"
                                 type="text"
@@ -578,196 +1053,508 @@
                                 placeholder="Search files..."
                                 class="search-input h-11 w-full rounded-xl pl-10 pr-10 text-xs text-slate-200 placeholder:text-slate-600"
                             >
-                            <button id="clearSearch" type="button" onclick="clearSearch()" class="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-lg p-1.5 text-slate-600 transition hover:bg-slate-800 hover:text-slate-300" aria-label="Clear search">
+
+                            <button
+                                id="clearSearch"
+                                type="button"
+                                onclick="clearSearch()"
+                                class="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-lg p-1.5 text-slate-600 transition hover:bg-slate-800 hover:text-slate-300"
+                            >
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
                                     <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                                 </svg>
                             </button>
+
                         </div>
 
-                        <div class="flex w-full gap-2 sm:w-auto">
-                            <select id="sortSelect" class="select-box h-11 min-w-0 flex-1 rounded-xl px-3 text-xs sm:w-44 sm:flex-none">
+
+                        <!-- Sort / Refresh -->
+                        <div class="flex gap-2">
+
+                            <select
+                                id="sortSelect"
+                                class="select-box h-11 flex-1 rounded-xl px-3 text-xs sm:w-44 sm:flex-none"
+                            >
                                 <option value="newest">Newest First</option>
                                 <option value="oldest">Oldest First</option>
                                 <option value="views">Most Views</option>
                                 <option value="name">Name A-Z</option>
                             </select>
 
+
                             <button
                                 type="button"
                                 onclick="loadFiles()"
                                 title="Refresh files"
-                                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-950/60 text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
+                                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/60 text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
                             >
                                 <svg id="refreshIcon" width="17" height="17" viewBox="0 0 24 24" fill="none">
-                                    <path d="M20 11A8 8 0 0 0 6.4 5.2L4 7.5M4 4.5V7.5H7M4 13A8 8 0 0 0 17.6 18.8L20 16.5M20 19.5V16.5H17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M20 11A8 8 0 0 0 6.4 5.2L4 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M4 4.5V7.5H7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M4 13A8 8 0 0 0 17.6 18.8L20 16.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M20 19.5V16.5H17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
                             </button>
+
                         </div>
+
                     </div>
+
                 </div>
+
 
                 <!-- Loading -->
                 <div id="loadingState" class="px-5 py-16 text-center">
+
                     <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10">
+
                         <div class="spinner"></div>
+
                     </div>
-                    <div class="mt-4 text-sm font-medium text-slate-300">Loading files...</div>
-                    <div class="mt-1 text-xs text-slate-600">Please wait a moment.</div>
+
+                    <div class="mt-4 text-sm font-medium text-slate-300">
+                        Loading files...
+                    </div>
+
+                    <div class="mt-1 text-xs text-slate-600">
+                        Please wait a moment.
+                    </div>
+
                 </div>
+
 
                 <!-- Error -->
                 <div id="errorState" class="hidden px-5 py-16 text-center">
+
                     <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-400">
+
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                             <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
                             <path d="M12 8V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                             <circle cx="12" cy="16.5" r="1" fill="currentColor"/>
                         </svg>
+
                     </div>
-                    <div class="mt-4 text-sm font-medium text-slate-300">Unable to load files</div>
-                    <div id="errorMessage" class="mx-auto mt-1 max-w-md text-xs leading-relaxed text-slate-600">Something went wrong.</div>
-                    <button type="button" onclick="loadFiles()" class="mt-4 rounded-xl bg-blue-600/90 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-600">
+
+                    <div class="mt-4 text-sm font-medium text-slate-300">
+                        Unable to load files
+                    </div>
+
+                    <div
+                        id="errorMessage"
+                        class="mx-auto mt-1 max-w-md text-xs leading-relaxed text-slate-600"
+                    >
+                        Something went wrong.
+                    </div>
+
+                    <button
+                        type="button"
+                        onclick="loadFiles()"
+                        class="mt-4 rounded-xl bg-blue-600/90 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-600"
+                    >
                         Try Again
                     </button>
+
                 </div>
+
 
                 <!-- Empty -->
                 <div id="emptyState" class="hidden px-5 py-16 text-center">
+
                     <div class="empty-icon mx-auto flex h-20 w-20 items-center justify-center rounded-full">
+
                         <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-                            <path d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z" stroke="currentColor" stroke-width="1.5"/>
-                            <path d="M8 12H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            <path
+                                d="M4 6.5C4 5.67 4.67 5 5.5 5H9L10.5 7H18.5C19.33 7 20 7.67 20 8.5V17.5C20 18.33 19.33 19 18.5 19H5.5C4.67 19 4 18.33 4 17.5V6.5Z"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                class="text-slate-600"
+                            />
+
+                            <path
+                                d="M8 12H16"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                                class="text-slate-700"
+                            />
                         </svg>
+
                     </div>
-                    <div id="emptyTitle" class="mt-4 text-sm font-medium text-slate-300">No files found</div>
-                    <div id="emptyDescription" class="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-slate-600">Upload your first file to start earning.</div>
-                    <a id="emptyUploadButton" href="/upload" class="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600/90 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-600">
+
+                    <div
+                        id="emptyTitle"
+                        class="mt-4 text-sm font-medium text-slate-300"
+                    >
+                        No files found
+                    </div>
+
+                    <div
+                        id="emptyDescription"
+                        class="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-slate-600"
+                    >
+                        Upload your first file to start earning.
+                    </div>
+
+                    <a
+                        id="emptyUploadButton"
+                        href="/upload"
+                        class="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600/90 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-600"
+                    >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 16V4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            <path d="M7.5 8.5L12 4L16.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 14.5V18.5C5 19.6 5.9 20.5 7 20.5H17C18.1 20.5 19 19.6 19 18.5V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+
                         Upload File
                     </a>
+
                 </div>
 
-                <!-- Desktop table -->
+
+                <!-- Desktop Table -->
                 <div id="desktopFiles" class="hidden">
+
                     <div class="table-wrapper">
+
                         <table class="w-full min-w-[900px]">
+
                             <thead>
-                                <tr class="border-b border-slate-800/60 bg-slate-950/30 text-left">
-                                    <th class="px-6 py-4 text-[10px] font-semibold uppercase tracking-wider text-slate-500">File Details</th>
-                                    <th class="px-6 py-4 text-[10px] font-semibold uppercase tracking-wider text-slate-500">File Link</th>
-                                    <th class="px-6 py-4 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500">Views</th>
-                                    <th class="px-6 py-4 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500">Earnings</th>
-                                    <th class="px-6 py-4 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500">Status</th>
-                                    <th class="px-6 py-4 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500">Actions</th>
+
+                                <tr class="border-b border-slate-800/60 bg-slate-950/20 text-left">
+
+                                    <th class="px-5 py-3.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        File Details
+                                    </th>
+
+                                    <th class="px-5 py-3.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        File Link
+                                    </th>
+
+                                    <th class="px-5 py-3.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        Views
+                                    </th>
+
+                                    <th class="px-5 py-3.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        Earnings
+                                    </th>
+
+                                    <th class="px-5 py-3.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        Status
+                                    </th>
+
+                                    <th class="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                                        Actions
+                                    </th>
+
                                 </tr>
+
                             </thead>
-                            <tbody id="filesTableBody" class="divide-y divide-slate-800/60"></tbody>
+
+                            <tbody id="filesTableBody"></tbody>
+
                         </table>
+
                     </div>
+
                 </div>
 
-                <!-- Mobile cards -->
+
+                <!-- Mobile Cards -->
                 <div id="mobileFiles" class="hidden divide-y divide-slate-800/60"></div>
 
-                <!-- Pagination -->
-                <div id="pagination" class="hidden border-t border-slate-800/70 bg-slate-950/15 px-4 py-4 sm:px-6">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div id="paginationInfo" class="text-[10px] text-slate-600">—</div>
-                        <div id="paginationButtons" class="flex items-center justify-center gap-1.5 sm:justify-end"></div>
-                    </div>
-                </div>
-            </section>
-        </main>
-    </div>
 
-    <!-- Global action menu -->
-    <div id="globalActionMenu" class="action-menu dropdown fixed z-[70] hidden w-40 rounded-xl p-1.5">
-        <button id="actionCopy" type="button" class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs text-slate-400 transition hover:bg-slate-800/70 hover:text-white">
+                <!-- Pagination -->
+                <div
+                    id="pagination"
+                    class="hidden border-t border-slate-800/70 px-4 py-4 sm:px-5"
+                >
+
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+                        <div
+                            id="paginationInfo"
+                            class="text-[10px] text-slate-600"
+                        >
+                            —
+                        </div>
+
+
+                        <div
+                            id="paginationButtons"
+                            class="flex items-center justify-center gap-1.5 sm:justify-end"
+                        ></div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+        </div>
+
+    </main>
+
+
+    <!-- ========================================================= -->
+    <!-- ACTION MENU -->
+    <!-- ========================================================= -->
+
+    <div
+        id="globalActionMenu"
+        class="action-menu dropdown fixed z-[70] hidden w-40 rounded-xl p-1.5"
+    >
+
+        <button
+            id="actionCopy"
+            type="button"
+            class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
+        >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <rect x="8" y="8" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/>
                 <path d="M16 8V6C16 4.9 15.1 4 14 4H6C4.9 4 4 4.9 4 6V14C4 15.1 4.9 16 6 16H8" stroke="currentColor" stroke-width="1.6"/>
             </svg>
             Copy Link
         </button>
-        <button id="actionRename" type="button" class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs text-slate-400 transition hover:bg-slate-800/70 hover:text-white">
+
+
+        <button
+            id="actionRename"
+            type="button"
+            class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
+        >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M4 20H8L19 9C20.1 7.9 20.1 6.1 19 5C17.9 3.9 16.1 3.9 15 5L4 16V20Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
                 <path d="M13.5 6.5L17.5 10.5" stroke="currentColor" stroke-width="1.6"/>
             </svg>
             Rename
         </button>
+
+
         <div class="my-1 border-t border-slate-800/70"></div>
-        <button id="actionDelete" type="button" class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs text-red-400 transition hover:bg-red-500/10">
+
+
+        <button
+            id="actionDelete"
+            type="button"
+            class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs text-red-400 transition hover:bg-red-500/10"
+        >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M5 7H19M9 7V4H15V7M7 7L7.8 19H16.2L17 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M5 7H19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                <path d="M9 7V4H15V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                <path d="M7 7L7.8 19H16.2L17 7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
             </svg>
             Delete
         </button>
+
     </div>
 
-    <!-- Rename modal -->
-    <div id="renameModal" class="modal-backdrop fixed inset-0 z-[80] hidden items-center justify-center p-4">
+
+    <!-- ========================================================= -->
+    <!-- RENAME MODAL -->
+    <!-- ========================================================= -->
+
+    <div
+        id="renameModal"
+        class="modal-backdrop fixed inset-0 z-[80] hidden items-center justify-center p-4"
+    >
+
         <div class="modal-box glass w-full max-w-md rounded-2xl p-5 sm:p-6">
+
             <div class="flex items-start justify-between gap-4">
+
                 <div>
-                    <h3 class="text-base font-semibold text-white">Rename File</h3>
-                    <p class="mt-1 text-xs leading-relaxed text-slate-500">Enter a new name for this file.</p>
+
+                    <h3 class="text-base font-semibold text-white">
+                        Rename File
+                    </h3>
+
+                    <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                        Enter a new name for this file.
+                    </p>
+
                 </div>
-                <button type="button" onclick="closeRenameModal()" class="rounded-lg p-1.5 text-slate-600 transition hover:bg-slate-800 hover:text-slate-300">
+
+
+                <button
+                    type="button"
+                    onclick="closeRenameModal()"
+                    class="rounded-lg p-1.5 text-slate-600 transition hover:bg-slate-800 hover:text-slate-300"
+                >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                         <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
                     </svg>
                 </button>
+
             </div>
+
+
             <div class="mt-5">
-                <label for="renameInput" class="mb-2 block text-[11px] font-medium text-slate-400">File Name</label>
-                <input id="renameInput" type="text" maxlength="255" autocomplete="off" class="search-input h-11 w-full rounded-xl px-3 text-sm text-slate-200" placeholder="Enter file name">
+
+                <label
+                    for="renameInput"
+                    class="mb-2 block text-[11px] font-medium text-slate-400"
+                >
+                    File Name
+                </label>
+
+                <input
+                    id="renameInput"
+                    type="text"
+                    maxlength="255"
+                    autocomplete="off"
+                    class="search-input h-11 w-full rounded-xl px-3 text-sm text-slate-200"
+                    placeholder="Enter file name"
+                >
+
             </div>
+
+
             <div class="mt-6 flex justify-end gap-2">
-                <button type="button" onclick="closeRenameModal()" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-white">Cancel</button>
-                <button id="renameConfirmButton" type="button" onclick="confirmRename()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-500">
+
+                <button
+                    type="button"
+                    onclick="closeRenameModal()"
+                    class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                >
+                    Cancel
+                </button>
+
+
+                <button
+                    id="renameConfirmButton"
+                    type="button"
+                    onclick="confirmRename()"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-blue-500"
+                >
                     <span>Save Changes</span>
                 </button>
+
             </div>
+
         </div>
+
     </div>
 
-    <!-- Delete modal -->
-    <div id="deleteModal" class="modal-backdrop fixed inset-0 z-[80] hidden items-center justify-center p-4">
+
+    <!-- ========================================================= -->
+    <!-- DELETE MODAL -->
+    <!-- ========================================================= -->
+
+    <div
+        id="deleteModal"
+        class="modal-backdrop fixed inset-0 z-[80] hidden items-center justify-center p-4"
+    >
+
         <div class="modal-box glass w-full max-w-md rounded-2xl p-5 sm:p-6">
+
             <div class="flex items-start gap-4">
+
                 <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-400">
+
                     <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
-                        <path d="M5 7H19M9 7V4H15V7M7 7L7.8 19H16.2L17 7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M5 7H19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                        <path d="M9 7V4H15V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                        <path d="M7 7L7.8 19H16.2L17 7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
                     </svg>
+
                 </div>
+
+
                 <div class="min-w-0">
-                    <h3 class="text-base font-semibold text-white">Delete File?</h3>
-                    <p class="mt-1 text-xs leading-relaxed text-slate-500">This will mark the file as deleted. The file record will remain in your account.</p>
-                    <div id="deleteFileName" class="mt-3 truncate rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs font-medium text-slate-300">—</div>
+
+                    <h3 class="text-base font-semibold text-white">
+                        Delete File?
+                    </h3>
+
+                    <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                        This will mark the file as deleted. The file record will remain in your account.
+                    </p>
+
+                    <div
+                        id="deleteFileName"
+                        class="mt-3 truncate rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs font-medium text-slate-300"
+                    >
+                        —
+                    </div>
+
                 </div>
+
             </div>
+
+
             <div class="mt-6 flex justify-end gap-2">
-                <button type="button" onclick="closeDeleteModal()" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-white">Cancel</button>
-                <button id="deleteConfirmButton" type="button" onclick="confirmDelete()" class="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600/90 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-red-600">
+
+                <button
+                    type="button"
+                    onclick="closeDeleteModal()"
+                    class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2.5 text-xs font-semibold text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                >
+                    Cancel
+                </button>
+
+
+                <button
+                    id="deleteConfirmButton"
+                    type="button"
+                    onclick="confirmDelete()"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600/90 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-red-600"
+                >
                     <span>Delete File</span>
                 </button>
+
             </div>
+
         </div>
+
     </div>
 
-    <!-- Toast -->
-    <div id="toast" class="toast fixed bottom-5 left-1/2 z-[100] w-[calc(100%-28px)] max-w-sm -translate-x-1/2 rounded-2xl border bg-slate-900/95 px-4 py-3 shadow-2xl backdrop-blur-xl">
+
+    <!-- ========================================================= -->
+    <!-- TOAST -->
+    <!-- ========================================================= -->
+
+    <div
+        id="toast"
+        class="toast fixed bottom-5 left-1/2 z-[100] w-[calc(100%-28px)] max-w-sm -translate-x-1/2 rounded-2xl border bg-slate-900/95 px-4 py-3 shadow-2xl backdrop-blur-xl"
+    >
+
         <div class="flex items-start gap-3">
-            <div id="toastIcon" class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"></div>
+
+            <div
+                id="toastIcon"
+                class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+            ></div>
+
             <div class="min-w-0 flex-1">
-                <div id="toastTitle" class="text-xs font-semibold text-white">Done</div>
-                <div id="toastMessage" class="mt-0.5 text-[10px] leading-relaxed text-slate-500">—</div>
+
+                <div
+                    id="toastTitle"
+                    class="text-xs font-semibold text-white"
+                >
+                    Done
+                </div>
+
+                <div
+                    id="toastMessage"
+                    class="mt-0.5 text-[10px] leading-relaxed text-slate-500"
+                >
+                    —
+                </div>
+
             </div>
+
         </div>
+
     </div>
 
-<script>
+
+    <!-- ========================================================= -->
+    <!-- JAVASCRIPT -->
+    <!-- ========================================================= -->
+
+    <script>
 
         /* =========================================================
            STATE
@@ -3049,5 +3836,6 @@
         );
 
     </script>
+
 </body>
 </html>
