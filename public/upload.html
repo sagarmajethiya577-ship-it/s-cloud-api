@@ -85,12 +85,14 @@
         .dropdown-menu {
             display: none;
             opacity: 0;
-            transition: opacity 0.2s ease-in-out;
+            transform: translateY(-4px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
         }
 
         .profile-dropdown-container.active .dropdown-menu {
             display: block;
             opacity: 1;
+            transform: translateY(0);
         }
 
         .spinner {
@@ -136,6 +138,39 @@
                 transform: translateY(0);
             }
         }
+
+        /* Toast Styles */
+        .toast {
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            width: min(380px, calc(100vw - 36px));
+            z-index: 300;
+            transform: translateY(20px);
+            opacity: 0;
+            pointer-events: none;
+            transition:
+                transform .25s ease,
+                opacity .25s ease;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .toast-icon.success {
+            color: #34d399;
+        }
+
+        .toast-icon.error {
+            color: #f87171;
+        }
+
+        .toast-icon.info {
+            color: #22d3ee;
+        }
     </style>
 </head>
 
@@ -152,7 +187,7 @@
     <!-- =====================================================
          SIDEBAR
     ====================================================== -->
-    <div
+    <aside
         id="sidebar"
         class="glass-card fixed inset-y-0 left-0 w-64 z-50 sidebar-closed flex flex-col rounded-r-2xl border-l-0"
     >
@@ -193,196 +228,61 @@
                 href="/dashboard"
                 class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-[rgba(255,255,255,0.05)] hover:text-white rounded-xl font-medium transition"
             >
-
-                <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                    ></path>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                 </svg>
-
                 Analytics
-
             </a>
-
 
             <!-- Upload File - Active -->
             <a
                 href="/upload"
                 class="flex items-center gap-3 px-4 py-3 bg-[rgba(34,211,238,0.1)] text-cyan-400 rounded-xl font-medium transition"
             >
-
-                <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                    ></path>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                 </svg>
-
                 Upload File
-
             </a>
-
 
             <!-- Manage Files -->
             <a
                 href="/files"
                 class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-[rgba(255,255,255,0.05)] hover:text-white rounded-xl font-medium transition"
             >
-
-                <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"
-                    ></path>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"></path>
                 </svg>
-
                 Manage Files
-
             </a>
 
-
-            <!-- API Documentation -->
+            <!-- API Document -->
             <a
                 href="#"
-                onclick="showComingSoon('API Documentation'); return false;"
+                onclick="showComingSoon(event, 'API Document')"
                 class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-[rgba(255,255,255,0.05)] hover:text-white rounded-xl font-medium transition"
             >
-
-                <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-                    ></path>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
                 </svg>
-
-                API Documentation
-
+                API Document
             </a>
-
 
             <!-- Telegram Support -->
             <a
                 href="#"
-                onclick="showComingSoon('Telegram Support'); return false;"
+                onclick="showComingSoon(event, 'Telegram Support')"
                 class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-[rgba(255,255,255,0.05)] hover:text-white rounded-xl font-medium transition"
             >
-
-                <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M21 11.5a8.38 8.38 0 01-.9 3.8
-                        8.5 8.5 0 11-3.9-3.9
-                        8.38 8.38 0 013.8-.9
-                        8.5 8.5 0 011 1z"
-                    ></path>
+                <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.06-.2-.07-.06-.17-.04-.25-.02-.11.02-1.79 1.14-5.06 3.34-.48.33-.91.49-1.3.48-.43-.01-1.24-.24-1.84-.44-.74-.24-1.32-.37-1.27-.79.03-.22.32-.44.88-.67 3.45-1.5 5.76-2.5 6.93-2.99 3.29-1.36 3.98-1.6 4.43-1.61.1 0 .32.02.44.11.1.08.13.19.14.28-.01.05-.01.12-.02.21z"></path>
                 </svg>
-
                 Telegram Support
-
             </a>
 
         </nav>
 
-
-        <!-- Sidebar Bottom -->
-        <div class="px-4 pb-5">
-
-            <div class="border-t border-gray-700/50 pt-4">
-
-                <a
-                    href="/settings"
-                    class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-[rgba(255,255,255,0.05)] hover:text-white rounded-xl font-medium transition"
-                >
-
-                    <svg
-                        class="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z"
-                        ></path>
-
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06
-                            a2 2 0 01-2.83 2.83l-.06-.06
-                            a1.65 1.65 0 00-1.82-.33
-                            1.65 1.65 0 00-1 1.51V21
-                            a2 2 0 01-4 0v-.09
-                            a1.65 1.65 0 00-1-1.51
-                            1.65 1.65 0 00-1.82.33l-.06.06
-                            a2 2 0 01-2.83-2.83l.06-.06
-                            A1.65 1.65 0 004.4 15
-                            1.65 1.65 0 002.89 14H3
-                            a2 2 0 010-4h.09
-                            a1.65 1.65 0 001.51-1
-                            1.65 1.65 0 00-.33-1.82l-.06-.06
-                            a2 2 0 012.83-2.83l.06.06
-                            a1.65 1.65 0 001.82.33
-                            1.65 1.65 0 001-1.51V3
-                            a2 2 0 014 0v.09
-                            a1.65 1.65 0 001 1.51
-                            1.65 1.65 0 001.82-.33l.06-.06
-                            a2 2 0 012.83 2.83l-.06.06
-                            a1.65 1.65 0 00-.33 1.82
-                            1.65 1.65 0 001.51 1H21
-                            a2 2 0 010 4h-.09
-                            a1.65 1.65 0 00-1.51 1z"
-                        ></path>
-                    </svg>
-
-                    Account Settings
-
-                </a>
-
-            </div>
-
-        </div>
-
-    </div>
+    </aside>
 
 
     <!-- =====================================================
@@ -401,55 +301,21 @@
                         onclick="toggleSidebar()"
                         class="text-gray-400 hover:text-cyan-400 transition cursor-pointer"
                     >
-
-                        <svg
-                            class="w-7 h-7"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M4 6h16M4 12h16M4 18h16"
-                            ></path>
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                         </svg>
-
                     </button>
 
-
-                    <a
-                        href="/dashboard"
-                        class="flex items-center gap-2 cursor-pointer"
-                    >
-
-                        <svg
-                            class="w-7 h-7 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999
-                                5.002 5.002 0 10-9.78 2.096
-                                A4.001 4.001 0 003 15z"
-                            ></path>
+                    <a href="/dashboard" class="flex items-center gap-2 cursor-pointer">
+                        <svg class="w-7 h-7 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path>
                         </svg>
-
-                        <span
-                            class="text-lg md:text-xl font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 drop-shadow-lg"
-                        >
+                        <span class="text-lg md:text-xl font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 drop-shadow-lg">
                             S-CLOUD
                         </span>
-
                     </a>
 
                 </div>
-
 
                 <!-- Right: Profile -->
                 <div class="flex items-center gap-4">
@@ -460,159 +326,50 @@
                     >
 
                         <div class="text-right hidden md:block">
-
-                            <p
-                                id="profileName"
-                                class="text-sm font-semibold text-white"
-                            >
-                                Majethiya Sagar
+                            <p id="profileName" class="text-sm font-semibold text-white">
+                                Loading...
                             </p>
-
                         </div>
 
-
-                        <div
-                            class="w-9 h-9 md:w-10 md:h-10 rounded-full bg-[rgba(12,18,29,.8)] border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.1)] transition"
-                        >
-
-                            <svg
-                                class="w-5 h-5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M16 7a4 4 0 11-8 0
-                                    4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                ></path>
+                        <div class="w-9 h-9 md:w-10 md:h-10 rounded-full bg-[rgba(12,18,29,.8)] border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.1)] transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                             </svg>
-
                         </div>
-
 
                         <!-- Profile Dropdown -->
-                        <div
-                            id="profileDropdown"
-                            class="dropdown-menu absolute right-0 top-12 w-48 z-50"
-                        >
-
+                        <div id="profileDropdown" class="dropdown-menu absolute right-0 top-12 w-52 z-50">
                             <div class="glass-card overflow-hidden">
+                                
+                                <div class="px-5 py-4 border-b border-gray-700/50">
+                                    <p id="profileMenuName" class="text-sm font-semibold text-white truncate">
+                                        Loading...
+                                    </p>
+                                    <p id="profileMenuEmail" class="text-xs text-gray-500 mt-1 truncate">
+                                        Loading...
+                                    </p>
+                                </div>
 
                                 <!-- Account Settings -->
-                                <a
-                                    href="/settings"
-                                    class="block px-5 py-3 text-sm text-gray-300 hover:bg-[rgba(255,255,255,0.05)] flex items-center gap-2 transition"
-                                >
-
-                                    <svg
-                                        class="w-4 h-4"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2"
-                                            d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z"
-                                        ></path>
-
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2"
-                                            d="M19.4 15a1.65 1.65 0 00.33 1.82
-                                            l.06.06a2 2 0 01-2.83 2.83
-                                            l-.06-.06a1.65 1.65 0 00-1.82-.33
-                                            1.65 1.65 0 00-1 1.51V21
-                                            a2 2 0 01-4 0v-.09
-                                            a1.65 1.65 0 00-1-1.51
-                                            1.65 1.65 0 00-1.82.33
-                                            l-.06.06a2 2 0 01-2.83-2.83
-                                            l.06-.06A1.65 1.65 0 004.4 15
-                                            1.65 1.65 0 002.89 14H3
-                                            a2 2 0 010-4h.09
-                                            a1.65 1.65 0 001.51-1
-                                            1.65 1.65 0 00-.33-1.82
-                                            l-.06-.06a2 2 0 012.83-2.83
-                                            l.06.06a1.65 1.65 0 001.82.33
-                                            1.65 1.65 0 001-1.51V3
-                                            a2 2 0 014 0v.09
-                                            a1.65 1.65 0 001 1.51
-                                            1.65 1.65 0 001.82-.33
-                                            l.06-.06a2 2 0 012.83 2.83
-                                            l-.06.06a1.65 1.65 0 00-.33 1.82
-                                            1.65 1.65 0 001.51 1H21
-                                            a2 2 0 010 4h-.09
-                                            a1.65 1.65 0 00-1.51 1z"
-                                        ></path>
-                                    </svg>
-
+                                <a href="/settings" class="block px-5 py-3 text-sm text-gray-300 hover:bg-[rgba(255,255,255,0.05)] hover:text-white transition">
                                     Account Settings
-
                                 </a>
-
 
                                 <!-- Withdraw Funds -->
-                                <a
-                                    href="#"
-                                    onclick="showComingSoon('Withdraw Funds'); return false;"
-                                    class="block px-5 py-3 text-sm text-gray-300 hover:bg-[rgba(255,255,255,0.05)] flex items-center gap-2 transition"
-                                >
-
-                                    <svg
-                                        class="w-4 h-4"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2"
-                                            d="M12 8c-2.21 0-4 1.343-4 3s1.79 3 4 3
-                                            4 1.343 4 3-1.79 3-4 3
-                                            -4-1.343-4-3 1.79-3 4-3zm0-6v2m0 16v2"
-                                        ></path>
-                                    </svg>
-
+                                <a href="#" onclick="showComingSoon(event, 'Withdraw Funds')" class="block px-5 py-3 text-sm text-gray-300 hover:bg-[rgba(255,255,255,0.05)] hover:text-white transition">
                                     Withdraw Funds
-
                                 </a>
 
+                                <div class="border-t border-gray-700/50"></div>
 
                                 <!-- Logout -->
-                                <a
-                                    href="#"
-                                    onclick="logout(); return false;"
-                                    class="block px-5 py-3 text-sm text-red-400 hover:bg-[rgba(255,255,255,0.05)] flex items-center gap-2 transition"
-                                >
-
-                                    <svg
-                                        class="w-4 h-4"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2"
-                                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1
-                                            a3 3 0 01-3 3H6a3 3 0 01-3-3V7
-                                            a3 3 0 013-3h4a3 3 0 013 3v1"
-                                        ></path>
+                                <button type="button" onclick="logout(event)" class="w-full text-left block px-5 py-3 text-sm text-red-400 hover:bg-[rgba(255,255,255,0.05)] flex items-center gap-2 transition">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                                     </svg>
-
                                     Logout
-
-                                </a>
-
+                                </button>
                             </div>
-
                         </div>
 
                     </div>
@@ -633,11 +390,9 @@
 
         <!-- Header -->
         <div class="mb-6">
-
             <h1 class="text-2xl font-bold text-white tracking-wide mb-1">
                 Upload File
             </h1>
-
         </div>
 
 
@@ -648,7 +403,6 @@
 
             <!-- Tabs -->
             <div class="flex gap-6 border-b border-gray-700/50 mb-6 pb-2">
-
                 <button
                     onclick="switchTab('links')"
                     id="tab-links"
@@ -657,7 +411,6 @@
                 >
                     Drive Links
                 </button>
-
                 <button
                     onclick="switchTab('folder')"
                     id="tab-folder"
@@ -666,7 +419,6 @@
                 >
                     Drive Folder
                 </button>
-
             </div>
 
 
@@ -674,24 +426,17 @@
                  TAB 1: MULTIPLE LINKS
             ================================================== -->
             <div id="view-links">
-
-                <label
-                    class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2"
-                >
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
                     Google Drive Links (One per line)
                 </label>
-
                 <div class="relative mb-6">
-
                     <textarea
                         id="driveLinks"
                         rows="4"
                         placeholder="https://drive.google.com/file/d/...&#10;https://drive.google.com/file/d/..."
                         class="w-full bg-[#0a0e17] border border-gray-700 focus:border-cyan-500 rounded-xl py-3 px-4 text-gray-300 outline-none transition-all shadow-inner placeholder-gray-600 text-sm resize-none"
                     ></textarea>
-
                 </div>
-
             </div>
 
 
@@ -699,24 +444,17 @@
                  TAB 2: FOLDER
             ================================================== -->
             <div id="view-folder" class="hidden">
-
-                <label
-                    class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2"
-                >
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
                     Google Drive Folder Link
                 </label>
-
                 <div class="relative mb-6">
-
                     <input
                         type="text"
                         id="folderLink"
                         placeholder="https://drive.google.com/drive/folders/..."
                         class="w-full bg-[#0a0e17] border border-gray-700 focus:border-cyan-500 rounded-xl py-3 px-4 text-gray-300 outline-none transition-all shadow-inner placeholder-gray-600 text-sm"
                     >
-
                 </div>
-
             </div>
 
 
@@ -727,23 +465,10 @@
                 type="button"
                 class="w-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold py-4 px-4 rounded-xl transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_25px_rgba(34,211,238,0.4)] flex items-center justify-center gap-2 group"
             >
-
-                <svg
-                    class="w-5 h-5 group-hover:-translate-y-1 transition-transform"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                    ></path>
+                <svg class="w-5 h-5 group-hover:-translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                 </svg>
-
                 <span>Upload</span>
-
             </button>
 
 
@@ -759,6 +484,26 @@
 
     </div>
 
+    <!-- Toast Component -->
+    <div id="toast" class="toast glass-card">
+        <div class="flex items-start gap-3 p-4">
+            <div id="toastIcon" class="toast-icon success mt-0.5 shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <div class="min-w-0 flex-1">
+                <p id="toastTitle" class="text-sm font-semibold text-white">Success</p>
+                <p id="toastMessage" class="text-xs text-gray-500 mt-0.5">Done.</p>
+            </div>
+            <button type="button" onclick="hideToast()" class="text-gray-600 hover:text-white transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
 
     <!-- =====================================================
          SCRIPT
@@ -770,47 +515,22 @@
         ====================================================== */
 
         function toggleSidebar() {
+            const sidebar = document.getElementById("sidebar");
+            const overlay = document.getElementById("sidebar-overlay");
 
-            const sidebar =
-                document.getElementById("sidebar");
-
-            const overlay =
-                document.getElementById("sidebar-overlay");
-
-            if (
-                window.matchMedia("(min-width: 1024px)").matches
-            ) {
+            if (window.matchMedia("(min-width: 1024px)").matches) {
                 return;
             }
 
-            if (
-                sidebar.classList.contains("sidebar-closed")
-            ) {
-
-                sidebar.classList.remove(
-                    "sidebar-closed"
-                );
-
-                sidebar.classList.add(
-                    "sidebar-open"
-                );
-
+            if (sidebar.classList.contains("sidebar-closed")) {
+                sidebar.classList.remove("sidebar-closed");
+                sidebar.classList.add("sidebar-open");
                 overlay.classList.remove("hidden");
-
             } else {
-
-                sidebar.classList.remove(
-                    "sidebar-open"
-                );
-
-                sidebar.classList.add(
-                    "sidebar-closed"
-                );
-
+                sidebar.classList.remove("sidebar-open");
+                sidebar.classList.add("sidebar-closed");
                 overlay.classList.add("hidden");
-
             }
-
         }
 
 
@@ -819,58 +539,77 @@
         ====================================================== */
 
         function toggleDropdown(event) {
-
             event.stopPropagation();
-
-            const container =
-                document.querySelector(
-                    ".profile-dropdown-container"
-                );
-
-            if (!container) {
-                return;
-            }
-
+            const container = document.querySelector(".profile-dropdown-container");
+            if (!container) return;
             container.classList.toggle("active");
-
         }
 
-
-        document.addEventListener(
-            "click",
-            function(event) {
-
-                const container =
-                    document.querySelector(
-                        ".profile-dropdown-container"
-                    );
-
-                if (
-                    container &&
-                    container.classList.contains("active") &&
-                    !container.contains(event.target)
-                ) {
-
-                    container.classList.remove(
-                        "active"
-                    );
-
-                }
-
+        document.addEventListener("click", function(event) {
+            const container = document.querySelector(".profile-dropdown-container");
+            if (
+                container &&
+                container.classList.contains("active") &&
+                !container.contains(event.target)
+            ) {
+                container.classList.remove("active");
             }
-        );
+        });
 
 
         /* =====================================================
-           COMING SOON
+           TOAST NOTIFICATIONS
         ====================================================== */
 
-        function showComingSoon(name) {
+        let toastTimer = null;
 
-            alert(
-                name + " is coming soon."
-            );
+        function showToast(type, title, message) {
+            const toast = document.getElementById("toast");
+            const icon = document.getElementById("toastIcon");
+            const titleElement = document.getElementById("toastTitle");
+            const messageElement = document.getElementById("toastMessage");
 
+            if (!toast || !icon || !titleElement || !messageElement) return;
+
+            clearTimeout(toastTimer);
+
+            icon.classList.remove("success", "error", "info");
+            icon.classList.add(type);
+
+            if (type === "error") {
+                icon.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86l-7.82 13.5A2 2 0 004.2 20h15.6a2 2 0 001.73-2.64l-7.82-13.5a2 2 0 00-3.42 0z"></path></svg>`;
+            } else if (type === "info") {
+                icon.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 21a9 9 0 100-18 9 9 0 000 18z"></path></svg>`;
+            } else {
+                icon.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+            }
+
+            titleElement.textContent = title || "Notice";
+            messageElement.textContent = message || "";
+
+            toast.classList.add("show");
+
+            toastTimer = setTimeout(() => {
+                hideToast();
+            }, 3500);
+        }
+
+        function hideToast() {
+            const toast = document.getElementById("toast");
+            if (toast) toast.classList.remove("show");
+            clearTimeout(toastTimer);
+        }
+
+        function showComingSoon(event, name) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            // Close dropdown if open
+            const container = document.querySelector(".profile-dropdown-container");
+            if (container) container.classList.remove("active");
+            
+            showToast("info", "Coming Soon", `${name} will be available soon.`);
         }
 
 
@@ -879,46 +618,22 @@
         ====================================================== */
 
         function switchTab(tab) {
-
-            const linksTabBtn =
-                document.getElementById("tab-links");
-
-            const folderTabBtn =
-                document.getElementById("tab-folder");
-
-            const linksView =
-                document.getElementById("view-links");
-
-            const folderView =
-                document.getElementById("view-folder");
-
+            const linksTabBtn = document.getElementById("tab-links");
+            const folderTabBtn = document.getElementById("tab-folder");
+            const linksView = document.getElementById("view-links");
+            const folderView = document.getElementById("view-folder");
 
             if (tab === "links") {
-
-                linksTabBtn.className =
-                    "text-cyan-400 font-semibold border-b-2 border-cyan-400 px-1 pb-2 transition";
-
-                folderTabBtn.className =
-                    "text-gray-400 hover:text-gray-300 font-medium px-1 pb-2 transition";
-
+                linksTabBtn.className = "text-cyan-400 font-semibold border-b-2 border-cyan-400 px-1 pb-2 transition";
+                folderTabBtn.className = "text-gray-400 hover:text-gray-300 font-medium px-1 pb-2 transition";
                 linksView.classList.remove("hidden");
-
                 folderView.classList.add("hidden");
-
             } else {
-
-                folderTabBtn.className =
-                    "text-cyan-400 font-semibold border-b-2 border-cyan-400 px-1 pb-2 transition";
-
-                linksTabBtn.className =
-                    "text-gray-400 hover:text-gray-300 font-medium px-1 pb-2 transition";
-
+                folderTabBtn.className = "text-cyan-400 font-semibold border-b-2 border-cyan-400 px-1 pb-2 transition";
+                linksTabBtn.className = "text-gray-400 hover:text-gray-300 font-medium px-1 pb-2 transition";
                 folderView.classList.remove("hidden");
-
                 linksView.classList.add("hidden");
-
             }
-
         }
 
 
@@ -927,14 +642,12 @@
         ====================================================== */
 
         function escapeHtml(value) {
-
             return String(value ?? "")
                 .replace(/&/g, "&amp;")
                 .replace(/</g, "&lt;")
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
-
         }
 
 
@@ -942,99 +655,36 @@
            CREATE PROCESSING ROW
         ====================================================== */
 
-        function createFileRow(
-            fileName
-        ) {
-
-            const row =
-                document.createElement("div");
-
-            row.className =
-                "processing-row bg-[#0a0e17] border border-gray-700/50 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-3";
-
+        function createFileRow(fileName) {
+            const row = document.createElement("div");
+            row.className = "processing-row bg-[#0a0e17] border border-gray-700/50 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-3";
 
             row.innerHTML = `
-
                 <div class="flex items-center gap-3 w-full md:w-auto">
-
-                    <svg
-                        class="w-5 h-5 text-gray-500 shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                        ></path>
+                    <svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                     </svg>
-
-                    <span
-                        data-file-name
-                        class="text-sm text-gray-300 font-medium truncate max-w-[200px] md:max-w-xs"
-                    >
+                    <span data-file-name class="text-sm text-gray-300 font-medium truncate max-w-[200px] md:max-w-xs">
                         ${escapeHtml(fileName || "Fetching info...")}
                     </span>
-
                 </div>
-
-
-                <div
-                    data-status
-                    class="flex items-center gap-2 text-xs text-cyan-400 font-medium shrink-0"
-                >
-
+                <div data-status class="flex items-center gap-2 text-xs text-cyan-400 font-medium shrink-0">
                     <div class="spinner"></div>
-
                     Processing
-
                 </div>
-
-
-                <div
-                    data-result
-                    class="hidden items-center gap-2 w-full md:w-auto"
-                >
-
-                    <input
-                        type="text"
-                        readonly
-                        data-link
-                        value=""
-                        class="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-emerald-400 text-xs font-mono outline-none w-full md:w-48"
-                    >
-
-                    <button
-                        type="button"
-                        data-copy
-                        class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded text-xs font-semibold transition shrink-0"
-                    >
+                <div data-result class="hidden items-center gap-2 w-full md:w-auto">
+                    <input type="text" readonly data-link value="" class="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-emerald-400 text-xs font-mono outline-none w-full md:w-48">
+                    <button type="button" data-copy class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded text-xs font-semibold transition shrink-0">
                         Copy
                     </button>
-
                 </div>
-
             `;
 
-
-            row.querySelector("[data-copy]")
-                .addEventListener(
-                    "click",
-                    function() {
-
-                        copyLink(
-                            row.querySelector("[data-link]"),
-                            this
-                        );
-
-                    }
-                );
-
+            row.querySelector("[data-copy]").addEventListener("click", function() {
+                copyLink(row.querySelector("[data-link]"), this);
+            });
 
             return row;
-
         }
 
 
@@ -1043,20 +693,11 @@
         ====================================================== */
 
         function extractDriveFileName(url) {
-
             try {
-
-                const match =
-                    url.match(/\/d\/([^/]+)/);
-
-                if (match) {
-                    return "Google Drive File";
-                }
-
+                const match = url.match(/\/d\/([^/]+)/);
+                if (match) return "Google Drive File";
             } catch {}
-
             return "Google Drive File";
-
         }
 
 
@@ -1065,24 +706,15 @@
         ====================================================== */
 
         function getShortLink(data) {
-
-            const uploadData =
-                data?.data || data || {};
-
-
+            const uploadData = data?.data || data || {};
             return (
                 uploadData.short_link ||
                 uploadData.short_url ||
                 uploadData.url ||
                 uploadData.download_url ||
                 uploadData.file_url ||
-                (
-                    uploadData.short_id
-                        ? `${window.location.origin}/file/${encodeURIComponent(uploadData.short_id)}`
-                        : ""
-                )
+                (uploadData.short_id ? `${window.location.origin}/file/${encodeURIComponent(uploadData.short_id)}` : "")
             );
-
         }
 
 
@@ -1090,225 +722,74 @@
            UPLOAD ONE FILE
         ====================================================== */
 
-        async function uploadOne(
-            driveUrl,
-            row
-        ) {
-
+        async function uploadOne(driveUrl, row) {
             try {
-
-                const response =
-                    await fetch(
-                        "/api/upload",
-                        {
-                            method: "POST",
-
-                            credentials: "include",
-
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
-
-                            body: JSON.stringify({
-                                drive_url: driveUrl
-                            })
-                        }
-                    );
-
+                const response = await fetch("/api/upload", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ drive_url: driveUrl })
+                });
 
                 let data;
-
                 try {
-
-                    data =
-                        await response.json();
-
+                    data = await response.json();
                 } catch {
-
                     data = null;
-
                 }
 
-
-                if (
-                    response.status === 401 ||
-                    response.status === 403
-                ) {
-
+                if (response.status === 401 || response.status === 403) {
                     window.location.href = "/";
-
                     return false;
-
                 }
 
-
-                if (
-                    !response.ok ||
-                    !data ||
-                    data.status !== "success"
-                ) {
-
-                    const status =
-                        row.querySelector(
-                            "[data-status]"
-                        );
-
-
-                    status.innerHTML = `
-
-                        <span class="text-red-400">
-                            Failed
-                        </span>
-
-                    `;
-
-
-                    status.classList.remove(
-                        "text-cyan-400"
-                    );
-
-                    status.classList.add(
-                        "text-red-400"
-                    );
-
-
+                if (!response.ok || !data || data.status !== "success") {
+                    const status = row.querySelector("[data-status]");
+                    status.innerHTML = `<span class="text-red-400">Failed</span>`;
+                    status.classList.remove("text-cyan-400");
+                    status.classList.add("text-red-400");
                     return false;
-
                 }
 
+                const uploadData = data.data || data;
 
-                const uploadData =
-                    data.data || data;
-
-
-                /* Real filename from worker */
                 if (uploadData.file_name) {
-
-                    const nameElement =
-                        row.querySelector(
-                            "[data-file-name]"
-                        );
-
-                    nameElement.textContent =
-                        uploadData.file_name;
-
-                    nameElement.title =
-                        uploadData.file_name;
-
-                    nameElement.classList.remove(
-                        "text-gray-300"
-                    );
-
-                    nameElement.classList.add(
-                        "text-white"
-                    );
-
+                    const nameElement = row.querySelector("[data-file-name]");
+                    nameElement.textContent = uploadData.file_name;
+                    nameElement.title = uploadData.file_name;
+                    nameElement.classList.remove("text-gray-300");
+                    nameElement.classList.add("text-white");
                 }
 
-
-                /* Real short link from worker */
-                const shortLink =
-                    getShortLink(data);
-
+                const shortLink = getShortLink(data);
 
                 if (!shortLink) {
-
-                    const status =
-                        row.querySelector(
-                            "[data-status]"
-                        );
-
-                    status.innerHTML = `
-                        <span class="text-red-400">
-                            No link returned
-                        </span>
-                    `;
-
-                    status.classList.remove(
-                        "text-cyan-400"
-                    );
-
-                    status.classList.add(
-                        "text-red-400"
-                    );
-
+                    const status = row.querySelector("[data-status]");
+                    status.innerHTML = `<span class="text-red-400">No link returned</span>`;
+                    status.classList.remove("text-cyan-400");
+                    status.classList.add("text-red-400");
                     return false;
-
                 }
 
+                const status = row.querySelector("[data-status]");
+                const result = row.querySelector("[data-result]");
+                const linkInput = row.querySelector("[data-link]");
 
-                const status =
-                    row.querySelector(
-                        "[data-status]"
-                    );
-
-                const result =
-                    row.querySelector(
-                        "[data-result]"
-                    );
-
-                const linkInput =
-                    row.querySelector(
-                        "[data-link]"
-                    );
-
-
-                status.classList.add(
-                    "hidden"
-                );
-
-
-                linkInput.value =
-                    shortLink;
-
-
-                result.classList.remove(
-                    "hidden"
-                );
-
-                result.classList.add(
-                    "flex"
-                );
-
+                status.classList.add("hidden");
+                linkInput.value = shortLink;
+                result.classList.remove("hidden");
+                result.classList.add("flex");
 
                 return true;
 
-
             } catch (error) {
-
-                console.error(
-                    "Upload error:",
-                    error
-                );
-
-
-                const status =
-                    row.querySelector(
-                        "[data-status]"
-                    );
-
-
-                status.innerHTML = `
-                    <span class="text-red-400">
-                        Failed
-                    </span>
-                `;
-
-
-                status.classList.remove(
-                    "text-cyan-400"
-                );
-
-                status.classList.add(
-                    "text-red-400"
-                );
-
-
+                console.error("Upload error:", error);
+                const status = row.querySelector("[data-status]");
+                status.innerHTML = `<span class="text-red-400">Failed</span>`;
+                status.classList.remove("text-cyan-400");
+                status.classList.add("text-red-400");
                 return false;
-
             }
-
         }
 
 
@@ -1317,249 +798,83 @@
         ====================================================== */
 
         async function startUpload() {
-
-            const driveLinks =
-                document.getElementById(
-                    "driveLinks"
-                ).value.trim();
-
-
-            const folderLink =
-                document.getElementById(
-                    "folderLink"
-                ).value.trim();
-
-
-            const linksView =
-                document.getElementById(
-                    "view-links"
-                );
-
-
-            const isLinksTab =
-                !linksView.classList.contains(
-                    "hidden"
-                );
-
+            const driveLinks = document.getElementById("driveLinks").value.trim();
+            const folderLink = document.getElementById("folderLink").value.trim();
+            const linksView = document.getElementById("view-links");
+            const isLinksTab = !linksView.classList.contains("hidden");
 
             let uploadLinks = [];
 
-
             if (isLinksTab) {
-
-                uploadLinks =
-                    driveLinks
-                        .split(/\r?\n/)
-                        .map(link => link.trim())
-                        .filter(Boolean);
-
-
+                uploadLinks = driveLinks.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
                 if (uploadLinks.length === 0) {
-
-                    alert(
-                        "Please enter a valid Google Drive link."
-                    );
-
+                    showToast("error", "Invalid Input", "Please enter a valid Google Drive link.");
                     return;
-
                 }
-
             } else {
-
                 if (!folderLink) {
-
-                    alert(
-                        "Please enter a valid Google Drive folder link."
-                    );
-
+                    showToast("error", "Invalid Input", "Please enter a valid Google Drive folder link.");
                     return;
-
                 }
-
-
-                uploadLinks = [
-                    folderLink
-                ];
-
+                uploadLinks = [folderLink];
             }
 
-
-            const button =
-                document.getElementById(
-                    "uploadBtn"
-                );
-
-
-            const processingArea =
-                document.getElementById(
-                    "processing-area"
-                );
-
+            const button = document.getElementById("uploadBtn");
+            const processingArea = document.getElementById("processing-area");
 
             button.disabled = true;
-
             button.innerHTML = `
-
                 <div class="spinner border-t-white"></div>
-
                 <span>Uploading...</span>
-
             `;
-
-
-            button.classList.add(
-                "opacity-80",
-                "cursor-wait"
-            );
-
+            button.classList.add("opacity-80", "cursor-wait");
 
             processingArea.innerHTML = "";
-
-            processingArea.classList.remove(
-                "hidden"
-            );
-
+            processingArea.classList.remove("hidden");
 
             let successCount = 0;
-
-
-            /*
-             * Create rows first.
-             */
             const rows = [];
 
+            uploadLinks.forEach(function(url) {
+                const row = createFileRow(extractDriveFileName(url));
+                processingArea.appendChild(row);
+                rows.push(row);
+            });
 
-            uploadLinks.forEach(
-                function(url) {
-
-                    const row =
-                        createFileRow(
-                            extractDriveFileName(url)
-                        );
-
-                    processingArea.appendChild(
-                        row
-                    );
-
-                    rows.push(row);
-
-                }
-            );
-
-
-            /*
-             * Use the real Worker endpoint.
-             */
-            for (
-                let i = 0;
-                i < uploadLinks.length;
-                i++
-            ) {
-
-                const success =
-                    await uploadOne(
-                        uploadLinks[i],
-                        rows[i]
-                    );
-
-
+            for (let i = 0; i < uploadLinks.length; i++) {
+                const success = await uploadOne(uploadLinks[i], rows[i]);
                 if (success) {
                     successCount++;
                 }
-
             }
-
 
             button.disabled = false;
+            button.classList.remove("opacity-80", "cursor-wait");
 
-            button.classList.remove(
-                "opacity-80",
-                "cursor-wait"
-            );
-
-
-            if (
-                successCount ===
-                uploadLinks.length
-            ) {
-
+            if (successCount === uploadLinks.length) {
                 button.innerHTML = `
-
-                    <svg
-                        class="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M5 13l4 4L19 7"
-                        ></path>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                     </svg>
-
                     <span>Upload Complete</span>
-
                 `;
-
-                button.classList.remove(
-                    "from-blue-600",
-                    "to-cyan-500"
-                );
-
-                button.classList.add(
-                    "from-emerald-600",
-                    "to-teal-500"
-                );
-
+                button.classList.remove("from-blue-600", "to-cyan-500");
+                button.classList.add("from-emerald-600", "to-teal-500");
             } else if (successCount > 0) {
-
                 button.innerHTML = `
-
-                    <svg
-                        class="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M5 13l4 4L19 7"
-                        ></path>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                     </svg>
-
                     <span>Upload Finished</span>
-
                 `;
-
             } else {
-
                 button.innerHTML = `
-
-                    <svg
-                        class="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1
-                            m-4-8l-4-4m0 0L8 8m4-4v12"
-                        ></path>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                     </svg>
-
                     <span>Try Again</span>
-
                 `;
-
             }
-
         }
 
 
@@ -1567,77 +882,30 @@
            COPY LINK
         ====================================================== */
 
-        async function copyLink(
-            input,
-            button
-        ) {
+        async function copyLink(input, button) {
+            if (!input || !input.value) return;
 
-            if (
-                !input ||
-                !input.value
-            ) {
-                return;
-            }
-
-
-            const originalText =
-                button.innerText;
-
+            const originalText = button.innerText;
 
             try {
-
-                if (
-                    navigator.clipboard &&
-                    window.isSecureContext
-                ) {
-
-                    await navigator.clipboard.writeText(
-                        input.value
-                    );
-
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(input.value);
                 } else {
-
                     input.select();
-
-                    document.execCommand(
-                        "copy"
-                    );
-
+                    document.execCommand("copy");
                 }
 
+                button.innerText = "Copied!";
+                button.classList.add("bg-emerald-600");
 
-                button.innerText =
-                    "Copied!";
-
-                button.classList.add(
-                    "bg-emerald-600"
-                );
-
-
-                setTimeout(
-                    function() {
-
-                        button.innerText =
-                            originalText;
-
-                        button.classList.remove(
-                            "bg-emerald-600"
-                        );
-
-                    },
-                    1500
-                );
-
+                setTimeout(function() {
+                    button.innerText = originalText;
+                    button.classList.remove("bg-emerald-600");
+                }, 1500);
 
             } catch (error) {
-
-                console.error(
-                    "Copy failed:",
-                    error
-                );
-
+                console.error("Copy failed:", error);
             }
-
         }
 
 
@@ -1646,76 +914,44 @@
         ====================================================== */
 
         async function loadUser() {
-
             try {
-
-                const response =
-                    await fetch(
-                        "/api/me",
-                        {
-                            method: "GET",
-                            credentials: "include"
-                        }
-                    );
-
+                const response = await fetch("/api/me", {
+                    method: "GET",
+                    credentials: "include"
+                });
 
                 if (!response.ok) {
-
-                    window.location.href =
-                        "/";
-
+                    window.location.href = "/";
                     return;
-
                 }
 
+                const data = await response.json();
 
-                const data =
-                    await response.json();
-
-
-                if (
-                    !data ||
-                    data.status !== "success"
-                ) {
-
-                    window.location.href =
-                        "/";
-
+                if (!data || data.status !== "success") {
+                    window.location.href = "/";
                     return;
-
                 }
 
+                const user = data.data || data.user || data;
+                const name = user.name || user.full_name || user.username || "S-Cloud User";
+                const email = user.email || "";
 
-                const user =
-                    data.data ||
-                    data.user ||
-                    data;
-
-
-                const name =
-                    user.name ||
-                    user.full_name ||
-                    user.username ||
-                    "S-Cloud User";
-
-
-                document.getElementById(
-                    "profileName"
-                ).textContent = name;
-
+                if (document.getElementById("profileName")) {
+                    document.getElementById("profileName").textContent = name;
+                }
+                
+                if (document.getElementById("profileMenuName")) {
+                    document.getElementById("profileMenuName").textContent = name;
+                }
+                
+                if (document.getElementById("profileMenuEmail")) {
+                    document.getElementById("profileMenuEmail").textContent = email;
+                }
 
             } catch (error) {
-
-                console.error(
-                    "User load error:",
-                    error
-                );
-
-                window.location.href =
-                    "/";
-
+                console.error("User load error:", error);
+                window.location.href = "/";
             }
-
         }
 
 
@@ -1723,30 +959,20 @@
            LOGOUT
         ====================================================== */
 
-        async function logout() {
-
-            try {
-
-                await fetch(
-                    "/api/logout",
-                    {
-                        method: "POST",
-                        credentials: "include"
-                    }
-                );
-
-            } catch (error) {
-
-                console.error(
-                    "Logout error:",
-                    error
-                );
-
+        async function logout(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
             }
-
-
+            try {
+                await fetch("/api/logout", {
+                    method: "POST",
+                    credentials: "include"
+                });
+            } catch (error) {
+                console.error("Logout error:", error);
+            }
             window.location.href = "/";
-
         }
 
 
@@ -1754,16 +980,10 @@
            INITIALIZE
         ====================================================== */
 
-        document.addEventListener(
-            "DOMContentLoaded",
-            function() {
-
-                loadUser();
-
-            }
-        );
+        document.addEventListener("DOMContentLoaded", function() {
+            loadUser();
+        });
 
     </script>
-
 </body>
 </html>

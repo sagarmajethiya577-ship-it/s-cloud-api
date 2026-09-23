@@ -135,6 +135,16 @@
             transform: translateX(-100%);
         }
 
+        /* DESKTOP SIDEBAR FIX */
+        @media (min-width: 1024px) {
+            #sidebar {
+                transform: translateX(0);
+            }
+            #sidebar-overlay {
+                display: none !important;
+            }
+        }
+
         /* =========================================================
            DROPDOWN
         ========================================================= */
@@ -424,7 +434,7 @@
 
             <a
                 href="#"
-                onclick="showToast('API Documentation is coming soon.')"
+                onclick="showToast('API Document is coming soon.')"
                 class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-[rgba(255,255,255,0.05)] hover:text-white rounded-xl font-medium"
             >
 
@@ -516,7 +526,7 @@
 
                     <!-- Logo -->
 
-                    <div class="flex items-center gap-2">
+                    <a href="/dashboard" class="flex items-center gap-2 cursor-pointer">
 
                         <svg
                             class="w-7 h-7 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]"
@@ -538,24 +548,30 @@
                             S-CLOUD
                         </span>
 
-                    </div>
+                    </a>
 
                 </div>
 
 
                 <!-- RIGHT -->
 
-                <div class="flex items-center">
+                <div class="flex items-center gap-4">
 
                     <!-- Profile -->
 
                     <div
-                        class="relative cursor-pointer profile-dropdown-container"
+                        class="relative cursor-pointer flex items-center gap-3 profile-dropdown-container"
                         onclick="toggleDropdown(event)"
                     >
+                        
+                        <div class="text-right hidden md:block">
+                            <p id="profileName" class="text-sm font-semibold text-white">
+                                Loading...
+                            </p>
+                        </div>
 
                         <div
-                            class="w-9 h-9 rounded-full bg-[rgba(12,18,29,.8)] border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.1)] hover:bg-[rgba(24,31,45,.8)] transition"
+                            class="w-9 h-9 md:w-10 md:h-10 rounded-full bg-[rgba(12,18,29,.8)] border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.1)] hover:bg-[rgba(24,31,45,.8)] transition"
                         >
 
                             <svg
@@ -589,17 +605,17 @@
                                 >
 
                                     <p
-                                        id="dropdownUserName"
-                                        class="text-sm font-semibold text-white"
+                                        id="profileMenuName"
+                                        class="text-sm font-semibold text-white truncate"
                                     >
-                                        Publisher
+                                        Loading...
                                     </p>
 
                                     <p
-                                        id="dropdownUserEmail"
+                                        id="profileMenuEmail"
                                         class="text-xs text-gray-500 mt-1 truncate"
                                     >
-                                        -
+                                        Loading...
                                     </p>
 
                                 </div>
@@ -668,7 +684,7 @@
     ========================================================== -->
 
     <main
-        class="main-container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-6"
+        class="main-container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-6 lg:pl-72"
     >
 
 
@@ -1767,19 +1783,16 @@
                     '-';
 
 
-                const dropdownName =
-                    document.getElementById('dropdownUserName');
-
-                const dropdownEmail =
-                    document.getElementById('dropdownUserEmail');
-
-
-                if (dropdownName) {
-                    dropdownName.textContent = name;
+                if (document.getElementById("profileName")) {
+                    document.getElementById("profileName").textContent = name;
                 }
-
-                if (dropdownEmail) {
-                    dropdownEmail.textContent = email;
+                
+                if (document.getElementById("profileMenuName")) {
+                    document.getElementById("profileMenuName").textContent = name;
+                }
+                
+                if (document.getElementById("profileMenuEmail")) {
+                    document.getElementById("profileMenuEmail").textContent = email;
                 }
 
 
