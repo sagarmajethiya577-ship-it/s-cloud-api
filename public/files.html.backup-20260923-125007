@@ -1886,7 +1886,7 @@
 
                 currentPage = 1;
 
-                // Stats UI removed - no stats update required.
+                updateStats();
 
                 applyFilters();
 
@@ -3560,8 +3560,69 @@
         ========================================================= */
 
         function updateStats() {
-            // Stats cards are intentionally removed from the UI.
-            return;
+
+            const total =
+                allFiles.length;
+
+            const active =
+                allFiles.filter(function(file) {
+
+                    return (
+                        String(
+                            file.status || ""
+                        ).toLowerCase() ===
+                        "active"
+                    );
+
+                }).length;
+
+            const deleted =
+                allFiles.filter(function(file) {
+
+                    return (
+                        String(
+                            file.status || ""
+                        ).toLowerCase() ===
+                        "deleted"
+                    );
+
+                }).length;
+
+            const views =
+                allFiles.reduce(
+                    function(sum, file) {
+
+                        return (
+                            sum +
+                            Number(
+                                file.views || 0
+                            )
+                        );
+
+                    },
+                    0
+                );
+
+            document.getElementById(
+                "totalFiles"
+            ).textContent =
+                formatNumber(total);
+
+            document.getElementById(
+                "activeFiles"
+            ).textContent =
+                formatNumber(active);
+
+            document.getElementById(
+                "deletedFiles"
+            ).textContent =
+                formatNumber(deleted);
+
+            document.getElementById(
+                "totalViews"
+            ).textContent =
+                formatNumber(views);
+
         }
 
 
