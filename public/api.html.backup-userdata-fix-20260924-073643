@@ -625,13 +625,13 @@ echo $response;
 
                 if (
                     result.status !== "success" ||
-                    !result.userData
+                    !result.user
                 ) {
                     window.location.href = "/";
                     return;
                 }
 
-                const user = result.userData;
+                const user = result.user;
 
                 const name =
                     user.name ||

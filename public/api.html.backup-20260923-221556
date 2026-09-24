@@ -101,7 +101,7 @@
     <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 z-40 hidden backdrop-blur-sm transition-opacity"></div>
 
     <!-- Sidebar -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 w-64 z-50 sidebar-closed flex flex-col">
+    <aside id="sidebar" class="glass-card fixed inset-y-0 left-0 w-64 z-50 sidebar-closed flex flex-col border-l-0">
         <div class="h-16 flex items-center px-6 border-b border-gray-700/50 shrink-0">
             <svg class="w-8 h-8 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)] mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path>
@@ -212,7 +212,7 @@
             
             <div class="bg-[#0a0e17] border border-gray-700 rounded-lg p-4 mb-6 flex items-center gap-3 overflow-x-auto no-scrollbar">
                 <span class="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded text-xs font-bold tracking-widest flex-shrink-0">GET</span>
-                <code class="text-sm md:text-base text-gray-300 whitespace-nowrap">https://dashboard.scloud7266.workers.dev/v1/upload</code>
+                <code class="text-sm md:text-base text-gray-300 whitespace-nowrap">https://api.scloud.site/v1/upload</code>
             </div>
 
             <div class="overflow-x-auto">
@@ -252,51 +252,34 @@
             </div>
 
             <div class="p-6 relative">
-                <pre id="code-curl" class="block no-scrollbar"><code>curl -G "https://dashboard.scloud7266.workers.dev/v1/upload" \
-  --data-urlencode "api=YOUR_API_KEY" \
-  --data-urlencode "url=YOUR_DRIVE_LINK"</code></pre>
+                <pre id="code-curl" class="block no-scrollbar"><code>curl -X GET "https://api.scloud.site/v1/upload?api=YOUR_API_KEY&url=YOUR_DRIVE_LINK"</code></pre>
                 
                 <pre id="code-python" class="hidden no-scrollbar"><code>import requests
 
 api_key = "YOUR_API_KEY"
 drive_url = "YOUR_DRIVE_LINK"
 
-url = "https://dashboard.scloud7266.workers.dev/v1/upload"
+url = f"https://api.scloud.site/v1/upload?api={api_key}&url={drive_url}"
 
-response = requests.get(
-    url,
-    params={
-        "api": api_key,
-        "url": drive_url
-    }
-)
-
+response = requests.get(url)
 print(response.json())</code></pre>
 
                 <pre id="code-php" class="hidden no-scrollbar"><code>&lt;?php
 $api_key = "YOUR_API_KEY";
 $drive_url = "YOUR_DRIVE_LINK";
 
-$url = "https://dashboard.scloud7266.workers.dev/v1/upload";
+$url = "https://api.scloud.site/v1/upload?api=" . $api_key . "&url=" . urlencode($drive_url);
 
-$query = http_build_query([
-    "api" => $api_key,
-    "url" => $drive_url
-]);
-
-$response = file_get_contents($url . "?" . $query);
-
+$response = file_get_contents($url);
 echo $response;
 ?&gt;</code></pre>
 
                 <pre id="code-json" class="hidden no-scrollbar"><code>{
   "status": "success",
-  "message": "File Verified & Uploaded Instantly!",
   "data": {
-    "file_name": "Calmos 1976 REMASTERED 1080p BluRay French ESubs - MoviesMod.Zone.mkv",
-    "file_size": "1.85 GB",
-    "short_id": "ied35Hjk",
-    "short_link": "https://dashboard.scloud7266.workers.dev/file/ied35Hjk"
+    "file_name": "Avengers.Endgame.1080p.mkv",
+    "file_size": "2.4 GB",
+    "short_link": "https://scloud.site/f/k9Zx2"
   }
 }</code></pre>
             </div>
@@ -444,147 +427,13 @@ echo $response;
             }, 2000);
         }
 
-        async function regenerateKey() {
-            if (!confirm(
-                "Are you sure? Your existing API key will immediately stop working."
-            )) {
-                return;
-            }
-
-            try {
-                const response = await fetch(
-                    "/api/key/regenerate",
-                    {
-                        method: "POST",
-                        credentials: "include"
-                    }
-                );
-
-                let result = null;
-
-                try {
-                    result = await response.json();
-                } catch (error) {
-                    throw new Error("Invalid server response.");
-                }
-
-                if (!response.ok) {
-                    throw new Error(
-                        result?.message ||
-                        "Unable to regenerate API key."
-                    );
-                }
-
-                const newKey =
-                    result?.api_key ||
-                    result?.key ||
-                    result?.data?.api_key ||
-                    result?.data?.key;
-
-                if (!newKey) {
-                    throw new Error(
-                        "New API key was not returned by the server."
-                    );
-                }
-
-                const input =
-                    document.getElementById("apiKey");
-
-                if (input) {
-                    input.value = newKey;
-                    input.type = "password";
-                }
-
-                showToast(
-                    "success",
-                    "Key Regenerated",
-                    "Your new API Key is ready to use."
-                );
-
-            } catch (error) {
-                console.error(
-                    "API key regeneration error:",
-                    error
-                );
-
-                showToast(
-                    "error",
-                    "Regeneration Failed",
-                    error?.message ||
-                    "Unable to regenerate API key."
-                );
-            }
-        }
-
-        // ==========================================
-        // LOAD REAL API KEY
-        // ==========================================
-
-        async function loadApiKey() {
-            const input =
-                document.getElementById("apiKey");
-
-            if (!input) return;
-
-            input.value = "Fetching...";
-
-            try {
-                const response = await fetch(
-                    "/api/key",
-                    {
-                        method: "GET",
-                        credentials: "include"
-                    }
-                );
-
-                let result = null;
-
-                try {
-                    result = await response.json();
-                } catch (error) {
-                    throw new Error("Invalid server response.");
-                }
-
-                if (response.status === 401) {
-                    window.location.href = "/";
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error(
-                        result?.message ||
-                        "Unable to load API key."
-                    );
-                }
-
-                const key =
-                    result?.api_key ||
-                    result?.key ||
-                    result?.data?.api_key ||
-                    result?.data?.key;
-
-                if (!key) {
-                    throw new Error(
-                        "API key was not returned by the server."
-                    );
-                }
-
-                input.value = key;
-
-            } catch (error) {
-                console.error(
-                    "API key loading error:",
-                    error
-                );
-
-                input.value = "Unable to load API key";
-
-                showToast(
-                    "error",
-                    "API Key Error",
-                    error?.message ||
-                    "Unable to load your API key."
-                );
+        function regenerateKey() {
+            if(confirm("Are you sure? Your existing API key will immediately stop working.")) {
+                // TODO: Aap yaha apna fetch POST request logic daal sakte hain.
+                // Example fallback snippet:
+                const newKey = "sc_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                document.getElementById('apiKey').value = newKey;
+                showToast('success', 'Key Generated', 'New API Key generated successfully!');
             }
         }
 
@@ -610,118 +459,18 @@ echo $response;
         // ==========================================
 
         async function loadUser() {
-            try {
-                const response = await fetch("/api/me", {
-                    method: "GET",
-                    credentials: "include"
-                });
-
-                if (!response.ok) {
-                    window.location.href = "/";
-                    return;
-                }
-
-                const result = await response.json();
-
-                if (
-                    result.status !== "success" ||
-                    !result.userData
-                ) {
-                    window.location.href = "/";
-                    return;
-                }
-
-                const user = result.userData;
-
-                const name =
-                    user.name ||
-                    user.email ||
-                    "Publisher";
-
-                const email =
-                    user.email ||
-                    "—";
-
-                const profileName =
-                    document.getElementById("profileName");
-
-                if (profileName) {
-                    profileName.textContent = name;
-                }
-
-                const profileMenuName =
-                    document.getElementById("profileMenuName");
-
-                if (profileMenuName) {
-                    profileMenuName.textContent = name;
-                }
-
-                const profileMenuEmail =
-                    document.getElementById("profileMenuEmail");
-
-                if (profileMenuEmail) {
-                    profileMenuEmail.textContent = email;
-                }
-
-                const profileAvatar =
-                    document.getElementById("profileAvatar");
-
-                if (profileAvatar) {
-                    const parts =
-                        String(name)
-                            .trim()
-                            .split(/\s+/)
-                            .filter(Boolean);
-
-                    let initials = "U";
-
-                    if (parts.length >= 2) {
-                        initials =
-                            (
-                                parts[0][0] +
-                                parts[parts.length - 1][0]
-                            ).toUpperCase();
-                    } else if (parts.length === 1) {
-                        initials =
-                            parts[0]
-                                .substring(0, 2)
-                                .toUpperCase();
-                    }
-
-                    profileAvatar.textContent = initials;
-                }
-
-            } catch (error) {
-                console.error(
-                    "Failed to load user:",
-                    error
-                );
-
-                window.location.href = "/";
-            }
+            // Aap yaha apna actual fetch('/api/me') laga lena
+            document.getElementById("profileName").textContent = "Majethiya Sagar";
         }
 
-        async function logout(event) {
-            if (event) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
-
-            try {
-                await fetch("/api/logout", {
-                    method: "POST",
-                    credentials: "include"
-                });
-            } catch (error) {
-                console.error("Logout error:", error);
-            }
-
+        function logout(event) {
+            if(event) event.preventDefault();
+            // Aap yaha apna actual fetch('/api/logout') laga lena
             window.location.href = "/";
         }
 
         document.addEventListener("DOMContentLoaded", () => {
             loadUser();
-            loadApiKey();
         });
 
     </script>
