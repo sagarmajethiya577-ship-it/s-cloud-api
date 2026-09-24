@@ -164,6 +164,159 @@ async function sha256Hex(
 
 
 // ==================================================
+// API KEY ENCRYPTION
+// ==================================================
+
+const API_KEY_ENCRYPTION_IV_BYTES =
+    12;
+
+
+async function getApiKeyEncryptionKey(
+    env
+) {
+    const secret =
+        String(
+            env.API_KEY_ENCRYPTION_SECRET || ""
+        );
+
+    if (
+        !secret
+    ) {
+        throw new Error(
+            "API_KEY_ENCRYPTION_SECRET is not configured"
+        );
+    }
+
+    const secretHash =
+        await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(
+                secret
+            )
+        );
+
+    return await crypto.subtle.importKey(
+        "raw",
+        secretHash,
+        {
+            name: "AES-GCM"
+        },
+        false,
+        [
+            "encrypt",
+            "decrypt"
+        ]
+    );
+}
+
+
+async function encryptApiKey(
+    apiKey,
+    env
+) {
+    const iv =
+        new Uint8Array(
+            API_KEY_ENCRYPTION_IV_BYTES
+        );
+
+    crypto.getRandomValues(
+        iv
+    );
+
+    const key =
+        await getApiKeyEncryptionKey(
+            env
+        );
+
+    const encrypted =
+        await crypto.subtle.encrypt(
+            {
+                name: "AES-GCM",
+                iv
+            },
+            key,
+            new TextEncoder().encode(
+                apiKey
+            )
+        );
+
+    return (
+        bytesToHex(iv) +
+        "." +
+        bytesToHex(
+            new Uint8Array(
+                encrypted
+            )
+        )
+    );
+}
+
+
+async function decryptApiKey(
+    encryptedKey,
+    env
+) {
+    if (
+        !encryptedKey ||
+        typeof encryptedKey !== "string"
+    ) {
+        return null;
+    }
+
+    const parts =
+        encryptedKey.split(
+            "."
+        );
+
+    if (
+        parts.length !== 2
+    ) {
+        throw new Error(
+            "Invalid encrypted API key format"
+        );
+    }
+
+    const iv =
+        hexToBytes(
+            parts[0]
+        );
+
+    const encryptedBytes =
+        hexToBytes(
+            parts[1]
+        );
+
+    if (
+        iv.length !==
+        API_KEY_ENCRYPTION_IV_BYTES
+    ) {
+        throw new Error(
+            "Invalid API key encryption IV"
+        );
+    }
+
+    const key =
+        await getApiKeyEncryptionKey(
+            env
+        );
+
+    const decrypted =
+        await crypto.subtle.decrypt(
+            {
+                name: "AES-GCM",
+                iv
+            },
+            key,
+            encryptedBytes
+        );
+
+    return new TextDecoder().decode(
+        decrypted
+    );
+}
+
+
+// ==================================================
 // CONSTANT-TIME STRING COMPARE
 // ==================================================
 
@@ -945,12 +1098,41 @@ async function ensureApiKeyTable(
             user_id INTEGER NOT NULL,
             key_hash TEXT NOT NULL UNIQUE,
             key_prefix TEXT NOT NULL,
+            encrypted_key TEXT,
             status TEXT NOT NULL DEFAULT 'active',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_used_at TIMESTAMP,
             revoked_at TIMESTAMP
         )`
     ).run();
+
+
+    // Migrate old api_keys table.
+    // Existing table may not have encrypted_key.
+    const columns =
+        await env.DB
+            .prepare(
+                `PRAGMA table_info(api_keys)`
+            )
+            .all();
+
+    const hasEncryptedKey =
+        columns.results?.some(
+            column =>
+                column.name ===
+                "encrypted_key"
+        );
+
+    if (
+        !hasEncryptedKey
+    ) {
+        await env.DB
+            .prepare(
+                `ALTER TABLE api_keys
+                 ADD COLUMN encrypted_key TEXT`
+            )
+            .run();
+    }
 
 
     await env.DB.prepare(
@@ -975,26 +1157,55 @@ async function getUserApiKey(
     env
 ) {
 
-    return await env.DB
-        .prepare(
-            `SELECT
-                id,
-                user_id,
-                key_prefix,
-                status,
-                created_at,
-                last_used_at,
-                revoked_at
-             FROM api_keys
-             WHERE user_id = ?
-             AND status = 'active'
-             ORDER BY id DESC
-             LIMIT 1`
-        )
-        .bind(
-            userId
-        )
-        .first();
+    const key =
+        await env.DB
+            .prepare(
+                `SELECT
+                    id,
+                    user_id,
+                    key_prefix,
+                    encrypted_key,
+                    status,
+                    created_at,
+                    last_used_at,
+                    revoked_at
+                 FROM api_keys
+                 WHERE user_id = ?
+                 AND status = 'active'
+                 ORDER BY id DESC
+                 LIMIT 1`
+            )
+            .bind(
+                userId
+            )
+            .first();
+
+
+    if (
+        !key
+    ) {
+        return null;
+    }
+
+
+    // New API keys have an encrypted copy,
+    // so the full key can be viewed again.
+    //
+    // Old API keys created before this migration
+    // have no encrypted copy and need one-time
+    // regeneration.
+    if (
+        key.encrypted_key
+    ) {
+        key.api_key =
+            await decryptApiKey(
+                key.encrypted_key,
+                env
+            );
+    }
+
+
+    return key;
 }
 
 
@@ -1010,15 +1221,24 @@ async function createApiKey(
     const apiKey =
         generateApiKey();
 
+
     const keyHash =
         await sha256Hex(
             apiKey
         );
 
+
     const keyPrefix =
         apiKey.slice(
             0,
             11
+        );
+
+
+    const encryptedKey =
+        await encryptApiKey(
+            apiKey,
+            env
         );
 
 
@@ -1029,14 +1249,16 @@ async function createApiKey(
                 user_id,
                 key_hash,
                 key_prefix,
+                encrypted_key,
                 status
             )
-            VALUES (?, ?, ?, 'active')`
+            VALUES (?, ?, ?, ?, 'active')`
         )
         .bind(
             userId,
             keyHash,
-            keyPrefix
+            keyPrefix,
+            encryptedKey
         )
         .run();
 
@@ -1371,7 +1593,7 @@ export default {
                                 is_new:
                                     true,
                                 warning:
-                                    "Save this API key now. It will not be shown again."
+                                    "Your API key is stored encrypted and can be viewed again from the API page."
                             }
                         }),
                         {
@@ -1401,9 +1623,13 @@ export default {
                             is_new:
                                 false,
                             api_key:
-                                null,
+                                key.api_key || null,
+                            requires_regeneration:
+                                !key.api_key,
                             message:
-                                "Your API key is active. The full key is only returned when it is first generated or regenerated."
+                                key.api_key
+                                    ? "Your API key is active and stored encrypted. You can view the full key again anytime."
+                                    : "This API key was created before secure key storage was enabled. Regenerate it once to enable full-key viewing."
                         }
                     }),
                     {
@@ -1515,7 +1741,7 @@ export default {
                             is_new:
                                 true,
                             warning:
-                                "Save this API key now. It will not be shown again."
+                                "Your API key is stored encrypted and can be viewed again from the API page."
                         }
                     }),
                     {
