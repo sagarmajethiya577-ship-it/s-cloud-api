@@ -3855,7 +3855,8 @@ export default {
                     record.hubcloud_url === "Not Found";
 
                 const gdflixMissing =
-                    !record.gdflix_url;
+                    !record.gdflix_url ||
+                    record.gdflix_url === "Not Found";
 
                 if (
                     (hubcloudMissing || gdflixMissing) &&
