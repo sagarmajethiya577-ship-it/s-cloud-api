@@ -2564,6 +2564,562 @@ export default {
 
 
         // ==================================================
+        // 3.5. UPDATE PROFILE
+        // ==================================================
+
+        if (
+            url.pathname ===
+                "/api/profile/update" &&
+            request.method ===
+                "POST"
+        ) {
+            try {
+
+                const user =
+                    await getCurrentUser(
+                        request,
+                        env
+                    );
+
+                if (
+                    !user
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Authentication required"
+                        }),
+                        {
+                            status: 401,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                let body;
+
+                try {
+                    body =
+                        await request.json();
+                } catch (
+                    error
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Invalid JSON request"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                const requestedName =
+                    body?.name ??
+                    body?.username;
+
+                if (
+                    requestedName ===
+                        undefined ||
+                    requestedName ===
+                        null
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Name is required"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                const cleanName =
+                    String(
+                        requestedName
+                    ).trim();
+
+                if (
+                    cleanName.length <
+                    2
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Name must be at least 2 characters"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                if (
+                    cleanName.length >
+                    80
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Name must not exceed 80 characters"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                await env.DB
+                    .prepare(
+                        `UPDATE users
+                         SET name = ?
+                         WHERE id = ?`
+                    )
+                    .bind(
+                        cleanName,
+                        user.id
+                    )
+                    .run();
+
+                const updatedUser =
+                    await getCurrentUser(
+                        request,
+                        env
+                    );
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "success",
+                        message:
+                            "Profile updated successfully!",
+                        userData:
+                            updatedUser
+                    }),
+                    {
+                        status: 200,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Profile Update Error:",
+                    error
+                );
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "error",
+                        message:
+                            "Unable to update profile"
+                    }),
+                    {
+                        status: 500,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+            }
+        }
+
+
+        // ==================================================
+        // 3.6. CHANGE PASSWORD
+        // ==================================================
+
+        if (
+            url.pathname ===
+                "/api/password/change" &&
+            request.method ===
+                "POST"
+        ) {
+            try {
+
+                const user =
+                    await getCurrentUser(
+                        request,
+                        env
+                    );
+
+                if (
+                    !user
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Authentication required"
+                        }),
+                        {
+                            status: 401,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                let body;
+
+                try {
+                    body =
+                        await request.json();
+                } catch (
+                    error
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Invalid JSON request"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                const currentPassword =
+                    String(
+                        body?.current_password ??
+                            ""
+                    );
+
+                const newPassword =
+                    String(
+                        body?.new_password ??
+                            ""
+                    );
+
+                const confirmPassword =
+                    String(
+                        body?.confirm_password ??
+                            ""
+                    );
+
+                if (
+                    !currentPassword ||
+                    !newPassword ||
+                    !confirmPassword
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "All password fields are required"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                if (
+                    newPassword.length <
+                    8
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "New password must be at least 8 characters"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                if (
+                    newPassword.length >
+                    200
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "New password is too long"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                if (
+                    newPassword !==
+                    confirmPassword
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "New passwords do not match"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                const dbUser =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                id,
+                                password_hash,
+                                status
+                             FROM users
+                             WHERE id = ?
+                             LIMIT 1`
+                        )
+                        .bind(
+                            user.id
+                        )
+                        .first();
+
+                if (
+                    !dbUser
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "User account not found"
+                        }),
+                        {
+                            status: 404,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                const passwordResult =
+                    await verifyPassword(
+                        currentPassword,
+                        dbUser.password_hash
+                    );
+
+                if (
+                    !passwordResult.valid
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Current password is incorrect"
+                        }),
+                        {
+                            status: 401,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                const samePasswordResult =
+                    await verifyPassword(
+                        newPassword,
+                        dbUser.password_hash
+                    );
+
+                if (
+                    samePasswordResult.valid
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "New password must be different from your current password"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                const newPasswordHash =
+                    await hashPassword(
+                        newPassword
+                    );
+
+                await env.DB
+                    .prepare(
+                        `UPDATE users
+                         SET password_hash = ?
+                         WHERE id = ?`
+                    )
+                    .bind(
+                        newPasswordHash,
+                        user.id
+                    )
+                    .run();
+
+                const currentToken =
+                    getCookie(
+                        request,
+                        "scloud_session"
+                    );
+
+                if (
+                    currentToken
+                ) {
+
+                    const currentTokenHash =
+                        await sha256Hex(
+                            currentToken
+                        );
+
+                    await env.DB
+                        .prepare(
+                            `DELETE FROM sessions
+                             WHERE user_id = ?
+                             AND session_token_hash != ?`
+                        )
+                        .bind(
+                            user.id,
+                            currentTokenHash
+                        )
+                        .run();
+
+                } else {
+
+                    await env.DB
+                        .prepare(
+                            `DELETE FROM sessions
+                             WHERE user_id = ?`
+                        )
+                        .bind(
+                            user.id
+                        )
+                        .run();
+                }
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "success",
+                        message:
+                            "Password changed successfully. Other active sessions have been logged out."
+                    }),
+                    {
+                        status: 200,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Password Change Error:",
+                    error
+                );
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "error",
+                        message:
+                            "Unable to change password"
+                    }),
+                    {
+                        status: 500,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+            }
+        }
+
+
+        // ==================================================
         // 4. LOGOUT
         // ==================================================
 
@@ -2646,6 +3202,10 @@ export default {
                 "/api/delete" ||
             url.pathname ===
                 "/api/upload" ||
+            url.pathname ===
+                "/api/profile/update" ||
+            url.pathname ===
+                "/api/password/change" ||
             url.pathname ===
                 "/v1/upload"
         ) {
