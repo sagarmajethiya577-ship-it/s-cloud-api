@@ -3838,78 +3838,151 @@ export default {
                 // ==================================================
                 // SELF-HEALING
                 //
-                // drive_url already contains the S-CLOUD
-                // copied Drive URL.
+                // IMPORTANT:
+                // If HubCloud/GDFlix is missing and an existing
+                // Drivetot URL is already stored, reuse that
+                // existing Drivetot share.
                 //
-                // Therefore DO NOT call copyFileToSCloud()
-                // again. Directly send the S-CLOUD file ID
-                // to Drivetot.
+                // DO NOT upload the S-CLOUD Drive file to Drivetot
+                // again when drivetot_url already exists.
+                //
+                // Only if Drivetot URL is unavailable do we start
+                // again from the S-CLOUD Drive file.
                 // ==================================================
 
+                const hubcloudMissing =
+                    !record.hubcloud_url ||
+                    record.hubcloud_url === "Not Found";
+
+                const gdflixMissing =
+                    !record.gdflix_url;
+
                 if (
-                    !record.gdflix_url &&
-                    record.drive_url
+                    (hubcloudMissing || gdflixMissing) &&
+                    (
+                        record.drivetot_url ||
+                        record.drive_url
+                    )
                 ) {
 
                     try {
 
-                        // --------------------------------------
-                        // STEP 1 - GET S-CLOUD FILE ID
-                        // --------------------------------------
+                        let drivetotShareId = null;
+                        let drivetot_url =
+                            record.drivetot_url || null;
 
-                        const scloudMatch =
-                            String(
-                                record.drive_url
-                            ).match(
-                                /[-\w]{25,}/
-                            );
 
+                        // --------------------------------------
+                        // STEP 1 - REUSE EXISTING DRIVETOT URL
+                        // --------------------------------------
 
                         if (
-                            !scloudMatch
+                            record.drivetot_url
                         ) {
-                            throw new Error(
-                                "Step 1 Failed: Invalid S-Cloud Drive URL."
-                            );
+
+                            const drivetotMatch =
+                                String(
+                                    record.drivetot_url
+                                ).match(
+                                    /\/s\/([^/?#]+)/
+                                );
+
+
+                            if (
+                                drivetotMatch &&
+                                drivetotMatch[1]
+                            ) {
+
+                                drivetotShareId =
+                                    drivetotMatch[1];
+
+                            }
+
                         }
 
 
-                        const scloudFileId =
-                            scloudMatch[0];
-
-
                         // --------------------------------------
-                        // STEP 2 - DRIVETOT
+                        // STEP 2 - ONLY UPLOAD TO DRIVETOT
+                        // IF NO EXISTING SHARE ID EXISTS
                         // --------------------------------------
-
-                        const drivetotResult =
-                            await uploadToDrivetot(
-                                scloudFileId,
-                                env
-                            );
-
 
                         if (
-                            !drivetotResult ||
-                            !drivetotResult.share_id
+                            !drivetotShareId
                         ) {
-                            throw new Error(
-                                "Step 2 Failed: Drivetot API rejected the upload. Check DRIVETOT_API_KEY."
-                            );
+
+                            const scloudMatch =
+                                String(
+                                    record.drive_url || ""
+                                ).match(
+                                    /[-\w]{25,}/
+                                );
+
+
+                            if (
+                                !scloudMatch
+                            ) {
+                                throw new Error(
+                                    "Step 1 Failed: Invalid S-Cloud Drive URL."
+                                );
+                            }
+
+
+                            const scloudFileId =
+                                scloudMatch[0];
+
+
+                            const drivetotResult =
+                                await uploadToDrivetot(
+                                    scloudFileId,
+                                    env
+                                );
+
+
+                            if (
+                                !drivetotResult ||
+                                !drivetotResult.share_id
+                            ) {
+                                throw new Error(
+                                    "Step 2 Failed: Drivetot API rejected the upload. Check DRIVETOT_API_KEY."
+                                );
+                            }
+
+
+                            drivetotShareId =
+                                drivetotResult.share_id;
+
+
+                            drivetot_url =
+                                `https://drivetot.website/s/${drivetotShareId}`;
+
+
+                            await env.DB
+                                .prepare(
+                                    `UPDATE files
+                                     SET drivetot_url = ?
+                                     WHERE id = ?`
+                                )
+                                .bind(
+                                    drivetot_url,
+                                    record.id
+                                )
+                                .run();
+
+
+                            record.drivetot_url =
+                                drivetot_url;
+
                         }
 
 
-                        const drivetot_url =
-                            `https://drivetot.website/s/${drivetotResult.share_id}`;
-
-
                         // --------------------------------------
-                        // STEP 3 - EXTRACT LINKS
+                        // STEP 3 - EXTRACT LINKS FROM EXISTING
+                        // OR NEW DRIVETOT SHARE
                         // --------------------------------------
 
                         const extractedLinks =
                             await extractLinksFromDrivetot(
-                                drivetotResult.share_id,
+                                drivetotShareId,
                                 env
                             );
 
@@ -3924,17 +3997,28 @@ export default {
                         }
 
 
-                        record.hubcloud_url =
-                            extractedLinks.hubcloud_url ||
-                            "Not Found";
+                        // --------------------------------------
+                        // STEP 4 - UPDATE ONLY AVAILABLE LINKS
+                        // --------------------------------------
+
+                        if (
+                            extractedLinks.hubcloud_url
+                        ) {
+
+                            record.hubcloud_url =
+                                extractedLinks.hubcloud_url;
+
+                        }
 
 
-                        record.gdflix_url =
-                            extractedLinks.gdflix_url;
+                        if (
+                            extractedLinks.gdflix_url
+                        ) {
 
+                            record.gdflix_url =
+                                extractedLinks.gdflix_url;
 
-                        record.drivetot_url =
-                            drivetot_url;
+                        }
 
 
                         await env.DB
@@ -3946,12 +4030,16 @@ export default {
                                  WHERE id = ?`
                             )
                             .bind(
-                                record.drivetot_url,
-                                record.hubcloud_url,
-                                record.gdflix_url,
+                                record.drivetot_url ||
+                                    drivetot_url,
+                                record.hubcloud_url ||
+                                    null,
+                                record.gdflix_url ||
+                                    null,
                                 record.id
                             )
                             .run();
+
 
                     } catch (
                         healErr
