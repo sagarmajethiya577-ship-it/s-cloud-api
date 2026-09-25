@@ -1107,8 +1107,6 @@ async function ensureApiKeyTable(
     ).run();
 
 
-    // Migrate old api_keys table.
-    // Existing table may not have encrypted_key.
     const columns =
         await env.DB
             .prepare(
@@ -1188,12 +1186,6 @@ async function getUserApiKey(
     }
 
 
-    // New API keys have an encrypted copy,
-    // so the full key can be viewed again.
-    //
-    // Old API keys created before this migration
-    // have no encrypted copy and need one-time
-    // regeneration.
     if (
         key.encrypted_key
     ) {
@@ -3148,6 +3140,7 @@ export default {
                         "/drive/folders/"
                     )
                 ) {
+
                     const folderId =
                         extractFolderId(
                             cleanUrl
@@ -3452,6 +3445,58 @@ export default {
 
 
                 // --------------------------------------
+                // STEP 1 - COPY TO S-CLOUD DRIVE
+                //
+                // IMPORTANT:
+                // Original Google Drive URL is used only
+                // temporarily and is NEVER saved to DB.
+                // --------------------------------------
+
+                const scloudResult =
+                    await copyFileToSCloud(
+                        cleanUrl,
+                        env
+                    );
+
+
+                if (
+                    !scloudResult ||
+                    !scloudResult.fileId
+                ) {
+                    throw new Error(
+                        "S-Cloud Copy Failed"
+                    );
+                }
+
+
+                const scloudFileId =
+                    scloudResult.fileId;
+
+
+                // --------------------------------------
+                // CREATE S-CLOUD DRIVE URL
+                // --------------------------------------
+
+                const scloudDriveUrl =
+                    `https://drive.google.com/file/d/${scloudFileId}/view`;
+
+
+                // --------------------------------------
+                // UPDATE FILE SIZE FROM S-CLOUD COPY
+                // --------------------------------------
+
+                if (
+                    scloudResult.fileSize &&
+                    scloudResult.fileSize !==
+                        "Unknown"
+                ) {
+
+                    exactFileSize =
+                        scloudResult.fileSize;
+                }
+
+
+                // --------------------------------------
                 // CREATE SHORT ID
                 // --------------------------------------
 
@@ -3469,6 +3514,11 @@ export default {
 
                 // --------------------------------------
                 // INSERT FILE RECORD
+                //
+                // drive_url contains ONLY the
+                // S-CLOUD COPIED DRIVE URL.
+                //
+                // Original Google Drive URL is NOT saved.
                 // --------------------------------------
 
                 await env.DB
@@ -3492,7 +3542,7 @@ export default {
                         currentUser.id,
                         actualFileName,
                         exactFileSize,
-                        cleanUrl,
+                        scloudDriveUrl,
                         currentTime,
                         "active"
                     )
@@ -3501,57 +3551,16 @@ export default {
 
                 // --------------------------------------
                 // BACKGROUND PROCESSING
+                //
+                // S-CLOUD COPY IS ALREADY COMPLETE.
+                // Only Drivetot + link extraction run
+                // in the background.
                 // --------------------------------------
 
                 ctx.waitUntil(
                     (async () => {
 
                         try {
-
-                            // =================================
-                            // STEP 1 - COPY TO S-CLOUD DRIVE
-                            // =================================
-
-                            const scloudResult =
-                                await copyFileToSCloud(
-                                    cleanUrl,
-                                    env
-                                );
-
-
-                            if (
-                                !scloudResult ||
-                                !scloudResult.fileId
-                            ) {
-                                throw new Error(
-                                    "S-Cloud Copy Failed"
-                                );
-                            }
-
-
-                            const scloudFileId =
-                                scloudResult.fileId;
-
-
-                            if (
-                                scloudResult.fileSize &&
-                                scloudResult.fileSize !==
-                                    "Unknown"
-                            ) {
-
-                                await env.DB
-                                    .prepare(
-                                        `UPDATE files
-                                         SET file_size = ?
-                                         WHERE id = ?`
-                                    )
-                                    .bind(
-                                        scloudResult.fileSize,
-                                        shortId
-                                    )
-                                    .run();
-                            }
-
 
                             // =================================
                             // STEP 2 - DRIVETOT
@@ -3657,7 +3666,7 @@ export default {
 
 
                 // --------------------------------------
-                // INSTANT RESPONSE
+                // RESPONSE
                 // --------------------------------------
 
                 return new Response(
@@ -3665,7 +3674,7 @@ export default {
                         status:
                             "success",
                         message:
-                            "File Verified & Uploaded Instantly!",
+                            "File Uploaded Successfully!",
                         data: {
                             file_name:
                                 actualFileName,
@@ -3828,6 +3837,13 @@ export default {
 
                 // ==================================================
                 // SELF-HEALING
+                //
+                // drive_url already contains the S-CLOUD
+                // copied Drive URL.
+                //
+                // Therefore DO NOT call copyFileToSCloud()
+                // again. Directly send the S-CLOUD file ID
+                // to Drivetot.
                 // ==================================================
 
                 if (
@@ -3838,56 +3854,32 @@ export default {
                     try {
 
                         // --------------------------------------
-                        // STEP 1
+                        // STEP 1 - GET S-CLOUD FILE ID
                         // --------------------------------------
 
-                        const scloudResult =
-                            await copyFileToSCloud(
-                                record.drive_url,
-                                env
+                        const scloudMatch =
+                            String(
+                                record.drive_url
+                            ).match(
+                                /[-\w]{25,}/
                             );
 
 
                         if (
-                            !scloudResult ||
-                            !scloudResult.fileId
+                            !scloudMatch
                         ) {
                             throw new Error(
-                                "Step 1 Failed: S-Cloud Drive Copy Failed. Check OAuth Tokens."
+                                "Step 1 Failed: Invalid S-Cloud Drive URL."
                             );
                         }
 
 
                         const scloudFileId =
-                            scloudResult.fileId;
-
-
-                        if (
-                            scloudResult.fileSize &&
-                            scloudResult.fileSize !==
-                                "Unknown"
-                        ) {
-
-                            await env.DB
-                                .prepare(
-                                    `UPDATE files
-                                     SET file_size = ?
-                                     WHERE id = ?`
-                                )
-                                .bind(
-                                    scloudResult.fileSize,
-                                    record.id
-                                )
-                                .run();
-
-
-                            record.file_size =
-                                scloudResult.fileSize;
-                        }
+                            scloudMatch[0];
 
 
                         // --------------------------------------
-                        // STEP 2
+                        // STEP 2 - DRIVETOT
                         // --------------------------------------
 
                         const drivetotResult =
@@ -3912,7 +3904,7 @@ export default {
 
 
                         // --------------------------------------
-                        // STEP 3
+                        // STEP 3 - EXTRACT LINKS
                         // --------------------------------------
 
                         const extractedLinks =
