@@ -3185,6 +3185,260 @@ export default {
         }
 
 
+
+        // ==================================================
+        // WITHDRAWAL TABLES
+        // ==================================================
+        async function ensureWithdrawalTables(env) {
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS withdrawal_settings (
+                    id INTEGER PRIMARY KEY,
+                    minimum_amount REAL NOT NULL DEFAULT 10.00,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `).run();
+
+            await env.DB.prepare(`
+                INSERT OR IGNORE INTO withdrawal_settings (id, minimum_amount)
+                VALUES (1, 10.00)
+            `).run();
+
+            await env.DB.prepare(`
+                CREATE TABLE IF NOT EXISTS withdrawals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    amount REAL NOT NULL,
+                    method TEXT NOT NULL,
+                    payment_details TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    processed_at TIMESTAMP,
+                    processed_by INTEGER,
+                    rejection_reason TEXT
+                )
+            `).run();
+
+            await env.DB.prepare(`
+                CREATE INDEX IF NOT EXISTS idx_withdrawals_user
+                ON withdrawals(user_id)
+            `).run();
+
+            await env.DB.prepare(`
+                CREATE INDEX IF NOT EXISTS idx_withdrawals_status
+                ON withdrawals(status)
+            `).run();
+        }
+
+
+        // ==================================================
+        // WITHDRAWAL API
+        // ==================================================
+        if (url.pathname === "/api/withdraw") {
+            const user = await getCurrentUser(request, env);
+
+            if (!user) {
+                return jsonResponse(
+                    { status: "error", message: "Unauthorized" },
+                    401
+                );
+            }
+
+            await ensureWithdrawalTables(env);
+
+            if (request.method === "GET") {
+                const settings = await env.DB.prepare(`
+                    SELECT minimum_amount
+                    FROM withdrawal_settings
+                    WHERE id = 1
+                `).first();
+
+                const pending = await env.DB.prepare(`
+                    SELECT COALESCE(SUM(amount), 0) AS total
+                    FROM withdrawals
+                    WHERE user_id = ?
+                    AND status = 'pending'
+                `).bind(user.id).first();
+
+                const paid = await env.DB.prepare(`
+                    SELECT COALESCE(SUM(amount), 0) AS total
+                    FROM withdrawals
+                    WHERE user_id = ?
+                    AND status = 'completed'
+                `).bind(user.id).first();
+
+                const history = await env.DB.prepare(`
+                    SELECT
+                        id,
+                        amount,
+                        method,
+                        status,
+                        created_at,
+                        processed_at,
+                        rejection_reason
+                    FROM withdrawals
+                    WHERE user_id = ?
+                    ORDER BY id DESC
+                `).bind(user.id).all();
+
+                return jsonResponse({
+                    status: "success",
+                    balance: Number(user.balance || 0),
+                    minimumAmount: Number(settings?.minimum_amount || 10),
+                    pendingAmount: Number(pending?.total || 0),
+                    totalPaid: Number(paid?.total || 0),
+                    history: history.results || []
+                });
+            }
+
+            if (request.method === "POST") {
+                let body;
+
+                try {
+                    body = await request.json();
+                } catch {
+                    return jsonResponse(
+                        { status: "error", message: "Invalid JSON" },
+                        400
+                    );
+                }
+
+                const amount = Number(body.amount);
+                const method = String(body.method || "").toLowerCase();
+                const details = body.paymentDetails || {};
+
+                const settings = await env.DB.prepare(`
+                    SELECT minimum_amount
+                    FROM withdrawal_settings
+                    WHERE id = 1
+                `).first();
+
+                const minimum = Number(settings?.minimum_amount || 10);
+
+                if (!Number.isFinite(amount) || amount < minimum) {
+                    return jsonResponse({
+                        status: "error",
+                        message: `Minimum withdrawal is $${minimum.toFixed(2)}`
+                    }, 400);
+                }
+
+                if (amount > Number(user.balance || 0)) {
+                    return jsonResponse({
+                        status: "error",
+                        message: "Insufficient balance"
+                    }, 400);
+                }
+
+                if (!["upi", "bank", "paypal", "crypto"].includes(method)) {
+                    return jsonResponse({
+                        status: "error",
+                        message: "Invalid payment method"
+                    }, 400);
+                }
+
+                if (method === "upi") {
+                    const upi = String(details.upiId || "").trim();
+
+                    if (!/^[^\s@]+@[^\s@]+$/.test(upi)) {
+                        return jsonResponse({
+                            status: "error",
+                            message: "Invalid UPI ID"
+                        }, 400);
+                    }
+                }
+
+                if (method === "bank") {
+                    const name = String(details.bankName || "").trim();
+                    const acc = String(details.bankAcc || "").trim();
+                    const ifsc = String(details.bankIfsc || "").trim().toUpperCase();
+
+                    if (
+                        !name ||
+                        name.length > 100 ||
+                        !/^\d{6,30}$/.test(acc) ||
+                        !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)
+                    ) {
+                        return jsonResponse({
+                            status: "error",
+                            message: "Invalid bank details"
+                        }, 400);
+                    }
+
+                    details.bankIfsc = ifsc;
+                }
+
+                if (method === "paypal") {
+                    const email = String(details.paypalEmail || "").trim();
+
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                        return jsonResponse({
+                            status: "error",
+                            message: "Invalid PayPal email"
+                        }, 400);
+                    }
+                }
+
+                if (method === "crypto") {
+                    const address = String(details.cryptoAddress || "").trim();
+
+                    if (address.length < 20 || address.length > 100) {
+                        return jsonResponse({
+                            status: "error",
+                            message: "Invalid crypto address"
+                        }, 400);
+                    }
+                }
+
+                const paymentDetailsJson = JSON.stringify(details);
+
+                if (paymentDetailsJson.length > 5000) {
+                    return jsonResponse({
+                        status: "error",
+                        message: "Payment details are too large"
+                    }, 400);
+                }
+
+                const balanceUpdate = env.DB.prepare(`
+                    UPDATE users
+                    SET balance = balance - ?
+                    WHERE id = ?
+                    AND balance >= ?
+                `).bind(amount, user.id, amount);
+
+                const withdrawalInsert = env.DB.prepare(`
+                    INSERT INTO withdrawals
+                    (user_id, amount, method, payment_details, status)
+                    VALUES (?, ?, ?, ?, 'pending')
+                `).bind(
+                    user.id,
+                    amount,
+                    method,
+                    paymentDetailsJson
+                );
+
+                await env.DB.batch([
+                    balanceUpdate,
+                    withdrawalInsert
+                ]);
+
+                const updatedUser = await env.DB.prepare(`
+                    SELECT balance
+                    FROM users
+                    WHERE id = ?
+                `).bind(user.id).first();
+
+                return jsonResponse({
+                    status: "success",
+                    message: "Withdrawal request submitted successfully",
+                    balance: Number(updatedUser?.balance || 0)
+                });
+            }
+
+            return jsonResponse({
+                status: "error",
+                message: "Method not allowed"
+            }, 405);
+        }
+
         // ==================================================
         // AUTHENTICATED USER
         // ==================================================
@@ -3206,6 +3460,8 @@ export default {
                 "/api/profile/update" ||
             url.pathname ===
                 "/api/password/change" ||
+            url.pathname ===
+                "/api/withdraw" ||
             url.pathname ===
                 "/v1/upload"
         ) {
