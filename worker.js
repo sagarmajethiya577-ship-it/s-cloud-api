@@ -605,7 +605,6 @@ async function verifyPassword(
 // ==================================================
 
 const SESSION_MAX_AGE =
-    30 *
     24 *
     60 *
     60;
@@ -5109,6 +5108,172 @@ export default {
             }
         }
 
+
+        // ==================================================
+        // S-CLOUD SPA SERVER-SIDE PROTECTION
+        // ==================================================
+
+        const spaProtectedRoutes = [
+            "/dashboard",
+            "/upload",
+            "/files",
+            "/api",
+            "/settings",
+            "/withdraw"
+        ];
+
+        const spaSourcePages = [
+            "/dashboard.html",
+            "/upload.html",
+            "/files.html",
+            "/api.html",
+            "/settings.html",
+            "/withdraw.html"
+        ];
+
+        /*
+         * Clean SPA routes:
+         *
+         * /dashboard
+         * /upload
+         * /files
+         * /api
+         * /settings
+         * /withdraw
+         *
+         * Authentication is checked BEFORE
+         * app.html is ever returned.
+         *
+         * Therefore a logged-out visitor never
+         * receives the protected SPA shell.
+         */
+        if (
+            spaProtectedRoutes.includes(
+                url.pathname
+            )
+        ) {
+
+            const spaUser =
+                await getCurrentUser(
+                    request,
+                    env
+                );
+
+            if (!spaUser) {
+
+                const loginUrl =
+                    new URL(
+                        "/",
+                        request.url
+                    );
+
+                loginUrl.searchParams.set(
+                    "redirect",
+                    url.pathname +
+                    url.search
+                );
+
+                return Response.redirect(
+                    loginUrl.toString(),
+                    302
+                );
+            }
+
+            if (
+                env.ASSETS &&
+                typeof env.ASSETS.fetch ===
+                    "function"
+            ) {
+
+                const appRequest =
+                    new Request(
+                        new URL(
+                            "/app.html",
+                            request.url
+                        ),
+                        request
+                    );
+
+                return env.ASSETS.fetch(
+                    appRequest
+                );
+            }
+        }
+
+        /*
+         * The old HTML files are still used as
+         * SPA source templates by app.js.
+         *
+         * Protect them too, so a logged-out user
+         * cannot directly open:
+         *
+         * /dashboard.html
+         * /upload.html
+         * /files.html
+         * /api.html
+         * /settings.html
+         * /withdraw.html
+         *
+         * Logged-in requests continue through
+         * to the normal Assets handler below.
+         */
+        if (
+            spaSourcePages.includes(
+                url.pathname
+            )
+        ) {
+
+            const sourceUser =
+                await getCurrentUser(
+                    request,
+                    env
+                );
+
+            if (!sourceUser) {
+
+                const loginUrl =
+                    new URL(
+                        "/",
+                        request.url
+                    );
+
+                loginUrl.searchParams.set(
+                    "redirect",
+                    url.pathname
+                );
+
+                return Response.redirect(
+                    loginUrl.toString(),
+                    302
+                );
+            }
+        }
+
+        /*
+         * Direct access to app.html itself should
+         * not expose the SPA shell.
+         */
+        if (
+            url.pathname === "/app.html"
+        ) {
+
+            const appUser =
+                await getCurrentUser(
+                    request,
+                    env
+                );
+
+            if (!appUser) {
+
+                return Response.redirect(
+                    new URL(
+                        "/",
+                        request.url
+                    ).toString(),
+                    302
+                );
+            }
+        }
 
         // ==================================================
         // STATIC FRONTEND

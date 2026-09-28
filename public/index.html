@@ -934,8 +934,19 @@
 
                     setTimeout(() => {
 
+                        const redirectParam =
+                            new URLSearchParams(
+                                window.location.search
+                            ).get("redirect");
+
+                        const redirectTarget =
+                            redirectParam &&
+                            redirectParam.startsWith("/")
+                                ? redirectParam
+                                : "/dashboard";
+
                         window.location.href =
-                            "/dashboard";
+                            redirectTarget;
 
                     }, 500);
 
