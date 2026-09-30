@@ -1590,7 +1590,8 @@ async function checkDownloadStatus() {
             await response.json();
 
         if (
-            data.status === "ready" &&
+            data.status === "success" &&
+            data.ready &&
             data.links
         ) {
 
