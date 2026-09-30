@@ -1,0 +1,1916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>God Mode | S-Cloud Admin</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Poppins', sans-serif;
+            background:
+                radial-gradient(
+                    circle at top right,
+                    rgba(220, 38, 38, 0.12),
+                    transparent 30%
+                ),
+                #030712;
+            color: #f9fafb;
+        }
+
+        .glass-card {
+            background: rgba(17, 24, 39, 0.72);
+            border: 1px solid rgba(255,255,255,0.07);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border-radius: 18px;
+        }
+
+        .sidebar {
+            background: rgba(3, 7, 18, 0.96);
+            border-right: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .nav-item {
+            transition: .2s ease;
+        }
+
+        .nav-item:hover {
+            background: rgba(255,255,255,.05);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(
+                90deg,
+                rgba(220,38,38,.20),
+                rgba(220,38,38,.05)
+            );
+            border-left: 3px solid #ef4444;
+        }
+
+        .god-gradient {
+            background: linear-gradient(
+                135deg,
+                #ef4444,
+                #dc2626,
+                #991b1b
+            );
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .stat-number {
+            letter-spacing: -1px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            min-width: 850px;
+        }
+
+        th {
+            color: #9ca3af;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        td {
+            border-top: 1px solid rgba(255,255,255,.05);
+        }
+
+        .toast {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 100;
+            transform: translateY(30px);
+            opacity: 0;
+            pointer-events: none;
+            transition: .25s ease;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-online {
+            background: #22c55e;
+            box-shadow: 0 0 10px rgba(34,197,94,.7);
+        }
+
+        .status-offline {
+            background: #ef4444;
+        }
+
+        .hidden-tab {
+            display: none;
+        }
+
+        @media(max-width: 900px) {
+
+            .desktop-sidebar {
+                display: none;
+            }
+
+            .mobile-main {
+                margin-left: 0 !important;
+            }
+
+        }
+
+    </style>
+</head>
+
+<body>
+
+<!-- =====================================================
+     SIDEBAR
+===================================================== -->
+
+<aside
+    class="desktop-sidebar sidebar fixed left-0 top-0 bottom-0 w-64 z-40"
+>
+
+    <div class="p-6">
+
+        <div class="flex items-center gap-3">
+
+            <div
+                class="w-11 h-11 rounded-xl flex items-center justify-center"
+                style="background:rgba(239,68,68,.12);"
+            >
+                <span class="text-xl">👑</span>
+            </div>
+
+            <div>
+
+                <div class="font-bold text-lg">
+                    S-Cloud
+                </div>
+
+                <div class="text-xs text-red-400">
+                    GOD MODE
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <nav class="px-3 space-y-1">
+
+        <button
+            data-tab="overview"
+            class="nav-item active w-full text-left px-4 py-3 rounded-xl text-sm"
+        >
+            📊 Overview
+        </button>
+
+        <button
+            data-tab="users"
+            class="nav-item w-full text-left px-4 py-3 rounded-xl text-sm"
+        >
+            👥 Manage Users
+        </button>
+
+        <button
+            data-tab="payouts"
+            class="nav-item w-full text-left px-4 py-3 rounded-xl text-sm"
+        >
+            💸 Payouts
+        </button>
+
+        <button
+            data-tab="settings"
+            class="nav-item w-full text-left px-4 py-3 rounded-xl text-sm"
+        >
+            ⚙️ Settings
+        </button>
+
+        <!-- Module Plugins intentionally disabled for now -->
+
+    </nav>
+
+</aside>
+
+
+<!-- =====================================================
+     MAIN
+===================================================== -->
+
+<main class="mobile-main ml-64 min-h-screen">
+
+    <!-- TOP BAR -->
+
+    <header
+        class="h-20 border-b border-white/5 flex items-center justify-between px-6 lg:px-8"
+    >
+
+        <div>
+
+            <h1
+                id="pageTitle"
+                class="text-xl font-semibold"
+            >
+                God Mode
+            </h1>
+
+            <p
+                id="pageSubtitle"
+                class="text-xs text-gray-500"
+            >
+                S-Cloud administration panel
+            </p>
+
+        </div>
+
+        <div class="relative">
+
+            <button
+                id="profileButton"
+                class="flex items-center gap-3 glass-card px-4 py-2"
+            >
+
+                <div class="text-right">
+
+                    <div
+                        id="adminName"
+                        class="text-sm font-medium"
+                    >
+                        Loading...
+                    </div>
+
+                    <div class="text-xs text-red-400">
+                        Super Admin
+                    </div>
+
+                </div>
+
+                <div
+                    class="w-9 h-9 rounded-full bg-red-600/20 flex items-center justify-center"
+                >
+                    👑
+                </div>
+
+            </button>
+
+            <div
+                id="profileMenu"
+                class="hidden absolute right-0 mt-2 w-48 glass-card p-2"
+            >
+
+                <button
+                    onclick="location.href='/dashboard.html'"
+                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-sm"
+                >
+                    User Dashboard
+                </button>
+
+                <button
+                    onclick="logoutAdmin()"
+                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-sm text-red-400"
+                >
+                    Logout Admin
+                </button>
+
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <div class="p-6 lg:p-8">
+
+
+        <!-- =================================================
+             OVERVIEW
+        ================================================== -->
+
+        <section id="tab-overview">
+
+            <div class="mb-6">
+
+                <h2 class="text-2xl font-semibold">
+                    Overview
+                </h2>
+
+                <p class="text-sm text-gray-500">
+                    Live S-Cloud system statistics
+                </p>
+
+            </div>
+
+
+            <div
+                class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5"
+            >
+
+                <div class="glass-card p-5">
+
+                    <div class="text-sm text-gray-500">
+                        Total Users
+                    </div>
+
+                    <div
+                        id="statUsers"
+                        class="stat-number text-3xl font-bold mt-2"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+
+                <div class="glass-card p-5">
+
+                    <div class="text-sm text-gray-500">
+                        Files Hosted
+                    </div>
+
+                    <div
+                        id="statFiles"
+                        class="stat-number text-3xl font-bold mt-2"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+
+                <div class="glass-card p-5">
+
+                    <div class="text-sm text-gray-500">
+                        Total Payouts
+                    </div>
+
+                    <div
+                        id="statPaid"
+                        class="stat-number text-3xl font-bold mt-2"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+
+                <div class="glass-card p-5">
+
+                    <div class="text-sm text-gray-500">
+                        Pending Requests
+                    </div>
+
+                    <div
+                        id="statPending"
+                        class="stat-number text-3xl font-bold mt-2"
+                    >
+                        —
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
+
+
+                <div class="glass-card p-6">
+
+                    <h3 class="font-semibold mb-5">
+                        System Status
+                    </h3>
+
+                    <div class="space-y-4">
+
+                        <div class="flex items-center justify-between">
+
+                            <span class="text-sm text-gray-400">
+                                Master Database
+                            </span>
+
+                            <span class="text-xs text-green-400">
+                                <span
+                                    class="status-dot status-online mr-2"
+                                ></span>
+                                D1 Connected
+                            </span>
+
+                        </div>
+
+
+                        <div class="flex items-center justify-between">
+
+                            <span class="text-sm text-gray-400">
+                                S-Cloud Worker
+                            </span>
+
+                            <span class="text-xs text-green-400">
+                                <span
+                                    class="status-dot status-online mr-2"
+                                ></span>
+                                Online
+                            </span>
+
+                        </div>
+
+
+                        <div class="flex items-center justify-between">
+
+                            <span class="text-sm text-gray-400">
+                                Withdrawal System
+                            </span>
+
+                            <span
+                                id="withdrawStatus"
+                                class="text-xs text-gray-400"
+                            >
+                                Loading...
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="glass-card p-6">
+
+                    <h3 class="font-semibold mb-5">
+                        Current Settings
+                    </h3>
+
+                    <div class="space-y-4">
+
+                        <div class="flex justify-between">
+
+                            <span class="text-sm text-gray-400">
+                                Exchange Rate
+                            </span>
+
+                            <span
+                                id="overviewRate"
+                                class="font-medium"
+                            >
+                                —
+                            </span>
+
+                        </div>
+
+
+                        <div class="flex justify-between">
+
+                            <span class="text-sm text-gray-400">
+                                Minimum Withdrawal
+                            </span>
+
+                            <span
+                                id="overviewMinimum"
+                                class="font-medium"
+                            >
+                                —
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             USERS
+        ================================================== -->
+
+        <section
+            id="tab-users"
+            class="hidden-tab"
+        >
+
+            <div class="mb-6">
+
+                <h2 class="text-2xl font-semibold">
+                    Manage Users
+                </h2>
+
+                <p class="text-sm text-gray-500">
+                    Manage publisher accounts and CPM
+                </p>
+
+            </div>
+
+
+            <div class="glass-card">
+
+                <div class="p-5 border-b border-white/5">
+
+                    <div class="flex justify-between items-center">
+
+                        <h3 class="font-semibold">
+                            Users
+                        </h3>
+
+                        <button
+                            onclick="loadUsers()"
+                            class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm"
+                        >
+                            ↻ Refresh
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <div class="table-wrap">
+
+                    <table class="w-full text-sm">
+
+                        <thead>
+
+                            <tr class="text-left">
+
+                                <th class="p-4">
+                                    User
+                                </th>
+
+                                <th class="p-4">
+                                    Balance
+                                </th>
+
+                                <th class="p-4">
+                                    Files
+                                </th>
+
+                                <th class="p-4">
+                                    CPM
+                                </th>
+
+                                <th class="p-4">
+                                    Status
+                                </th>
+
+                                <th class="p-4">
+                                    Action
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="usersTable">
+
+                            <tr>
+
+                                <td
+                                    colspan="6"
+                                    class="p-8 text-center text-gray-500"
+                                >
+                                    Loading users...
+                                </td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             PAYOUTS
+        ================================================== -->
+
+        <section
+            id="tab-payouts"
+            class="hidden-tab"
+        >
+
+            <div class="mb-6">
+
+                <h2 class="text-2xl font-semibold">
+                    Payout Requests
+                </h2>
+
+                <p class="text-sm text-gray-500">
+                    Approve or reject publisher withdrawals
+                </p>
+
+            </div>
+
+
+            <div class="glass-card">
+
+                <div class="p-5 border-b border-white/5">
+
+                    <div class="flex justify-between items-center">
+
+                        <h3 class="font-semibold">
+                            Withdrawal Requests
+                        </h3>
+
+                        <button
+                            onclick="loadPayouts()"
+                            class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm"
+                        >
+                            ↻ Refresh
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <div class="table-wrap">
+
+                    <table class="w-full text-sm">
+
+                        <thead>
+
+                            <tr class="text-left">
+
+                                <th class="p-4">
+                                    Publisher
+                                </th>
+
+                                <th class="p-4">
+                                    Method
+                                </th>
+
+                                <th class="p-4">
+                                    Amount
+                                </th>
+
+                                <th class="p-4">
+                                    Date
+                                </th>
+
+                                <th class="p-4">
+                                    Status
+                                </th>
+
+                                <th class="p-4">
+                                    Action
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="payoutsTable">
+
+                            <tr>
+
+                                <td
+                                    colspan="6"
+                                    class="p-8 text-center text-gray-500"
+                                >
+                                    Loading payouts...
+                                </td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             SETTINGS
+        ================================================== -->
+
+        <section
+            id="tab-settings"
+            class="hidden-tab"
+        >
+
+            <div class="mb-6">
+
+                <h2 class="text-2xl font-semibold">
+                    Admin Settings
+                </h2>
+
+                <p class="text-sm text-gray-500">
+                    Control global S-Cloud payout settings
+                </p>
+
+            </div>
+
+
+            <div class="max-w-2xl glass-card p-6">
+
+                <div class="mb-6">
+
+                    <h3 class="font-semibold text-lg">
+                        Withdrawal Settings
+                    </h3>
+
+                    <p class="text-xs text-gray-500 mt-1">
+                        These values will be used by the user withdrawal page.
+                    </p>
+
+                </div>
+
+
+                <div class="space-y-5">
+
+                    <div>
+
+                        <label class="block text-sm text-gray-400 mb-2">
+                            Exchange Rate
+                        </label>
+
+                        <div class="flex">
+
+                            <span
+                                class="px-4 flex items-center bg-white/5 border border-white/10 border-r-0 rounded-l-xl text-gray-400"
+                            >
+                                $1 =
+                            </span>
+
+                            <input
+                                id="exchangeRate"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                class="flex-1 bg-transparent border border-white/10 rounded-r-xl px-4 py-3 outline-none focus:border-red-500"
+                                placeholder="83.50"
+                            >
+
+                            <span class="ml-3 flex items-center text-gray-500">
+                                INR
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div>
+
+                        <label class="block text-sm text-gray-400 mb-2">
+                            Minimum Withdrawal
+                        </label>
+
+                        <div class="flex">
+
+                            <span
+                                class="px-4 flex items-center bg-white/5 border border-white/10 border-r-0 rounded-l-xl text-gray-400"
+                            >
+                                $
+                            </span>
+
+                            <input
+                                id="minimumWithdrawal"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                class="flex-1 bg-transparent border border-white/10 rounded-r-xl px-4 py-3 outline-none focus:border-red-500"
+                                placeholder="10.00"
+                            >
+
+                        </div>
+
+                    </div>
+
+
+                    <button
+                        id="saveSettingsButton"
+                        onclick="saveSettings()"
+                        class="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 font-semibold transition"
+                    >
+                        Save Settings
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </div>
+
+</main>
+
+
+<!-- =====================================================
+     TOAST
+===================================================== -->
+
+<div
+    id="toast"
+    class="toast glass-card px-5 py-3 text-sm"
+>
+    <span id="toastText">
+        Done
+    </span>
+</div>
+
+
+<script>
+
+    const API = '';
+
+    let currentAdmin = null;
+
+
+    // =================================================
+    // HELPERS
+    // =================================================
+
+    function money(value) {
+
+        const n = Number(value || 0);
+
+        return '$' + n.toFixed(2);
+
+    }
+
+
+    function escapeHtml(value) {
+
+        return String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+
+    }
+
+
+    function toast(message) {
+
+        const box =
+            document.getElementById('toast');
+
+        document.getElementById('toastText')
+            .textContent = message;
+
+        box.classList.add('show');
+
+        setTimeout(() => {
+
+            box.classList.remove('show');
+
+        }, 2500);
+
+    }
+
+
+    async function api(
+        path,
+        options = {}
+    ) {
+
+        const response =
+            await fetch(
+                API + path,
+                {
+                    credentials: 'include',
+                    ...options,
+                    headers: {
+                        'Content-Type':
+                            'application/json',
+                        ...(options.headers || {})
+                    }
+                }
+            );
+
+        let data = null;
+
+        try {
+            data = await response.json();
+        } catch (_) {
+            data = {};
+        }
+
+        if (response.status === 401) {
+
+            location.href = '/login.html';
+
+            throw new Error(
+                'Authentication required'
+            );
+
+        }
+
+        if (response.status === 403) {
+
+            throw new Error(
+                data.message ||
+                'Admin access required'
+            );
+
+        }
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.message ||
+                'Request failed'
+            );
+
+        }
+
+        return data;
+
+    }
+
+
+    // =================================================
+    // AUTH
+    // =================================================
+
+    async function loadAdmin() {
+
+        try {
+
+            const result =
+                await api('/api/me');
+
+            const user =
+                result.userData ||
+                result.data ||
+                result.user;
+
+            if (!user) {
+                throw new Error(
+                    'Unable to load admin account'
+                );
+            }
+
+            if (
+                String(user.role).toLowerCase() !==
+                'admin'
+            ) {
+
+                toast(
+                    'Admin access required'
+                );
+
+                setTimeout(() => {
+
+                    location.href =
+                        '/dashboard.html';
+
+                }, 1000);
+
+                return false;
+
+            }
+
+            currentAdmin = user;
+
+            document.getElementById(
+                'adminName'
+            ).textContent =
+                user.name || 'Admin';
+
+            return true;
+
+        } catch (error) {
+
+            console.error(error);
+
+            if (
+                error.message ===
+                'Authentication required'
+            ) {
+                return false;
+            }
+
+            toast(
+                error.message ||
+                'Unable to load admin'
+            );
+
+            return false;
+
+        }
+
+    }
+
+
+    async function logoutAdmin() {
+
+        try {
+
+            await fetch(
+                '/api/logout',
+                {
+                    method: 'POST',
+                    credentials: 'include'
+                }
+            );
+
+        } catch (_) {}
+
+        location.href = '/login.html';
+
+    }
+
+
+    // =================================================
+    // OVERVIEW
+    // =================================================
+
+    async function loadOverview() {
+
+        try {
+
+            const result =
+                await api('/api/admin/overview');
+
+            const data =
+                result.data || result;
+
+            document.getElementById(
+                'statUsers'
+            ).textContent =
+                Number(
+                    data.total_users || 0
+                ).toLocaleString();
+
+            document.getElementById(
+                'statFiles'
+            ).textContent =
+                Number(
+                    data.total_files || 0
+                ).toLocaleString();
+
+            document.getElementById(
+                'statPaid'
+            ).textContent =
+                money(data.total_paid);
+
+            document.getElementById(
+                'statPending'
+            ).textContent =
+                money(data.pending_amount);
+
+            document.getElementById(
+                'overviewRate'
+            ).textContent =
+                '₹' +
+                Number(
+                    data.exchange_rate || 0
+                ).toFixed(2);
+
+            document.getElementById(
+                'overviewMinimum'
+            ).textContent =
+                money(
+                    data.minimum_withdrawal
+                );
+
+            document.getElementById(
+                'withdrawStatus'
+            ).innerHTML =
+                '<span class="status-dot status-online mr-2"></span>Active';
+
+        } catch (error) {
+
+            console.error(error);
+
+            document.getElementById(
+                'withdrawStatus'
+            ).textContent =
+                'Unavailable';
+
+        }
+
+    }
+
+
+    // =================================================
+    // USERS
+    // =================================================
+
+    async function loadUsers() {
+
+        const tbody =
+            document.getElementById(
+                'usersTable'
+            );
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6"
+                    class="p-8 text-center text-gray-500">
+                    Loading users...
+                </td>
+            </tr>
+        `;
+
+        try {
+
+            const result =
+                await api('/api/admin/users');
+
+            const users =
+                result.data ||
+                result.users ||
+                [];
+
+            if (!users.length) {
+
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6"
+                            class="p-8 text-center text-gray-500">
+                            No users found
+                        </td>
+                    </tr>
+                `;
+
+                return;
+
+            }
+
+
+            tbody.innerHTML =
+                users.map(user => {
+
+                    const banned =
+                        user.status === 'banned';
+
+                    return `
+
+                    <tr>
+
+                        <td class="p-4">
+
+                            <div class="font-medium">
+                                ${escapeHtml(user.name)}
+                            </div>
+
+                            <div class="text-xs text-gray-500">
+                                ${escapeHtml(user.email)}
+                            </div>
+
+                        </td>
+
+
+                        <td class="p-4">
+                            ${money(user.balance)}
+                        </td>
+
+
+                        <td class="p-4">
+                            ${Number(user.file_count || 0)}
+                        </td>
+
+
+                        <td class="p-4">
+
+                            <div class="flex items-center gap-2">
+
+                                <input
+                                    id="cpm-${user.id}"
+                                    value="${Number(user.custom_cpm || 0).toFixed(2)}"
+                                    type="number"
+                                    step="0.01"
+                                    class="w-20 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs outline-none"
+                                >
+
+                                <button
+                                    onclick="saveCPM('${user.id}')"
+                                    class="text-xs text-red-400 hover:text-red-300"
+                                >
+                                    Save
+                                </button>
+
+                            </div>
+
+                        </td>
+
+
+                        <td class="p-4">
+
+                            <span class="${
+                                banned
+                                ? 'text-red-400'
+                                : 'text-green-400'
+                            } text-xs">
+
+                                ${
+                                    banned
+                                    ? 'Banned'
+                                    : 'Active'
+                                }
+
+                            </span>
+
+                        </td>
+
+
+                        <td class="p-4">
+
+                            <button
+                                onclick="toggleUser('${user.id}', '${banned ? 'active' : 'banned'}')"
+                                class="px-3 py-1.5 rounded-lg text-xs ${
+                                    banned
+                                    ? 'bg-green-500/10 text-green-400'
+                                    : 'bg-red-500/10 text-red-400'
+                                }"
+                            >
+                                ${
+                                    banned
+                                    ? 'Unban'
+                                    : 'Ban'
+                                }
+                            </button>
+
+                        </td>
+
+                    </tr>
+
+                    `;
+
+                }).join('');
+
+        } catch (error) {
+
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6"
+                        class="p-8 text-center text-red-400">
+                        ${escapeHtml(error.message)}
+                    </td>
+                </tr>
+            `;
+
+        }
+
+    }
+
+
+    async function toggleUser(
+        userId,
+        status
+    ) {
+
+        try {
+
+            await api(
+                '/api/admin/user/status',
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        user_id: userId,
+                        status
+                    })
+                }
+            );
+
+            toast(
+                status === 'banned'
+                ? 'User banned'
+                : 'User unbanned'
+            );
+
+            loadUsers();
+
+        } catch (error) {
+
+            toast(error.message);
+
+        }
+
+    }
+
+
+    async function saveCPM(userId) {
+
+        const input =
+            document.getElementById(
+                'cpm-' + userId
+            );
+
+        const cpm =
+            Number(input.value);
+
+        if (
+            !Number.isFinite(cpm) ||
+            cpm < 0
+        ) {
+
+            toast(
+                'Invalid CPM'
+            );
+
+            return;
+
+        }
+
+        try {
+
+            await api(
+                '/api/admin/user/cpm',
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        user_id: userId,
+                        custom_cpm: cpm
+                    })
+                }
+            );
+
+            toast(
+                'CPM updated'
+            );
+
+        } catch (error) {
+
+            toast(error.message);
+
+        }
+
+    }
+
+
+    // =================================================
+    // PAYOUTS
+    // =================================================
+
+    async function loadPayouts() {
+
+        const tbody =
+            document.getElementById(
+                'payoutsTable'
+            );
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6"
+                    class="p-8 text-center text-gray-500">
+                    Loading payouts...
+                </td>
+            </tr>
+        `;
+
+        try {
+
+            const result =
+                await api(
+                    '/api/admin/payouts'
+                );
+
+            const payouts =
+                result.data ||
+                result.payouts ||
+                [];
+
+            if (!payouts.length) {
+
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6"
+                            class="p-8 text-center text-gray-500">
+                            No payout requests
+                        </td>
+                    </tr>
+                `;
+
+                return;
+
+            }
+
+
+            tbody.innerHTML =
+                payouts.map(item => {
+
+                    const pending =
+                        item.status === 'pending';
+
+                    return `
+
+                    <tr>
+
+                        <td class="p-4">
+
+                            <div class="font-medium">
+                                ${escapeHtml(item.name || 'Unknown')}
+                            </div>
+
+                            <div class="text-xs text-gray-500">
+                                ${escapeHtml(item.email || '')}
+                            </div>
+
+                        </td>
+
+
+                        <td class="p-4 uppercase text-xs">
+                            ${escapeHtml(item.method || '')}
+                        </td>
+
+
+                        <td class="p-4 font-medium">
+                            ${money(item.amount)}
+                        </td>
+
+
+                        <td class="p-4 text-xs text-gray-500">
+                            ${escapeHtml(item.created_at || '')}
+                        </td>
+
+
+                        <td class="p-4">
+
+                            <span class="${
+                                item.status === 'approved'
+                                ? 'text-green-400'
+                                : item.status === 'rejected'
+                                ? 'text-red-400'
+                                : 'text-yellow-400'
+                            } text-xs">
+
+                                ${escapeHtml(item.status || '')}
+
+                            </span>
+
+                        </td>
+
+
+                        <td class="p-4">
+
+                            ${
+                                pending
+                                ? `
+                                    <div class="flex gap-2">
+
+                                        <button
+                                            onclick="processPayout('${item.id}', 'approve')"
+                                            class="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs"
+                                        >
+                                            Approve
+                                        </button>
+
+                                        <button
+                                            onclick="processPayout('${item.id}', 'reject')"
+                                            class="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs"
+                                        >
+                                            Reject
+                                        </button>
+
+                                    </div>
+                                `
+                                : '—'
+                            }
+
+                        </td>
+
+                    </tr>
+
+                    `;
+
+                }).join('');
+
+        } catch (error) {
+
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6"
+                        class="p-8 text-center text-red-400">
+                        ${escapeHtml(error.message)}
+                    </td>
+                </tr>
+            `;
+
+        }
+
+    }
+
+
+    async function processPayout(
+        id,
+        action
+    ) {
+
+        const text =
+            action === 'approve'
+            ? 'Approve this withdrawal?'
+            : 'Reject this withdrawal?';
+
+        if (!confirm(text)) {
+            return;
+        }
+
+        try {
+
+            await api(
+                '/api/admin/payout',
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        withdrawal_id: id,
+                        action
+                    })
+                }
+            );
+
+            toast(
+                action === 'approve'
+                ? 'Payout approved'
+                : 'Payout rejected'
+            );
+
+            await loadPayouts();
+            await loadOverview();
+
+        } catch (error) {
+
+            toast(error.message);
+
+        }
+
+    }
+
+
+    // =================================================
+    // SETTINGS
+    // =================================================
+
+    async function loadSettings() {
+
+        try {
+
+            const result =
+                await api(
+                    '/api/admin/settings'
+                );
+
+            const data =
+                result.data || result;
+
+            document.getElementById(
+                'exchangeRate'
+            ).value =
+                Number(
+                    data.exchange_rate || 0
+                ).toFixed(2);
+
+            document.getElementById(
+                'minimumWithdrawal'
+            ).value =
+                Number(
+                    data.minimum_withdrawal || 0
+                ).toFixed(2);
+
+        } catch (error) {
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    async function saveSettings() {
+
+        const button =
+            document.getElementById(
+                'saveSettingsButton'
+            );
+
+        const exchangeRate =
+            Number(
+                document.getElementById(
+                    'exchangeRate'
+                ).value
+            );
+
+        const minimumWithdrawal =
+            Number(
+                document.getElementById(
+                    'minimumWithdrawal'
+                ).value
+            );
+
+
+        if (
+            !Number.isFinite(exchangeRate) ||
+            exchangeRate <= 0
+        ) {
+
+            toast(
+                'Enter a valid exchange rate'
+            );
+
+            return;
+
+        }
+
+
+        if (
+            !Number.isFinite(minimumWithdrawal) ||
+            minimumWithdrawal < 0
+        ) {
+
+            toast(
+                'Enter a valid minimum withdrawal'
+            );
+
+            return;
+
+        }
+
+
+        button.disabled = true;
+
+        button.textContent =
+            'Saving...';
+
+
+        try {
+
+            await api(
+                '/api/admin/settings',
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        exchange_rate:
+                            exchangeRate,
+                        minimum_withdrawal:
+                            minimumWithdrawal
+                    })
+                }
+            );
+
+            toast(
+                'Settings saved successfully'
+            );
+
+            await loadSettings();
+            await loadOverview();
+
+        } catch (error) {
+
+            toast(error.message);
+
+        } finally {
+
+            button.disabled = false;
+
+            button.textContent =
+                'Save Settings';
+
+        }
+
+    }
+
+
+    // =================================================
+    // TAB SYSTEM
+    // =================================================
+
+    function openTab(tab) {
+
+        document
+            .querySelectorAll(
+                '[id^="tab-"]'
+            )
+            .forEach(section => {
+
+                section.classList.add(
+                    'hidden-tab'
+                );
+
+            });
+
+
+        document
+            .querySelectorAll(
+                '.nav-item'
+            )
+            .forEach(button => {
+
+                button.classList.remove(
+                    'active'
+                );
+
+            });
+
+
+        const section =
+            document.getElementById(
+                'tab-' + tab
+            );
+
+        if (section) {
+
+            section.classList.remove(
+                'hidden-tab'
+            );
+
+        }
+
+
+        const button =
+            document.querySelector(
+                `[data-tab="${tab}"]`
+            );
+
+        if (button) {
+
+            button.classList.add(
+                'active'
+            );
+
+        }
+
+
+        const titles = {
+
+            overview: [
+                'God Mode',
+                'S-Cloud administration panel'
+            ],
+
+            users: [
+                'Manage Users',
+                'Manage publisher accounts and CPM'
+            ],
+
+            payouts: [
+                'Payout Requests',
+                'Approve or reject publisher withdrawals'
+            ],
+
+            settings: [
+                'Admin Settings',
+                'Control global S-Cloud payout settings'
+            ]
+
+        };
+
+
+        if (titles[tab]) {
+
+            document.getElementById(
+                'pageTitle'
+            ).textContent =
+                titles[tab][0];
+
+            document.getElementById(
+                'pageSubtitle'
+            ).textContent =
+                titles[tab][1];
+
+        }
+
+
+        if (tab === 'users') {
+            loadUsers();
+        }
+
+        if (tab === 'payouts') {
+            loadPayouts();
+        }
+
+        if (tab === 'settings') {
+            loadSettings();
+        }
+
+    }
+
+
+    // =================================================
+    // INIT
+    // =================================================
+
+    document
+        .querySelectorAll(
+            '.nav-item'
+        )
+        .forEach(button => {
+
+            button.addEventListener(
+                'click',
+                () => {
+
+                    openTab(
+                        button.dataset.tab
+                    );
+
+                }
+            );
+
+        });
+
+
+    document
+        .getElementById(
+            'profileButton'
+        )
+        .addEventListener(
+            'click',
+            () => {
+
+                document
+                    .getElementById(
+                        'profileMenu'
+                    )
+                    .classList.toggle(
+                        'hidden'
+                    );
+
+            }
+        );
+
+
+    document.addEventListener(
+        'click',
+        event => {
+
+            const menu =
+                document.getElementById(
+                    'profileMenu'
+                );
+
+            const button =
+                document.getElementById(
+                    'profileButton'
+                );
+
+            if (
+                !menu.contains(event.target) &&
+                !button.contains(event.target)
+            ) {
+
+                menu.classList.add(
+                    'hidden'
+                );
+
+            }
+
+        }
+    );
+
+
+    async function init() {
+
+        const ok =
+            await loadAdmin();
+
+        if (!ok) {
+            return;
+        }
+
+        await loadOverview();
+
+    }
+
+
+    init();
+
+</script>
+
+</body>
+</html>

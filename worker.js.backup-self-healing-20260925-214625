@@ -605,6 +605,7 @@ async function verifyPassword(
 // ==================================================
 
 const SESSION_MAX_AGE =
+    30 *
     24 *
     60 *
     60;
@@ -1452,309 +1453,6 @@ function jsonHeaders() {
 // ==================================================
 // MAIN WORKER
 // ==================================================
-
-
-// ============================================================
-// BACKGROUND FAST-LINK PREPARATION
-// ============================================================
-
-const fastLinkJobs = new Map();
-
-const THREE_HOURS_IN_MS =
-    3 *
-    60 *
-    60 *
-    1000;
-
-function hasValidFastLinks(record, currentTime) {
-    if (!record || !record.fast_links) {
-        return false;
-    }
-
-    try {
-        JSON.parse(record.fast_links);
-    } catch (error) {
-        return false;
-    }
-
-    const expiresAt = Number(
-        record.fast_links_expires_at || 0
-    );
-
-    if (expiresAt > currentTime) {
-        return true;
-    }
-
-    if (!expiresAt) {
-        const lastUpdated = Number(
-            record.last_updated || 0
-        );
-
-        if (
-            lastUpdated > 0 &&
-            currentTime - lastUpdated < THREE_HOURS_IN_MS
-        ) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-async function prepareFastLinks(shortId, env) {
-    if (fastLinkJobs.has(shortId)) {
-        return fastLinkJobs.get(shortId);
-    }
-
-    const job = (async () => {
-        try {
-            let record = await env.DB
-                .prepare(
-                    `SELECT *
-                     FROM files
-                     WHERE short_id = ?
-                        OR id = ?`
-                )
-                .bind(shortId, shortId)
-                .first();
-
-            if (!record || record.status === "deleted") {
-                return;
-            }
-
-            if (
-                hasValidFastLinks(
-                    record,
-                    Date.now()
-                )
-            ) {
-                return;
-            }
-
-            let drivetotShareId = null;
-            let drivetotUrl =
-                record.drivetot_url || null;
-
-            const hubcloudMissing =
-                !record.hubcloud_url ||
-                record.hubcloud_url === "Not Found";
-
-            const gdflixMissing =
-                !record.gdflix_url ||
-                record.gdflix_url === "Not Found";
-
-            if (drivetotUrl) {
-                const drivetotMatch =
-                    String(drivetotUrl).match(
-                        /\/s\/([^/?#]+)/
-                    );
-
-                if (
-                    drivetotMatch &&
-                    drivetotMatch[1]
-                ) {
-                    drivetotShareId =
-                        drivetotMatch[1];
-                }
-            }
-
-            if (
-                (hubcloudMissing || gdflixMissing) &&
-                !drivetotShareId
-            ) {
-                const scloudMatch =
-                    String(
-                        record.drive_url || ""
-                    ).match(
-                        /[-\w]{25,}/
-                    );
-
-                if (scloudMatch) {
-                    try {
-                        const drivetotResult =
-                            await uploadToDrivetot(
-                                scloudMatch[0],
-                                env
-                            );
-
-                        if (
-                            drivetotResult &&
-                            drivetotResult.share_id
-                        ) {
-                            drivetotShareId =
-                                drivetotResult.share_id;
-
-                            drivetotUrl =
-                                `https://drivetot.website/s/${drivetotShareId}`;
-
-                            await env.DB
-                                .prepare(
-                                    `UPDATE files
-                                     SET drivetot_url = ?
-                                     WHERE id = ?`
-                                )
-                                .bind(
-                                    drivetotUrl,
-                                    record.id
-                                )
-                                .run();
-                        }
-                    } catch (error) {
-                        console.error(
-                            "Background Drivetot upload failed for " +
-                            shortId + ":",
-                            error.message
-                        );
-                    }
-                }
-            }
-
-            if (
-                (hubcloudMissing || gdflixMissing) &&
-                drivetotShareId
-            ) {
-                try {
-                    const extractedLinks =
-                        await extractLinksFromDrivetot(
-                            drivetotShareId,
-                            env
-                        );
-
-                    if (
-                        extractedLinks &&
-                        !extractedLinks.error
-                    ) {
-                        record.hubcloud_url =
-                            extractedLinks.hubcloud_url ||
-                            record.hubcloud_url ||
-                            null;
-
-                        record.gdflix_url =
-                            extractedLinks.gdflix_url ||
-                            record.gdflix_url ||
-                            null;
-
-                        await env.DB
-                            .prepare(
-                                `UPDATE files
-                                 SET drivetot_url = ?,
-                                     hubcloud_url = ?,
-                                     gdflix_url = ?
-                                 WHERE id = ?`
-                            )
-                            .bind(
-                                drivetotUrl ||
-                                    record.drivetot_url ||
-                                    null,
-                                record.hubcloud_url,
-                                record.gdflix_url,
-                                record.id
-                            )
-                            .run();
-                    }
-                } catch (error) {
-                    console.error(
-                        "Background Drivetot extraction failed for " +
-                        shortId + ":",
-                        error.message
-                    );
-                }
-            }
-
-            record = await env.DB
-                .prepare(
-                    `SELECT *
-                     FROM files
-                     WHERE short_id = ?
-                        OR id = ?`
-                )
-                .bind(shortId, shortId)
-                .first();
-
-            if (
-                !record ||
-                record.status === "deleted"
-            ) {
-                return;
-            }
-
-            if (
-                hasValidFastLinks(
-                    record,
-                    Date.now()
-                )
-            ) {
-                return;
-            }
-
-            if (
-                !record.gdflix_url ||
-                record.gdflix_url === "Not Found"
-            ) {
-                console.error(
-                    "Background preparation: GDFlix URL unavailable for " +
-                    shortId
-                );
-                return;
-            }
-
-            const freshFastLinks =
-                await bypassGDFlix(
-                    record.gdflix_url,
-                    env
-                );
-
-            if (!freshFastLinks) {
-                console.error(
-                    "Background preparation returned empty links for " +
-                    shortId
-                );
-                return;
-            }
-
-            const savedAt = Date.now();
-            const expiresAt =
-                savedAt + THREE_HOURS_IN_MS;
-
-            await env.DB
-                .prepare(
-                    `UPDATE files
-                     SET fast_links = ?,
-                         last_updated = ?,
-                         fast_links_expires_at = ?
-                     WHERE id = ?`
-                )
-                .bind(
-                    JSON.stringify(
-                        freshFastLinks
-                    ),
-                    savedAt,
-                    expiresAt,
-                    record.id
-                )
-                .run();
-
-            console.log(
-                "Background fast links prepared for " +
-                shortId
-            );
-
-        } catch (error) {
-            console.error(
-                "Background fast-link preparation failed for " +
-                shortId + ":",
-                error.message
-            );
-        } finally {
-            fastLinkJobs.delete(shortId);
-        }
-    })();
-
-    fastLinkJobs.set(shortId, job);
-
-    return job;
-}
-
 
 export default {
     async fetch(
@@ -2866,562 +2564,6 @@ export default {
 
 
         // ==================================================
-        // 3.5. UPDATE PROFILE
-        // ==================================================
-
-        if (
-            url.pathname ===
-                "/api/profile/update" &&
-            request.method ===
-                "POST"
-        ) {
-            try {
-
-                const user =
-                    await getCurrentUser(
-                        request,
-                        env
-                    );
-
-                if (
-                    !user
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "Authentication required"
-                        }),
-                        {
-                            status: 401,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                let body;
-
-                try {
-                    body =
-                        await request.json();
-                } catch (
-                    error
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "Invalid JSON request"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                const requestedName =
-                    body?.name ??
-                    body?.username;
-
-                if (
-                    requestedName ===
-                        undefined ||
-                    requestedName ===
-                        null
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "Name is required"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                const cleanName =
-                    String(
-                        requestedName
-                    ).trim();
-
-                if (
-                    cleanName.length <
-                    2
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "Name must be at least 2 characters"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                if (
-                    cleanName.length >
-                    80
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "Name must not exceed 80 characters"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                await env.DB
-                    .prepare(
-                        `UPDATE users
-                         SET name = ?
-                         WHERE id = ?`
-                    )
-                    .bind(
-                        cleanName,
-                        user.id
-                    )
-                    .run();
-
-                const updatedUser =
-                    await getCurrentUser(
-                        request,
-                        env
-                    );
-
-                return new Response(
-                    JSON.stringify({
-                        status:
-                            "success",
-                        message:
-                            "Profile updated successfully!",
-                        userData:
-                            updatedUser
-                    }),
-                    {
-                        status: 200,
-                        headers: {
-                            ...corsHeaders,
-                            ...jsonHeaders()
-                        }
-                    }
-                );
-
-            } catch (
-                error
-            ) {
-
-                console.error(
-                    "Profile Update Error:",
-                    error
-                );
-
-                return new Response(
-                    JSON.stringify({
-                        status:
-                            "error",
-                        message:
-                            "Unable to update profile"
-                    }),
-                    {
-                        status: 500,
-                        headers: {
-                            ...corsHeaders,
-                            ...jsonHeaders()
-                        }
-                    }
-                );
-            }
-        }
-
-
-        // ==================================================
-        // 3.6. CHANGE PASSWORD
-        // ==================================================
-
-        if (
-            url.pathname ===
-                "/api/password/change" &&
-            request.method ===
-                "POST"
-        ) {
-            try {
-
-                const user =
-                    await getCurrentUser(
-                        request,
-                        env
-                    );
-
-                if (
-                    !user
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "Authentication required"
-                        }),
-                        {
-                            status: 401,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                let body;
-
-                try {
-                    body =
-                        await request.json();
-                } catch (
-                    error
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "Invalid JSON request"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                const currentPassword =
-                    String(
-                        body?.current_password ??
-                            ""
-                    );
-
-                const newPassword =
-                    String(
-                        body?.new_password ??
-                            ""
-                    );
-
-                const confirmPassword =
-                    String(
-                        body?.confirm_password ??
-                            ""
-                    );
-
-                if (
-                    !currentPassword ||
-                    !newPassword ||
-                    !confirmPassword
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "All password fields are required"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                if (
-                    newPassword.length <
-                    8
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "New password must be at least 8 characters"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                if (
-                    newPassword.length >
-                    200
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "New password is too long"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                if (
-                    newPassword !==
-                    confirmPassword
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "New passwords do not match"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                const dbUser =
-                    await env.DB
-                        .prepare(
-                            `SELECT
-                                id,
-                                password_hash,
-                                status
-                             FROM users
-                             WHERE id = ?
-                             LIMIT 1`
-                        )
-                        .bind(
-                            user.id
-                        )
-                        .first();
-
-                if (
-                    !dbUser
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "User account not found"
-                        }),
-                        {
-                            status: 404,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                const passwordResult =
-                    await verifyPassword(
-                        currentPassword,
-                        dbUser.password_hash
-                    );
-
-                if (
-                    !passwordResult.valid
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "Current password is incorrect"
-                        }),
-                        {
-                            status: 401,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                const samePasswordResult =
-                    await verifyPassword(
-                        newPassword,
-                        dbUser.password_hash
-                    );
-
-                if (
-                    samePasswordResult.valid
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "New password must be different from your current password"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                const newPasswordHash =
-                    await hashPassword(
-                        newPassword
-                    );
-
-                await env.DB
-                    .prepare(
-                        `UPDATE users
-                         SET password_hash = ?
-                         WHERE id = ?`
-                    )
-                    .bind(
-                        newPasswordHash,
-                        user.id
-                    )
-                    .run();
-
-                const currentToken =
-                    getCookie(
-                        request,
-                        "scloud_session"
-                    );
-
-                if (
-                    currentToken
-                ) {
-
-                    const currentTokenHash =
-                        await sha256Hex(
-                            currentToken
-                        );
-
-                    await env.DB
-                        .prepare(
-                            `DELETE FROM sessions
-                             WHERE user_id = ?
-                             AND session_token_hash != ?`
-                        )
-                        .bind(
-                            user.id,
-                            currentTokenHash
-                        )
-                        .run();
-
-                } else {
-
-                    await env.DB
-                        .prepare(
-                            `DELETE FROM sessions
-                             WHERE user_id = ?`
-                        )
-                        .bind(
-                            user.id
-                        )
-                        .run();
-                }
-
-                return new Response(
-                    JSON.stringify({
-                        status:
-                            "success",
-                        message:
-                            "Password changed successfully. Other active sessions have been logged out."
-                    }),
-                    {
-                        status: 200,
-                        headers: {
-                            ...corsHeaders,
-                            ...jsonHeaders()
-                        }
-                    }
-                );
-
-            } catch (
-                error
-            ) {
-
-                console.error(
-                    "Password Change Error:",
-                    error
-                );
-
-                return new Response(
-                    JSON.stringify({
-                        status:
-                            "error",
-                        message:
-                            "Unable to change password"
-                    }),
-                    {
-                        status: 500,
-                        headers: {
-                            ...corsHeaders,
-                            ...jsonHeaders()
-                        }
-                    }
-                );
-            }
-        }
-
-
-        // ==================================================
         // 4. LOGOUT
         // ==================================================
 
@@ -3487,260 +2629,6 @@ export default {
         }
 
 
-
-        // ==================================================
-        // WITHDRAWAL TABLES
-        // ==================================================
-        async function ensureWithdrawalTables(env) {
-            await env.DB.prepare(`
-                CREATE TABLE IF NOT EXISTS withdrawal_settings (
-                    id INTEGER PRIMARY KEY,
-                    minimum_amount REAL NOT NULL DEFAULT 10.00,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            `).run();
-
-            await env.DB.prepare(`
-                INSERT OR IGNORE INTO withdrawal_settings (id, minimum_amount)
-                VALUES (1, 10.00)
-            `).run();
-
-            await env.DB.prepare(`
-                CREATE TABLE IF NOT EXISTS withdrawals (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    amount REAL NOT NULL,
-                    method TEXT NOT NULL,
-                    payment_details TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    processed_at TIMESTAMP,
-                    processed_by INTEGER,
-                    rejection_reason TEXT
-                )
-            `).run();
-
-            await env.DB.prepare(`
-                CREATE INDEX IF NOT EXISTS idx_withdrawals_user
-                ON withdrawals(user_id)
-            `).run();
-
-            await env.DB.prepare(`
-                CREATE INDEX IF NOT EXISTS idx_withdrawals_status
-                ON withdrawals(status)
-            `).run();
-        }
-
-
-        // ==================================================
-        // WITHDRAWAL API
-        // ==================================================
-        if (url.pathname === "/api/withdraw") {
-            const user = await getCurrentUser(request, env);
-
-            if (!user) {
-                return jsonResponse(
-                    { status: "error", message: "Unauthorized" },
-                    401
-                );
-            }
-
-            await ensureWithdrawalTables(env);
-
-            if (request.method === "GET") {
-                const settings = await env.DB.prepare(`
-                    SELECT minimum_amount
-                    FROM withdrawal_settings
-                    WHERE id = 1
-                `).first();
-
-                const pending = await env.DB.prepare(`
-                    SELECT COALESCE(SUM(amount), 0) AS total
-                    FROM withdrawals
-                    WHERE user_id = ?
-                    AND status = 'pending'
-                `).bind(user.id).first();
-
-                const paid = await env.DB.prepare(`
-                    SELECT COALESCE(SUM(amount), 0) AS total
-                    FROM withdrawals
-                    WHERE user_id = ?
-                    AND status = 'completed'
-                `).bind(user.id).first();
-
-                const history = await env.DB.prepare(`
-                    SELECT
-                        id,
-                        amount,
-                        method,
-                        status,
-                        created_at,
-                        processed_at,
-                        rejection_reason
-                    FROM withdrawals
-                    WHERE user_id = ?
-                    ORDER BY id DESC
-                `).bind(user.id).all();
-
-                return jsonResponse({
-                    status: "success",
-                    balance: Number(user.balance || 0),
-                    minimumAmount: Number(settings?.minimum_amount || 10),
-                    pendingAmount: Number(pending?.total || 0),
-                    totalPaid: Number(paid?.total || 0),
-                    history: history.results || []
-                });
-            }
-
-            if (request.method === "POST") {
-                let body;
-
-                try {
-                    body = await request.json();
-                } catch {
-                    return jsonResponse(
-                        { status: "error", message: "Invalid JSON" },
-                        400
-                    );
-                }
-
-                const amount = Number(body.amount);
-                const method = String(body.method || "").toLowerCase();
-                const details = body.paymentDetails || {};
-
-                const settings = await env.DB.prepare(`
-                    SELECT minimum_amount
-                    FROM withdrawal_settings
-                    WHERE id = 1
-                `).first();
-
-                const minimum = Number(settings?.minimum_amount || 10);
-
-                if (!Number.isFinite(amount) || amount < minimum) {
-                    return jsonResponse({
-                        status: "error",
-                        message: `Minimum withdrawal is $${minimum.toFixed(2)}`
-                    }, 400);
-                }
-
-                if (amount > Number(user.balance || 0)) {
-                    return jsonResponse({
-                        status: "error",
-                        message: "Insufficient balance"
-                    }, 400);
-                }
-
-                if (!["upi", "bank", "paypal", "crypto"].includes(method)) {
-                    return jsonResponse({
-                        status: "error",
-                        message: "Invalid payment method"
-                    }, 400);
-                }
-
-                if (method === "upi") {
-                    const upi = String(details.upiId || "").trim();
-
-                    if (!/^[^\s@]+@[^\s@]+$/.test(upi)) {
-                        return jsonResponse({
-                            status: "error",
-                            message: "Invalid UPI ID"
-                        }, 400);
-                    }
-                }
-
-                if (method === "bank") {
-                    const name = String(details.bankName || "").trim();
-                    const acc = String(details.bankAcc || "").trim();
-                    const ifsc = String(details.bankIfsc || "").trim().toUpperCase();
-
-                    if (
-                        !name ||
-                        name.length > 100 ||
-                        !/^\d{6,30}$/.test(acc) ||
-                        !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)
-                    ) {
-                        return jsonResponse({
-                            status: "error",
-                            message: "Invalid bank details"
-                        }, 400);
-                    }
-
-                    details.bankIfsc = ifsc;
-                }
-
-                if (method === "paypal") {
-                    const email = String(details.paypalEmail || "").trim();
-
-                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                        return jsonResponse({
-                            status: "error",
-                            message: "Invalid PayPal email"
-                        }, 400);
-                    }
-                }
-
-                if (method === "crypto") {
-                    const address = String(details.cryptoAddress || "").trim();
-
-                    if (address.length < 20 || address.length > 100) {
-                        return jsonResponse({
-                            status: "error",
-                            message: "Invalid crypto address"
-                        }, 400);
-                    }
-                }
-
-                const paymentDetailsJson = JSON.stringify(details);
-
-                if (paymentDetailsJson.length > 5000) {
-                    return jsonResponse({
-                        status: "error",
-                        message: "Payment details are too large"
-                    }, 400);
-                }
-
-                const balanceUpdate = env.DB.prepare(`
-                    UPDATE users
-                    SET balance = balance - ?
-                    WHERE id = ?
-                    AND balance >= ?
-                `).bind(amount, user.id, amount);
-
-                const withdrawalInsert = env.DB.prepare(`
-                    INSERT INTO withdrawals
-                    (user_id, amount, method, payment_details, status)
-                    VALUES (?, ?, ?, ?, 'pending')
-                `).bind(
-                    user.id,
-                    amount,
-                    method,
-                    paymentDetailsJson
-                );
-
-                await env.DB.batch([
-                    balanceUpdate,
-                    withdrawalInsert
-                ]);
-
-                const updatedUser = await env.DB.prepare(`
-                    SELECT balance
-                    FROM users
-                    WHERE id = ?
-                `).bind(user.id).first();
-
-                return jsonResponse({
-                    status: "success",
-                    message: "Withdrawal request submitted successfully",
-                    balance: Number(updatedUser?.balance || 0)
-                });
-            }
-
-            return jsonResponse({
-                status: "error",
-                message: "Method not allowed"
-            }, 405);
-        }
-
         // ==================================================
         // AUTHENTICATED USER
         // ==================================================
@@ -3758,12 +2646,6 @@ export default {
                 "/api/delete" ||
             url.pathname ===
                 "/api/upload" ||
-            url.pathname ===
-                "/api/profile/update" ||
-            url.pathname ===
-                "/api/password/change" ||
-            url.pathname ===
-                "/api/withdraw" ||
             url.pathname ===
                 "/v1/upload"
         ) {
@@ -4845,10 +3727,6 @@ export default {
         // 9. PUBLIC DOWNLOAD ROUTE
         // ==================================================
 
-        // ==================================================
-        // 9. PUBLIC DOWNLOAD ROUTE
-        // ==================================================
-
         if (
             url.pathname.startsWith(
                 "/file/"
@@ -4861,7 +3739,10 @@ export default {
                         "/"
                     )[2];
 
-            if (!shortId) {
+
+            if (
+                !shortId
+            ) {
                 return new Response(
                     "Invalid Link",
                     {
@@ -4872,9 +3753,14 @@ export default {
                 );
             }
 
+
             try {
 
-                const record =
+                // ------------------------------------------
+                // FIND FILE
+                // ------------------------------------------
+
+                let record =
                     await env.DB
                         .prepare(
                             `SELECT *
@@ -4888,7 +3774,10 @@ export default {
                         )
                         .first();
 
-                if (!record) {
+
+                if (
+                    !record
+                ) {
                     return new Response(
                         "File Not Found in DB",
                         {
@@ -4898,6 +3787,7 @@ export default {
                         }
                     );
                 }
+
 
                 if (
                     record.status ===
@@ -4913,6 +3803,22 @@ export default {
                     );
                 }
 
+
+                const currentTime =
+                    Date.now();
+
+
+                const THREE_HOURS_IN_MS =
+                    3 *
+                    60 *
+                    60 *
+                    1000;
+
+
+                // ------------------------------------------
+                // INCREMENT VIEWS
+                // ------------------------------------------
+
                 await env.DB
                     .prepare(
                         `UPDATE files
@@ -4924,89 +3830,362 @@ export default {
                     )
                     .run();
 
-                const currentTime =
-                    Date.now();
 
-                let instantReady = false;
-                let cachedLinks = null;
+                let selfHealingError =
+                    "No processing error detected.";
+
+
+                // ==================================================
+                // SELF-HEALING
+                //
+                // drive_url already contains the S-CLOUD
+                // copied Drive URL.
+                //
+                // Therefore DO NOT call copyFileToSCloud()
+                // again. Directly send the S-CLOUD file ID
+                // to Drivetot.
+                // ==================================================
 
                 if (
-                    hasValidFastLinks(
-                        record,
-                        currentTime
-                    )
+                    !record.gdflix_url &&
+                    record.drive_url
                 ) {
-                    instantReady = true;
 
                     try {
-                        cachedLinks =
-                            JSON.parse(
-                                record.fast_links
+
+                        // --------------------------------------
+                        // STEP 1 - GET S-CLOUD FILE ID
+                        // --------------------------------------
+
+                        const scloudMatch =
+                            String(
+                                record.drive_url
+                            ).match(
+                                /[-\w]{25,}/
                             );
-                    } catch (error) {
-                        instantReady = false;
-                        cachedLinks = null;
+
+
+                        if (
+                            !scloudMatch
+                        ) {
+                            throw new Error(
+                                "Step 1 Failed: Invalid S-Cloud Drive URL."
+                            );
+                        }
+
+
+                        const scloudFileId =
+                            scloudMatch[0];
+
+
+                        // --------------------------------------
+                        // STEP 2 - DRIVETOT
+                        // --------------------------------------
+
+                        const drivetotResult =
+                            await uploadToDrivetot(
+                                scloudFileId,
+                                env
+                            );
+
+
+                        if (
+                            !drivetotResult ||
+                            !drivetotResult.share_id
+                        ) {
+                            throw new Error(
+                                "Step 2 Failed: Drivetot API rejected the upload. Check DRIVETOT_API_KEY."
+                            );
+                        }
+
+
+                        const drivetot_url =
+                            `https://drivetot.website/s/${drivetotResult.share_id}`;
+
+
+                        // --------------------------------------
+                        // STEP 3 - EXTRACT LINKS
+                        // --------------------------------------
+
+                        const extractedLinks =
+                            await extractLinksFromDrivetot(
+                                drivetotResult.share_id,
+                                env
+                            );
+
+
+                        if (
+                            extractedLinks.error
+                        ) {
+                            throw new Error(
+                                "Step 3 Failed: Drivetot Scraper Error -> " +
+                                extractedLinks.error
+                            );
+                        }
+
+
+                        record.hubcloud_url =
+                            extractedLinks.hubcloud_url ||
+                            "Not Found";
+
+
+                        record.gdflix_url =
+                            extractedLinks.gdflix_url;
+
+
+                        record.drivetot_url =
+                            drivetot_url;
+
+
+                        await env.DB
+                            .prepare(
+                                `UPDATE files
+                                 SET drivetot_url = ?,
+                                     hubcloud_url = ?,
+                                     gdflix_url = ?
+                                 WHERE id = ?`
+                            )
+                            .bind(
+                                record.drivetot_url,
+                                record.hubcloud_url,
+                                record.gdflix_url,
+                                record.id
+                            )
+                            .run();
+
+                    } catch (
+                        healErr
+                    ) {
+
+                        selfHealingError =
+                            healErr.message;
+
+
+                        console.error(
+                            "Self-Healing Error:",
+                            healErr.message
+                        );
                     }
                 }
 
-                // Start preparation in background.
-                // Page request does NOT wait for GDFlix.
-                ctx.waitUntil(
-                    prepareFastLinks(
-                        shortId,
-                        env
-                    )
-                );
 
-                return new Response(
-                    JSON.stringify({
-                        status: "success",
+                // ==================================================
+                // SERVE FAST LINKS FROM CACHE
+                // ==================================================
 
-                        file: {
-                            name:
-                                record.file_name,
+                const lastUpdated =
+                    Number(
+                        record.last_updated ||
+                        0
+                    );
 
-                            size:
-                                record.file_size,
 
-                            type:
-                                record.mime_type ||
-                                record.file_type ||
-                                "video/x-matroska",
+                if (
+                    record.fast_links &&
+                    lastUpdated > 0 &&
+                    (
+                        currentTime -
+                        lastUpdated
+                    ) <
+                        THREE_HOURS_IN_MS
+                ) {
 
-                            shared:
-                                record.created_at ||
-                                record.last_updated ||
-                                null
-                        },
+                    let parsedLinks;
 
-                        mirrors: {
-                            hubcloud:
-                                !!record.hubcloud_url,
 
-                            gdflix:
-                                !!record.gdflix_url
-                        },
+                    try {
 
-                        instant: {
-                            ready:
-                                instantReady,
+                        parsedLinks =
+                            JSON.parse(
+                                record.fast_links
+                            );
 
-                            links:
-                                cachedLinks
-                        }
-                    }),
-                    {
-                        status: 200,
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-                            ...corsHeaders
-                        }
+                    } catch (
+                        e
+                    ) {
+
+                        parsedLinks =
+                            record.fast_links;
                     }
-                );
 
-            } catch (err) {
+
+                    return new Response(
+                        JSON.stringify(
+                            {
+                                status:
+                                    "Success (Served from Cache)",
+
+                                file_name:
+                                    record.file_name,
+
+                                file_size:
+                                    record.file_size,
+
+                                drivetot_url:
+                                    record.drivetot_url,
+
+                                hubcloud_url:
+                                    record.hubcloud_url,
+
+                                gdflix_url:
+                                    record.gdflix_url,
+
+                                download_links:
+                                    parsedLinks
+                            },
+                            null,
+                            2
+                        ),
+                        {
+                            status: 200,
+                            headers: {
+                                "Content-Type":
+                                    "application/json",
+                                ...corsHeaders
+                            }
+                        }
+                    );
+                }
+
+
+                // ==================================================
+                // NO GDFLIX LINK
+                // ==================================================
+
+                if (
+                    !record.gdflix_url
+                ) {
+
+                    return new Response(
+                        JSON.stringify(
+                            {
+                                status:
+                                    "Processing Error",
+
+                                message:
+                                    "Background process is failing. Check the detailed reason below.",
+
+                                detailed_reason:
+                                    selfHealingError
+                            },
+                            null,
+                            2
+                        ),
+                        {
+                            status: 400,
+                            headers: {
+                                "Content-Type":
+                                    "application/json",
+                                ...corsHeaders
+                            }
+                        }
+                    );
+                }
+
+
+                // ==================================================
+                // FRESH GDFLIX SCRAPE
+                // ==================================================
+
+                try {
+
+                    const freshFastLinks =
+                        await bypassGDFlix(
+                            record.gdflix_url,
+                            env
+                        );
+
+
+                    // --------------------------------------
+                    // SAVE FAST LINKS
+                    // --------------------------------------
+
+                    const expiresAt =
+                        currentTime +
+                        THREE_HOURS_IN_MS;
+
+
+                    await env.DB
+                        .prepare(
+                            `UPDATE files
+                             SET fast_links = ?,
+                                 last_updated = ?,
+                                 fast_links_expires_at = ?
+                             WHERE id = ?`
+                        )
+                        .bind(
+                            JSON.stringify(
+                                freshFastLinks
+                            ),
+                            currentTime,
+                            expiresAt,
+                            record.id
+                        )
+                        .run();
+
+
+                    return new Response(
+                        JSON.stringify(
+                            {
+                                status:
+                                    "Success (Freshly Scraped)",
+
+                                file_name:
+                                    record.file_name,
+
+                                file_size:
+                                    record.file_size,
+
+                                drivetot_url:
+                                    record.drivetot_url,
+
+                                hubcloud_url:
+                                    record.hubcloud_url,
+
+                                gdflix_url:
+                                    record.gdflix_url,
+
+                                download_links:
+                                    freshFastLinks
+                            },
+                            null,
+                            2
+                        ),
+                        {
+                            status: 200,
+                            headers: {
+                                "Content-Type":
+                                    "application/json",
+                                ...corsHeaders
+                            }
+                        }
+                    );
+
+                } catch (
+                    scrapingError
+                ) {
+
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "Scraping Failed",
+                            error:
+                                scrapingError.message
+                        }),
+                        {
+                            status: 500,
+                            headers: {
+                                "Content-Type":
+                                    "application/json",
+                                ...corsHeaders
+                            }
+                        }
+                    );
+                }
+
+            } catch (
+                err
+            ) {
 
                 console.error(
                     "Download Route Error:",
@@ -5025,742 +4204,6 @@ export default {
             }
         }
 
-
-
-        // ==================================================
-        // PUBLIC DOWNLOAD PAGE
-        // ==================================================
-
-        if (
-            url.pathname.startsWith("/d/") &&
-            request.method === "GET"
-        ) {
-            const shortId =
-                url.pathname
-                    .split("/")
-                    .filter(Boolean)[1];
-
-            if (!shortId) {
-                return new Response(
-                    "Invalid download link.",
-                    {
-                        status: 400,
-                        headers: corsHeaders
-                    }
-                );
-            }
-
-            if (
-                env.ASSETS &&
-                typeof env.ASSETS.fetch === "function"
-            ) {
-                const downloadRequest =
-                    new Request(
-                        new URL(
-                            "/download.html",
-                            request.url
-                        ),
-                        request
-                    );
-
-                return env.ASSETS.fetch(
-                    downloadRequest
-                );
-            }
-
-            return new Response(
-                "Download page unavailable.",
-                {
-                    status: 503,
-                    headers: corsHeaders
-                }
-            );
-        }
-
-
-        // ==================================================
-        // DOWNLOAD STATUS
-        // ==================================================
-
-        if (
-            url.pathname.startsWith(
-                "/api/download-status/"
-            ) &&
-            request.method === "GET"
-        ) {
-            const shortId =
-                url.pathname
-                    .split("/")
-                    .filter(Boolean)[2];
-
-            if (!shortId) {
-                return new Response(
-                    JSON.stringify({
-                        status: "error",
-                        message: "Invalid file ID."
-                    }),
-                    {
-                        status: 400,
-                        headers: {
-                            ...corsHeaders,
-                            ...jsonHeaders()
-                        }
-                    }
-                );
-            }
-
-            try {
-                const record =
-                    await env.DB
-                        .prepare(
-                            `SELECT
-                                id,
-                                short_id,
-                                status,
-                                hubcloud_url,
-                                gdflix_url,
-                                fast_links,
-                                fast_links_expires_at,
-                                last_updated
-                             FROM files
-                             WHERE short_id = ?
-                                OR id = ?
-                             LIMIT 1`
-                        )
-                        .bind(
-                            shortId,
-                            shortId
-                        )
-                        .first();
-
-                if (!record) {
-                    return new Response(
-                        JSON.stringify({
-                            status: "error",
-                            message: "File not found."
-                        }),
-                        {
-                            status: 404,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                if (
-                    record.status ===
-                    "deleted"
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status: "error",
-                            message:
-                                "This file has been removed."
-                        }),
-                        {
-                            status: 403,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-                const currentTime =
-                    Date.now();
-
-                let ready = false;
-                let links = null;
-
-                if (
-                    hasValidFastLinks(
-                        record,
-                        currentTime
-                    )
-                ) {
-                    try {
-                        links = JSON.parse(
-                            record.fast_links
-                        );
-
-                        ready = true;
-                    } catch (error) {
-                        ready = false;
-                        links = null;
-                    }
-                }
-
-                return new Response(
-                    JSON.stringify({
-                        status: "success",
-                        ready,
-                        links,
-                        mirrors: {
-                            hubcloud:
-                                !!record.hubcloud_url &&
-                                record.hubcloud_url !==
-                                    "Not Found",
-
-                            gdflix:
-                                !!record.gdflix_url &&
-                                record.gdflix_url !==
-                                    "Not Found"
-                        }
-                    }),
-                    {
-                        status: 200,
-                        headers: {
-                            ...corsHeaders,
-                            ...jsonHeaders()
-                        }
-                    }
-                );
-
-            } catch (error) {
-                console.error(
-                    "Download Status Error:",
-                    error
-                );
-
-                return new Response(
-                    JSON.stringify({
-                        status: "error",
-                        message: error.message
-                    }),
-                    {
-                        status: 500,
-                        headers: {
-                            ...corsHeaders,
-                            ...jsonHeaders()
-                        }
-                    }
-                );
-            }
-        }
-
-
-        // ==================================================
-        // TRACKED DOWNLOAD / MIRROR REDIRECTS
-        // ==================================================
-
-        if (
-            url.pathname.startsWith("/go/") &&
-            request.method === "GET"
-        ) {
-            const parts =
-                url.pathname
-                    .split("/")
-                    .filter(Boolean);
-
-            const action =
-                parts[1] || "";
-
-            const shortId =
-                parts[2] || "";
-
-            if (
-                !shortId ||
-                ![
-                    "instant",
-                    "hubcloud",
-                    "gdflix"
-                ].includes(action)
-            ) {
-                return new Response(
-                    "Invalid download request.",
-                    {
-                        status: 400,
-                        headers: corsHeaders
-                    }
-                );
-            }
-
-            try {
-                const record =
-                    await env.DB
-                        .prepare(
-                            `SELECT *
-                             FROM files
-                             WHERE short_id = ?
-                                OR id = ?
-                             LIMIT 1`
-                        )
-                        .bind(
-                            shortId,
-                            shortId
-                        )
-                        .first();
-
-                if (!record) {
-                    return new Response(
-                        "File not found.",
-                        {
-                            status: 404,
-                            headers: corsHeaders
-                        }
-                    );
-                }
-
-                if (
-                    record.status ===
-                    "deleted"
-                ) {
-                    return new Response(
-                        "This file has been removed.",
-                        {
-                            status: 403,
-                            headers: corsHeaders
-                        }
-                    );
-                }
-
-
-                // ------------------------------------------
-                // INSTANT DOWNLOAD
-                // ------------------------------------------
-
-                if (
-                    action ===
-                    "instant"
-                ) {
-                    const currentTime =
-                        Date.now();
-
-                    if (
-                        !hasValidFastLinks(
-                            record,
-                            currentTime
-                        )
-                    ) {
-                        ctx.waitUntil(
-                            prepareFastLinks(
-                                shortId,
-                                env
-                            )
-                        );
-
-                        return new Response(
-                            JSON.stringify({
-                                status:
-                                    "preparing",
-                                message:
-                                    "Instant download is still preparing."
-                            }),
-                            {
-                                status: 202,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
-                    }
-
-                    let links = null;
-
-                    try {
-                        links =
-                            JSON.parse(
-                                record.fast_links
-                            );
-                    } catch (error) {
-                        links = null;
-                    }
-
-                    if (!links) {
-                        ctx.waitUntil(
-                            prepareFastLinks(
-                                shortId,
-                                env
-                            )
-                        );
-
-                        return new Response(
-                            JSON.stringify({
-                                status:
-                                    "preparing",
-                                message:
-                                    "Instant download is still preparing."
-                            }),
-                            {
-                                status: 202,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
-                    }
-
-                    /*
-                     * bypassGDFlix() output is kept as-is.
-                     * Find the first usable URL without
-                     * changing the scraper's structure.
-                     */
-
-                    let instantUrl = null;
-
-                    if (
-                        typeof links ===
-                        "string"
-                    ) {
-                        instantUrl =
-                            links;
-                    } else if (
-                        Array.isArray(
-                            links
-                        )
-                    ) {
-                        instantUrl =
-                            links.find(
-                                item =>
-                                    typeof item ===
-                                        "string" &&
-                                    /^https?:\/\//i.test(
-                                        item
-                                    )
-                            ) || null;
-                    } else if (
-                        links &&
-                        typeof links ===
-                            "object"
-                    ) {
-                        const candidates = [
-                            links.download,
-                            links.download_url,
-                            links.direct,
-                            links.direct_url,
-                            links.url,
-                            links.link,
-                            links.fast,
-                            links.fast_url
-                        ];
-
-                        instantUrl =
-                            candidates.find(
-                                item =>
-                                    typeof item ===
-                                        "string" &&
-                                    /^https?:\/\//i.test(
-                                        item
-                                    )
-                            ) || null;
-
-                        if (
-                            !instantUrl
-                        ) {
-                            const values =
-                                Object.values(
-                                    links
-                                );
-
-                            instantUrl =
-                                values.find(
-                                    item =>
-                                        typeof item ===
-                                            "string" &&
-                                        /^https?:\/\//i.test(
-                                            item
-                                        )
-                                ) || null;
-                        }
-                    }
-
-                    if (!instantUrl) {
-                        return new Response(
-                            JSON.stringify({
-                                status:
-                                    "error",
-                                message:
-                                    "Instant download link is unavailable."
-                            }),
-                            {
-                                status: 503,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
-                    }
-
-                    return Response.redirect(
-                        instantUrl,
-                        302
-                    );
-                }
-
-
-                // ------------------------------------------
-                // HUBCLOUD
-                // ------------------------------------------
-
-                if (
-                    action ===
-                    "hubcloud"
-                ) {
-                    const hubcloudUrl =
-                        record.hubcloud_url;
-
-                    if (
-                        !hubcloudUrl ||
-                        hubcloudUrl ===
-                            "Not Found"
-                    ) {
-                        return new Response(
-                            JSON.stringify({
-                                status:
-                                    "error",
-                                message:
-                                    "HubCloud link is not available yet."
-                            }),
-                            {
-                                status: 404,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
-                    }
-
-                    return Response.redirect(
-                        hubcloudUrl,
-                        302
-                    );
-                }
-
-
-                // ------------------------------------------
-                // GDFLIX
-                // ------------------------------------------
-
-                if (
-                    action ===
-                    "gdflix"
-                ) {
-                    const gdflixUrl =
-                        record.gdflix_url;
-
-                    if (
-                        !gdflixUrl ||
-                        gdflixUrl ===
-                            "Not Found"
-                    ) {
-                        return new Response(
-                            JSON.stringify({
-                                status:
-                                    "error",
-                                message:
-                                    "GDFlix link is not available yet."
-                            }),
-                            {
-                                status: 404,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
-                    }
-
-                    return Response.redirect(
-                        gdflixUrl,
-                        302
-                    );
-                }
-
-            } catch (error) {
-                console.error(
-                    "Tracked Download Error:",
-                    error
-                );
-
-                return new Response(
-                    JSON.stringify({
-                        status: "error",
-                        message: error.message
-                    }),
-                    {
-                        status: 500,
-                        headers: {
-                            ...corsHeaders,
-                            ...jsonHeaders()
-                        }
-                    }
-                );
-            }
-        }
-
-
-        // ==================================================
-        // S-CLOUD SPA SERVER-SIDE PROTECTION
-        // ==================================================
-
-        const spaProtectedRoutes = [
-            "/dashboard",
-            "/upload",
-            "/files",
-            "/api",
-            "/settings",
-            "/withdraw"
-        ];
-
-        const spaSourcePages = [
-            "/dashboard.html",
-            "/upload.html",
-            "/files.html",
-            "/api.html",
-            "/settings.html",
-            "/withdraw.html"
-        ];
-
-        /*
-         * Clean SPA routes:
-         *
-         * /dashboard
-         * /upload
-         * /files
-         * /api
-         * /settings
-         * /withdraw
-         *
-         * Authentication is checked BEFORE
-         * app.html is ever returned.
-         *
-         * Therefore a logged-out visitor never
-         * receives the protected SPA shell.
-         */
-        if (
-            spaProtectedRoutes.includes(
-                url.pathname
-            )
-        ) {
-
-            const spaUser =
-                await getCurrentUser(
-                    request,
-                    env
-                );
-
-            if (!spaUser) {
-
-                const loginUrl =
-                    new URL(
-                        "/",
-                        request.url
-                    );
-
-                loginUrl.searchParams.set(
-                    "redirect",
-                    url.pathname +
-                    url.search
-                );
-
-                return Response.redirect(
-                    loginUrl.toString(),
-                    302
-                );
-            }
-
-            if (
-                env.ASSETS &&
-                typeof env.ASSETS.fetch ===
-                    "function"
-            ) {
-
-                const appRequest =
-                    new Request(
-                        new URL(
-                            "/app.html",
-                            request.url
-                        ),
-                        request
-                    );
-
-                return env.ASSETS.fetch(
-                    appRequest
-                );
-            }
-        }
-
-        /*
-         * The old HTML files are still used as
-         * SPA source templates by app.js.
-         *
-         * Protect them too, so a logged-out user
-         * cannot directly open:
-         *
-         * /dashboard.html
-         * /upload.html
-         * /files.html
-         * /api.html
-         * /settings.html
-         * /withdraw.html
-         *
-         * Logged-in requests continue through
-         * to the normal Assets handler below.
-         */
-        if (
-            spaSourcePages.includes(
-                url.pathname
-            )
-        ) {
-
-            const sourceUser =
-                await getCurrentUser(
-                    request,
-                    env
-                );
-
-            if (!sourceUser) {
-
-                const loginUrl =
-                    new URL(
-                        "/",
-                        request.url
-                    );
-
-                loginUrl.searchParams.set(
-                    "redirect",
-                    url.pathname
-                );
-
-                return Response.redirect(
-                    loginUrl.toString(),
-                    302
-                );
-            }
-        }
-
-        /*
-         * Direct access to app.html itself should
-         * not expose the SPA shell.
-         */
-        if (
-            url.pathname === "/app.html"
-        ) {
-
-            const appUser =
-                await getCurrentUser(
-                    request,
-                    env
-                );
-
-            if (!appUser) {
-
-                return Response.redirect(
-                    new URL(
-                        "/",
-                        request.url
-                    ).toString(),
-                    302
-                );
-            }
-        }
 
         // ==================================================
         // STATIC FRONTEND

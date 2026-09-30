@@ -1,0 +1,987 @@
+(() => {
+
+    "use strict";
+
+    const PROTECTED_ROUTES = [
+        "/dashboard",
+        "/upload",
+        "/files",
+        "/api",
+        "/settings",
+        "/withdraw"
+    ];
+
+    const SOURCE_PAGES = {
+        "/dashboard": "/dashboard.html",
+        "/upload": "/upload.html",
+        "/files": "/files.html",
+        "/api": "/api.html",
+        "/settings": "/settings.html",
+        "/withdraw": "/withdraw.html"
+    };
+
+    const BASE_BODY_CLASS =
+        "min-h-screen text-white pb-10";
+
+    let currentRuntime = null;
+    let navigationInProgress = false;
+
+    function normalizePath(pathname) {
+
+        if (!pathname || pathname === "/") {
+            return "/";
+        }
+
+        return pathname.length > 1
+            ? pathname.replace(/\/+$/, "")
+            : pathname;
+    }
+
+    function isProtectedRoute(pathname) {
+        return PROTECTED_ROUTES.includes(
+            normalizePath(pathname)
+        );
+    }
+
+    async function checkAuthentication() {
+
+        try {
+
+            const response = await fetch(
+                "/api/me",
+                {
+                    method: "GET",
+                    credentials: "include",
+                    cache: "no-store"
+                }
+            );
+
+            if (!response.ok) {
+                return false;
+            }
+
+            const data =
+                await response.json();
+
+            return !!(
+                data &&
+                (
+                    data.status === "success" ||
+                    data.authenticated === true ||
+                    data.user
+                )
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Authentication check failed:",
+                error
+            );
+
+            return false;
+        }
+    }
+
+    function cleanupRuntime() {
+
+        if (!currentRuntime) {
+            return;
+        }
+
+        /*
+         * Remove event listeners registered
+         * by the previous page.
+         */
+        for (
+            const item of currentRuntime.listeners
+        ) {
+
+            try {
+
+                item.target.removeEventListener(
+                    item.type,
+                    item.listener,
+                    item.options
+                );
+
+            } catch (_) {}
+        }
+
+        /*
+         * Clear timers registered by the
+         * previous page.
+         */
+        for (
+            const timer of currentRuntime.timers
+        ) {
+
+            try {
+                clearTimeout(timer);
+            } catch (_) {}
+        }
+
+        for (
+            const timer of currentRuntime.intervals
+        ) {
+
+            try {
+                clearInterval(timer);
+            } catch (_) {}
+        }
+
+        /*
+         * Remove old page globals.
+         */
+        for (
+            const name of currentRuntime.globals
+        ) {
+
+            try {
+
+                if (
+                    currentRuntime.previousGlobals.has(
+                        name
+                    )
+                ) {
+
+                    const previous =
+                        currentRuntime.previousGlobals.get(
+                            name
+                        );
+
+                    if (
+                        previous.exists
+                    ) {
+                        window[name] =
+                            previous.value;
+                    } else {
+                        delete window[name];
+                    }
+
+                } else {
+                    delete window[name];
+                }
+
+            } catch (_) {}
+        }
+
+        currentRuntime = null;
+
+        /*
+         * Remove old page-specific CSS.
+         */
+        const oldStyle =
+            document.getElementById(
+                "spa-page-style"
+            );
+
+        if (oldStyle) {
+            oldStyle.remove();
+        }
+
+        /*
+         * Restore common body class.
+         */
+        document.body.className =
+            BASE_BODY_CLASS;
+    }
+
+    function collectFunctionNames(scriptText) {
+
+        const names = new Set();
+
+        const functionRegex =
+            /(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+
+        let match;
+
+        while (
+            (match = functionRegex.exec(scriptText))
+        ) {
+            names.add(match[1]);
+        }
+
+        /*
+         * Also catch:
+         *
+         * const foo = () =>
+         * let foo = function
+         * var foo = function
+         */
+        const variableRegex =
+            /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/g;
+
+        while (
+            (match = variableRegex.exec(scriptText))
+        ) {
+            names.add(match[1]);
+        }
+
+        return [...names];
+    }
+
+    function prepareRuntime(scriptText) {
+
+        const runtime = {
+            listeners: [],
+            timers: [],
+            intervals: [],
+            globals: new Set(),
+            previousGlobals: new Map()
+        };
+
+        const names =
+            collectFunctionNames(scriptText);
+
+        for (
+            const name of names
+        ) {
+
+            runtime.globals.add(name);
+
+            runtime.previousGlobals.set(
+                name,
+                {
+                    exists:
+                        Object.prototype.hasOwnProperty.call(
+                            window,
+                            name
+                        ),
+                    value:
+                        window[name]
+                }
+            );
+        }
+
+        return runtime;
+    }
+
+    function installRuntimeHooks(runtime) {
+
+        const originalDocumentAdd =
+            document.addEventListener;
+
+        const originalWindowAdd =
+            window.addEventListener;
+
+        const originalSetTimeout =
+            window.setTimeout;
+
+        const originalSetInterval =
+            window.setInterval;
+
+        document.addEventListener =
+            function(
+                type,
+                listener,
+                options
+            ) {
+
+                runtime.listeners.push({
+                    target: document,
+                    type,
+                    listener,
+                    options
+                });
+
+                return originalDocumentAdd.call(
+                    document,
+                    type,
+                    listener,
+                    options
+                );
+            };
+
+        window.addEventListener =
+            function(
+                type,
+                listener,
+                options
+            ) {
+
+                runtime.listeners.push({
+                    target: window,
+                    type,
+                    listener,
+                    options
+                });
+
+                return originalWindowAdd.call(
+                    window,
+                    type,
+                    listener,
+                    options
+                );
+            };
+
+        window.setTimeout =
+            function(
+                callback,
+                delay,
+                ...args
+            ) {
+
+                const timer =
+                    originalSetTimeout.call(
+                        window,
+                        callback,
+                        delay,
+                        ...args
+                    );
+
+                runtime.timers.push(timer);
+
+                return timer;
+            };
+
+        window.setInterval =
+            function(
+                callback,
+                delay,
+                ...args
+            ) {
+
+                const timer =
+                    originalSetInterval.call(
+                        window,
+                        callback,
+                        delay,
+                        ...args
+                    );
+
+                runtime.intervals.push(timer);
+
+                return timer;
+            };
+
+        return () => {
+
+            document.addEventListener =
+                originalDocumentAdd;
+
+            window.addEventListener =
+                originalWindowAdd;
+
+            window.setTimeout =
+                originalSetTimeout;
+
+            window.setInterval =
+                originalSetInterval;
+        };
+    }
+
+    async function executePageScripts(
+        scripts
+    ) {
+
+        if (!scripts.length) {
+            return;
+        }
+
+        /*
+         * Normally each existing page has its
+         * inline JavaScript in one script block.
+         *
+         * Execute each block exactly as a classic
+         * script so existing inline onclick=""
+         * functions continue to work.
+         */
+        for (
+            const scriptText of scripts
+        ) {
+
+            if (!scriptText.trim()) {
+                continue;
+            }
+
+            const runtime =
+                prepareRuntime(
+                    scriptText
+                );
+
+            /*
+             * Keep all runtime information belonging to
+             * the current route.
+             */
+            if (!currentRuntime) {
+
+                currentRuntime = {
+                    listeners: [],
+                    timers: [],
+                    intervals: [],
+                    globals: new Set(),
+                    previousGlobals: new Map()
+                };
+            }
+
+            /*
+             * Merge this script's globals into the
+             * current route runtime.
+             */
+            for (
+                const name of runtime.globals
+            ) {
+
+                currentRuntime.globals.add(
+                    name
+                );
+
+                if (
+                    !currentRuntime.previousGlobals.has(
+                        name
+                    )
+                ) {
+
+                    currentRuntime.previousGlobals.set(
+                        name,
+                        runtime.previousGlobals.get(
+                            name
+                        )
+                    );
+                }
+            }
+
+            /*
+             * Runtime hooks need to record into the
+             * route-level runtime.
+             */
+            const restoreHooks =
+                installRuntimeHooks(
+                    currentRuntime
+                );
+
+            try {
+
+                const script =
+                    document.createElement(
+                        "script"
+                    );
+
+                script.type =
+                    "text/javascript";
+
+                /*
+                 * The original Settings/Withdraw scripts
+                 * contain redirects to /login.
+                 *
+                 * S-Cloud's real login route is /.
+                 *
+                 * Normalize only the script being executed
+                 * inside the SPA. The original source HTML
+                 * files remain unchanged.
+                 */
+                script.textContent =
+                    scriptText.replace(
+                        /(["'])\\/login\\1/g,
+                        "$1/$1"
+                    );
+
+                document.body.appendChild(
+                    script
+                );
+
+                script.remove();
+
+            } finally {
+
+                restoreHooks();
+            }
+        }
+
+        /*
+         * Existing pages commonly initialize
+         * themselves through DOMContentLoaded.
+         *
+         * Because the SPA document already loaded,
+         * trigger the event after the page script
+         * has been installed.
+         */
+        document.dispatchEvent(
+            new Event(
+                "DOMContentLoaded",
+                {
+                    bubbles: true
+                }
+            )
+        );
+    }
+
+    async function loadRoute(
+        pathname,
+        pushHistory = false
+    ) {
+
+        const path =
+            normalizePath(pathname);
+
+        if (
+            !PROTECTED_ROUTES.includes(path)
+        ) {
+            return;
+        }
+
+        if (navigationInProgress) {
+            return;
+        }
+
+        navigationInProgress = true;
+
+        try {
+
+            const authenticated =
+                await checkAuthentication();
+
+            if (!authenticated) {
+
+                const returnTo =
+                    window.location.pathname +
+                    window.location.search +
+                    window.location.hash;
+
+                window.location.replace(
+                    "/?redirect=" +
+                    encodeURIComponent(
+                        returnTo
+                    )
+                );
+
+                return;
+            }
+
+            const sourceUrl =
+                SOURCE_PAGES[path];
+
+            if (!sourceUrl) {
+                return;
+            }
+
+            const response =
+                await fetch(
+                    sourceUrl,
+                    {
+                        method: "GET",
+                        credentials: "include",
+                        cache: "no-store"
+                    }
+                );
+
+            if (!response.ok) {
+
+                throw new Error(
+                    "Unable to load " +
+                    sourceUrl +
+                    " (" +
+                    response.status +
+                    ")"
+                );
+            }
+
+            const html =
+                await response.text();
+
+            const parser =
+                new DOMParser();
+
+            const sourceDocument =
+                parser.parseFromString(
+                    html,
+                    "text/html"
+                );
+
+            /*
+             * Clean previous page runtime first.
+             */
+            cleanupRuntime();
+
+            /*
+             * Remove the previous route DOM completely.
+             *
+             * Without this, navigating from one SPA route
+             * to another would append the next page below
+             * the previous page.
+             */
+            const app =
+                document.getElementById("app");
+
+            app.innerHTML = "";
+
+            /*
+             * Page title.
+             */
+            const title =
+                sourceDocument.querySelector(
+                    "title"
+                );
+
+            document.title =
+                title
+                    ? title.textContent.trim()
+                    : "S-Cloud";
+
+            /*
+             * Copy existing page-specific
+             * styles without changing them.
+             */
+            const styleNodes =
+                sourceDocument.head.querySelectorAll(
+                    "style"
+                );
+
+            if (styleNodes.length) {
+
+                const pageStyle =
+                    document.createElement(
+                        "style"
+                    );
+
+                pageStyle.id =
+                    "spa-page-style";
+
+                let css = "";
+
+                for (
+                    const styleNode of styleNodes
+                ) {
+                    css +=
+                        "\n" +
+                        styleNode.textContent +
+                        "\n";
+                }
+
+                pageStyle.textContent =
+                    css;
+
+                document.head.appendChild(
+                    pageStyle
+                );
+            }
+
+            /*
+             * Preserve body classes from the
+             * original page.
+             */
+            document.body.className =
+                sourceDocument.body.className ||
+                BASE_BODY_CLASS;
+
+            /*
+             * Extract existing body content.
+             * Scripts are executed separately.
+             */
+            const pageScripts = [];
+
+            for (
+                const node of
+                sourceDocument.body.children
+            ) {
+
+                if (
+                    node.tagName.toLowerCase() ===
+                    "script"
+                ) {
+
+                    if (
+                        !node.src &&
+                        node.textContent.trim()
+                    ) {
+                        pageScripts.push(
+                            node.textContent
+                        );
+                    }
+
+                    continue;
+                }
+
+                document
+                    .getElementById("app")
+                    .appendChild(
+                        document.importNode(
+                            node,
+                            true
+                        )
+                    );
+            }
+
+            /*
+             * Execute the exact existing inline
+             * JavaScript from that page.
+             */
+            await executePageScripts(
+                pageScripts
+            );
+
+            /*
+             * Update browser URL only after
+             * successful page loading.
+             */
+            if (pushHistory) {
+
+                history.pushState(
+                    {},
+                    "",
+                    path
+                );
+            }
+
+            /*
+             * Scroll to top like a normal page.
+             */
+            window.scrollTo(
+                0,
+                0
+            );
+
+        } catch (error) {
+
+            console.error(
+                "SPA route error:",
+                error
+            );
+
+            /*
+             * Keep the user on the requested route
+             * but show a simple error instead of a
+             * broken blank page.
+             */
+            const app =
+                document.getElementById(
+                    "app"
+                );
+
+            app.innerHTML = `
+                <div style="
+                    min-height:100vh;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    padding:24px;
+                    text-align:center;
+                ">
+                    <div>
+                        <h1 style="
+                            font-size:24px;
+                            font-weight:600;
+                            margin-bottom:10px;
+                        ">
+                            Unable to load page
+                        </h1>
+
+                        <p style="
+                            opacity:.7;
+                            margin-bottom:18px;
+                        ">
+                            Please refresh and try again.
+                        </p>
+
+                        <button
+                            onclick="location.reload()"
+                            style="
+                                padding:10px 18px;
+                                border-radius:10px;
+                                background:#2563eb;
+                                color:white;
+                                border:0;
+                            "
+                        >
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+            `;
+
+        } finally {
+
+            navigationInProgress =
+                false;
+        }
+    }
+
+    function handleNavigation(event) {
+
+        /*
+         * Ignore modified clicks.
+         */
+        if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+        ) {
+            return;
+        }
+
+        const link =
+            event.target.closest(
+                "a[href]"
+            );
+
+        if (!link) {
+            return;
+        }
+
+        if (
+            link.target &&
+            link.target !== "_self"
+        ) {
+            return;
+        }
+
+        const rawHref =
+            link.getAttribute(
+                "href"
+            );
+
+        if (
+            !rawHref ||
+            rawHref === "#" ||
+            rawHref.startsWith(
+                "javascript:"
+            )
+        ) {
+            return;
+        }
+
+        let targetUrl;
+
+        try {
+
+            targetUrl =
+                new URL(
+                    rawHref,
+                    window.location.origin
+                );
+
+        } catch (_) {
+            return;
+        }
+
+        if (
+            targetUrl.origin !==
+            window.location.origin
+        ) {
+            return;
+        }
+
+        const targetPath =
+            normalizePath(
+                targetUrl.pathname
+            );
+
+        if (
+            !PROTECTED_ROUTES.includes(
+                targetPath
+            )
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const fullPath =
+            targetPath +
+            targetUrl.search +
+            targetUrl.hash;
+
+        loadRoute(
+            fullPath,
+            true
+        );
+    }
+
+    async function boot() {
+
+        const path =
+            normalizePath(
+                window.location.pathname
+            );
+
+        /*
+         * Login page stays completely separate.
+         */
+        if (path === "/") {
+            return;
+        }
+
+        /*
+         * Admin stays completely separate.
+         */
+        if (
+            path === "/admin" ||
+            path === "/admin.html"
+        ) {
+            return;
+        }
+
+        /*
+         * Direct access to app.html itself
+         * should not expose a protected shell.
+         */
+        if (path === "/app.html") {
+
+            window.location.replace(
+                "/"
+            );
+
+            return;
+        }
+
+        if (
+            !PROTECTED_ROUTES.includes(path)
+        ) {
+            return;
+        }
+
+        /*
+         * Server-side Worker protection will also
+         * be added separately. This client check
+         * protects SPA history navigation and
+         * session expiry.
+         */
+        await loadRoute(
+            path,
+            false
+        );
+    }
+
+    /*
+     * SPA navigation.
+     */
+    document.addEventListener(
+        "click",
+        handleNavigation,
+        true
+    );
+
+    /*
+     * Browser back / forward.
+     */
+    window.addEventListener(
+        "popstate",
+        async () => {
+
+            const path =
+                normalizePath(
+                    window.location.pathname
+                );
+
+            if (
+                PROTECTED_ROUTES.includes(
+                    path
+                )
+            ) {
+
+                await loadRoute(
+                    path,
+                    false
+                );
+            }
+        }
+    );
+
+    boot();
+
+})();

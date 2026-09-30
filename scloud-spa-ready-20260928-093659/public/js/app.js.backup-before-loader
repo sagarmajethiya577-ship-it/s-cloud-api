@@ -1,0 +1,134 @@
+(() => {
+
+    "use strict";
+
+    const PROTECTED_ROUTES = [
+        "/dashboard",
+        "/upload",
+        "/files",
+        "/api",
+        "/settings",
+        "/withdraw"
+    ];
+
+    function normalizePath(pathname) {
+        if (!pathname || pathname === "/") {
+            return "/";
+        }
+
+        const path =
+            pathname.length > 1
+                ? pathname.replace(/\/+$/, "")
+                : pathname;
+
+        return path;
+    }
+
+    async function checkAuthentication() {
+
+        try {
+
+            const response = await fetch(
+                "/api/me",
+                {
+                    method: "GET",
+                    credentials: "include",
+                    cache: "no-store"
+                }
+            );
+
+            if (!response.ok) {
+                return false;
+            }
+
+            const data =
+                await response.json();
+
+            return (
+                data &&
+                (
+                    data.status === "success" ||
+                    data.authenticated === true ||
+                    data.user
+                )
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Authentication check failed:",
+                error
+            );
+
+            return false;
+        }
+    }
+
+    async function boot() {
+
+        const path =
+            normalizePath(
+                window.location.pathname
+            );
+
+        /*
+         * Login page remains completely separate.
+         */
+        if (path === "/") {
+            return;
+        }
+
+        /*
+         * Admin remains separate.
+         */
+        if (
+            path === "/admin" ||
+            path === "/admin.html"
+        ) {
+            return;
+        }
+
+        /*
+         * Only these routes belong to the user SPA.
+         */
+        if (
+            !PROTECTED_ROUTES.includes(path)
+        ) {
+            return;
+        }
+
+        /*
+         * Authentication is checked BEFORE
+         * displaying any protected UI.
+         *
+         * This prevents the old ~0.5 second
+         * protected-page flash.
+         */
+        const authenticated =
+            await checkAuthentication();
+
+        if (!authenticated) {
+
+            const returnTo =
+                window.location.pathname +
+                window.location.search +
+                window.location.hash;
+
+            window.location.replace(
+                "/?redirect=" +
+                encodeURIComponent(returnTo)
+            );
+
+            return;
+        }
+
+        /*
+         * SPA page loading will be added here
+         * after the existing page content is
+         * migrated safely.
+         */
+    }
+
+    boot();
+
+})();

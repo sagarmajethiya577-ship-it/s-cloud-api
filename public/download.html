@@ -1,0 +1,1922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download | S-Cloud</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        :root {
+            --bg: #05070b;
+            --panel: #0b1018;
+            --panel2: #0e141e;
+            --white: #f4f7fb;
+            --muted: #7d8797;
+            --cyan: #22d3ee;
+            --line: rgba(255,255,255,.075);
+            --green: #34d399;
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--white);
+            font-family: "Inter", sans-serif;
+            background:
+                radial-gradient(circle at 50% -15%, rgba(37,99,235,.19), transparent 38%),
+                radial-gradient(circle at 0% 55%, rgba(6,182,212,.075), transparent 25%),
+                radial-gradient(circle at 100% 65%, rgba(139,92,246,.065), transparent 28%),
+                var(--bg);
+        }
+
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px);
+            background-size: 48px 48px;
+            mask-image: linear-gradient(to bottom, black, transparent 75%);
+            -webkit-mask-image: linear-gradient(to bottom, black, transparent 75%);
+            z-index: -1;
+        }
+
+        button { font-family: inherit; }
+
+        /* HEADER */
+        .header {
+            width: 100%;
+            height: 74px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--line);
+            background: rgba(5,7,11,.72);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .header-inner {
+            width: min(1080px, calc(100% - 32px));
+            height: 100%;
+            margin: auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .brand svg {
+            width: 28px;
+            height: 28px;
+            color: #22d3ee;
+            filter: drop-shadow(0 0 8px rgba(34,211,238,.8));
+        }
+
+        .brand-name {
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: .12em;
+            color: transparent;
+            background: linear-gradient(to right, #22d3ee, #3b82f6);
+            background-clip: text;
+            -webkit-background-clip: text;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .secure {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            color: #667181;
+            font-size: 10px;
+        }
+
+        .secure-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow:
+                0 0 0 4px rgba(52,211,153,.07),
+                0 0 12px rgba(52,211,153,.5);
+        }
+
+        .signin {
+            padding: 9px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.035);
+            color: #bac3cf;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: .2s;
+        }
+
+        .signin:hover {
+            background: rgba(255,255,255,.07);
+            color: white;
+        }
+
+        /* PAGE */
+        .page {
+            width: min(920px, calc(100% - 28px));
+            margin: auto;
+            padding: 45px 0 70px;
+        }
+
+        /* UPLOAD & EARN */
+        .earn-banner {
+            position: relative;
+            width: fit-content;
+            max-width: 100%;
+            margin: 0 auto 18px;
+            padding: 12px 20px;
+            border-radius: 999px;
+            border: 1px solid rgba(34,211,238,.12);
+            background: linear-gradient(
+                100deg,
+                rgba(34,211,238,.055),
+                rgba(59,130,246,.055)
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            overflow: hidden;
+            box-shadow:
+                inset 0 0 25px rgba(34,211,238,.025),
+                0 0 25px rgba(34,211,238,.025);
+        }
+
+        .earn-banner::before {
+            content: "";
+            position: absolute;
+            width: 180px;
+            height: 80px;
+            left: 50%;
+            top: -70px;
+            transform: translateX(-50%);
+            background: rgba(34,211,238,.14);
+            filter: blur(35px);
+        }
+
+        .earn-icon {
+            position: relative;
+            font-size: 17px;
+        }
+
+        .earn-text {
+            position: relative;
+            font-size: 12px;
+            color: #9ca8b8;
+            font-weight: 600;
+            letter-spacing: .02em;
+        }
+
+        .earn-text strong { color: #67e8f9; }
+
+        /* MAIN PANEL */
+        .file-panel {
+            position: relative;
+            overflow: hidden;
+            border-radius: 23px;
+            border: 1px solid var(--line);
+            background: linear-gradient(
+                145deg,
+                rgba(15,22,33,.94),
+                rgba(7,10,15,.96)
+            );
+            box-shadow:
+                0 35px 90px rgba(0,0,0,.43),
+                0 0 70px rgba(37,99,235,.035);
+            animation: panelIn .5s ease;
+        }
+
+        @keyframes panelIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .panel-glow {
+            position: absolute;
+            width: 450px;
+            height: 140px;
+            left: 50%;
+            top: -125px;
+            transform: translateX(-50%);
+            background: rgba(37,99,235,.18);
+            filter: blur(60px);
+            pointer-events: none;
+        }
+
+        /* FILE INFORMATION */
+        .file-information {
+            position: relative;
+            margin: 25px 28px 0;
+            padding: 22px;
+            border-radius: 20px;
+            background: linear-gradient(
+                145deg,
+                rgba(10,15,24,.96),
+                rgba(6,9,15,.98)
+            );
+            border: 1px solid rgba(255,255,255,.055);
+            box-shadow:
+                inset 0 1px rgba(255,255,255,.025),
+                0 10px 35px rgba(0,0,0,.12);
+        }
+
+        .file-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 18px;
+        }
+
+        .file-content {
+            min-width: 0;
+            width: 100%;
+        }
+
+        .filename {
+            margin: 0;
+            color: #f2f5f9;
+            font-family: "Poppins", sans-serif;
+            font-size: 17px;
+            line-height: 1.55;
+            font-weight: 700;
+            word-break: break-word;
+        }
+
+        /* FILE INFO DETAILS */
+        .file-details {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            margin-top: 20px;
+            padding-top: 18px;
+            border-top: 1px solid rgba(255,255,255,.055);
+        }
+
+        .detail {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            padding: 0 18px;
+            border-right: 1px solid rgba(255,255,255,.055);
+        }
+
+        .detail:first-child { padding-left: 0; }
+
+        .detail:last-child {
+            padding-right: 0;
+            border-right: 0;
+        }
+
+        .detail-icon {
+            width: 34px;
+            height: 34px;
+            flex: 0 0 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9px;
+            background: rgba(34,211,238,.07);
+            border: 1px solid rgba(34,211,238,.10);
+            color: var(--cyan);
+        }
+
+        .detail:nth-child(2) .detail-icon {
+            color: #60a5fa;
+            background: rgba(59,130,246,.07);
+            border-color: rgba(59,130,246,.10);
+        }
+
+        .detail:nth-child(3) .detail-icon {
+            color: #a78bfa;
+            background: rgba(139,92,246,.07);
+            border-color: rgba(139,92,246,.10);
+        }
+
+        .detail-icon svg {
+            width: 17px;
+            height: 17px;
+        }
+
+        .detail-label {
+            margin-bottom: 3px;
+            color: #566171;
+            font-size: 7px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .12em;
+        }
+
+        .detail-value {
+            color: #9ca5b3;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .detail-value.mono {
+            color: #8995a6;
+            font-family: monospace;
+            font-size: 9px;
+        }
+
+        /* DOWNLOAD AREA */
+        .download-area {
+            padding: 27px 28px 30px;
+        }
+
+        .section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 13px;
+        }
+
+        .section-title {
+            color: #687485;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .13em;
+        }
+
+        /* DOWNLOAD BUTTONS */
+        .download-btn {
+            position: relative;
+            overflow: hidden;
+            transition: all .2s ease;
+            cursor: pointer;
+            border: none;
+            width: 100%;
+        }
+
+        .download-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
+
+        .download-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .download-btn:disabled {
+            cursor: wait;
+            opacity: .85;
+        }
+
+        .instant-btn {
+            background: linear-gradient(
+                135deg,
+                rgba(6,78,100,.58),
+                rgba(12,47,74,.75)
+            );
+            border: 1px solid rgba(34,211,238,.24);
+            box-shadow:
+                0 12px 30px rgba(34,211,238,.055),
+                inset 0 1px rgba(255,255,255,.07);
+        }
+
+        .hub-btn {
+            background: linear-gradient(
+                135deg,
+                rgba(22,45,90,.55),
+                rgba(13,25,51,.75)
+            );
+            border: 1px solid rgba(59,130,246,.18);
+            box-shadow:
+                0 12px 30px rgba(37,99,235,.045),
+                inset 0 1px rgba(255,255,255,.05);
+        }
+
+        .gdflix-btn {
+            background: linear-gradient(
+                135deg,
+                rgba(62,38,100,.48),
+                rgba(29,20,50,.74)
+            );
+            border: 1px solid rgba(139,92,246,.18);
+            box-shadow:
+                0 12px 30px rgba(139,92,246,.04),
+                inset 0 1px rgba(255,255,255,.05);
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,.25);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin .75s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-bar {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            height: 3px;
+            background: linear-gradient(
+                90deg,
+                #22d3ee,
+                #3b82f6,
+                #8b5cf6
+            );
+            box-shadow: 0 0 12px rgba(34,211,238,.75);
+            width: 0%;
+            border-radius: 0 5px 5px 0;
+            z-index: 5;
+        }
+
+        /* MIRROR STATES */
+        .mirror-disabled {
+            opacity: .55;
+            cursor: not-allowed !important;
+        }
+
+        /* SHARE */
+        .share {
+            margin-top: 25px;
+            padding-top: 23px;
+            border-top: 1px solid var(--line);
+        }
+
+        .share-title {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-bottom: 10px;
+            color: #687485;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .13em;
+        }
+
+        .share-title svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .share-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .share-input {
+            flex: 1;
+            min-width: 0;
+            height: 43px;
+            padding: 0 13px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: #06090e;
+            color: #697587;
+            font-size: 10px;
+            outline: none;
+        }
+
+        .copy-button {
+            height: 43px;
+            padding: 0 17px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,.10);
+            background: rgba(255,255,255,.045);
+            color: #b9c2ce;
+            font-size: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: .2s;
+        }
+
+        .copy-button:hover {
+            background: rgba(255,255,255,.08);
+            color: white;
+        }
+
+        .copied {
+            background: rgba(16,185,129,.13) !important;
+            border-color: rgba(52,211,153,.25) !important;
+            color: #5ee4b1 !important;
+        }
+
+        /* FOOTER */
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            color: #394250;
+            font-size: 9px;
+        }
+
+        .footer strong { color: #586373; }
+
+        /* TOAST */
+        .toast {
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            width: min(380px, calc(100vw - 36px));
+            z-index: 300;
+            transform: translateY(20px);
+            opacity: 0;
+            pointer-events: none;
+            transition:
+                transform .25s ease,
+                opacity .25s ease;
+            background: rgba(24,31,45,.9);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(148,163,184,.15);
+            box-shadow: 0 16px 45px -24px rgba(0,0,0,.75);
+            border-radius: 1rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .toast-icon {
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .toast-icon.success { color: #34d399; }
+        .toast-icon.error { color: #f87171; }
+        .toast-icon.info { color: #22d3ee; }
+
+        .toast-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 2px;
+        }
+
+        .toast-message {
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        /* ERROR STATE */
+        .page-error {
+            display: none;
+            margin: 30px auto;
+            max-width: 620px;
+            text-align: center;
+            padding: 35px 25px;
+            border: 1px solid rgba(248,113,113,.12);
+            border-radius: 20px;
+            background: rgba(20,10,14,.65);
+        }
+
+        .page-error h2 {
+            margin: 0 0 8px;
+            font-size: 18px;
+        }
+
+        .page-error p {
+            margin: 0;
+            color: #7d8797;
+            font-size: 12px;
+        }
+
+        @media (max-width: 700px) {
+            .page { padding-top: 28px; }
+
+            .secure { display: none; }
+
+            .header-inner {
+                width: calc(100% - 24px);
+            }
+
+            .earn-banner {
+                padding: 11px 17px;
+            }
+
+            .file-information {
+                margin: 18px 18px 0;
+                padding: 17px;
+            }
+
+            .file-details {
+                grid-template-columns: 1fr;
+                gap: 13px;
+                margin-top: 18px;
+                padding-top: 16px;
+            }
+
+            .detail,
+            .detail:first-child,
+            .detail:last-child {
+                padding: 0;
+                border-right: 0;
+                width: 100%;
+            }
+
+            .download-area {
+                padding: 23px 18px 25px;
+            }
+
+            .share-row {
+                flex-direction: column;
+            }
+
+            .copy-button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header class="header">
+    <div class="header-inner">
+        <a href="/" class="brand">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z">
+                </path>
+            </svg>
+            <span class="brand-name">S-CLOUD</span>
+        </a>
+
+        <div class="header-right">
+            <div class="secure">
+                <span class="secure-dot"></span>
+                Secure connection
+            </div>
+
+            <a href="/" class="signin" style="text-decoration:none;">
+                Sign In
+            </a>
+        </div>
+    </div>
+</header>
+
+<main class="page">
+
+    <div class="earn-banner">
+        <div class="earn-icon">💰</div>
+        <div class="earn-text">
+            <strong>Upload &amp; Earn Money</strong>
+            <span style="font-size:17px;vertical-align:middle;margin-left:2px;">🤑</span>
+        </div>
+    </div>
+
+    <section class="file-panel">
+
+        <div class="panel-glow"></div>
+
+        <div class="file-information">
+
+            <div class="file-row">
+                <div class="file-content">
+                    <h1 id="fileName" class="filename">
+                        Loading file...
+                    </h1>
+                </div>
+            </div>
+
+            <div class="file-details">
+
+                <div class="detail">
+                    <div class="detail-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="1.8"
+                                d="M4 19V5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2z">
+                            </path>
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="1.8"
+                                d="M8 15v-3m4 3V8m4 7v-5">
+                            </path>
+                        </svg>
+                    </div>
+
+                    <div class="detail-text">
+                        <div class="detail-label">File Size</div>
+                        <div id="fileSize" class="detail-value">—</div>
+                    </div>
+                </div>
+
+                <div class="detail">
+                    <div class="detail-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="1.8"
+                                d="M4 6h16M4 10h16M4 14h16M4 18h16">
+                            </path>
+                        </svg>
+                    </div>
+
+                    <div class="detail-text">
+                        <div class="detail-label">File Type</div>
+                        <div id="fileType" class="detail-value mono">—</div>
+                    </div>
+                </div>
+
+                <div class="detail">
+                    <div class="detail-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="1.8"
+                                d="M8 3v4m8-4v4M4 11h16M5 5h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z">
+                            </path>
+                        </svg>
+                    </div>
+
+                    <div class="detail-text">
+                        <div class="detail-label">Shared</div>
+                        <div id="fileShared" class="detail-value">—</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="download-area">
+
+            <div class="section-head">
+                <div class="section-title">
+                    Download Options
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+                <button
+                    id="instantBtn"
+                    onclick="instantDownload()"
+                    disabled
+                    class="download-btn instant-btn rounded-2xl px-4 py-4 flex items-center justify-center gap-3 text-sm font-semibold text-white">
+
+                    <span id="instantIcon">
+                        <svg
+                            class="w-5 h-5 text-cyan-300"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M13 2L3 14h7l-1 8 11-14h-7l0-6z">
+                            </path>
+                        </svg>
+                    </span>
+
+                    <span id="instantText">Loading...</span>
+
+                    <span id="instantSpinner" class="spinner"></span>
+
+                    <div id="loadingBar" class="loading-bar"></div>
+                </button>
+
+                <button
+                    id="hubcloudBtn"
+                    onclick="openMirror('hubcloud')"
+                    disabled
+                    class="download-btn hub-btn rounded-2xl px-4 py-4 flex items-center justify-center gap-3 text-sm font-semibold text-white">
+
+                    <svg
+                        class="w-5 h-5 text-blue-300"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M7 18h10a4 4 0 00.2-7.995A5 5 0 007.4 8.6 4.5 4.5 0 007 18z">
+                        </path>
+                    </svg>
+
+                    <span id="hubcloudText">HubCloud</span>
+                </button>
+
+                <button
+                    id="gdflixBtn"
+                    onclick="openMirror('gdflix')"
+                    disabled
+                    class="download-btn gdflix-btn rounded-2xl px-4 py-4 flex items-center justify-center gap-3 text-sm font-semibold text-white">
+
+                    <svg
+                        class="w-5 h-5 text-amber-300"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M14.5 6.5L17.5 3l3.5 3.5-3.5 3M13 7l4 4-5.5 5.5-4-4L13 7z">
+                        </path>
+
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M7.5 12.5L4 13l-1 4 4-1 1.5-3.5M11.5 16.5L11 20l4-1 1-3.5">
+                        </path>
+
+                        <circle
+                            cx="16.5"
+                            cy="7.5"
+                            r="1.2"
+                            fill="currentColor">
+                        </circle>
+                    </svg>
+
+                    <span id="gdflixText">GDFlix</span>
+                </button>
+
+            </div>
+
+            <div class="share">
+
+                <div class="share-title">
+                    <svg
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.1-1.1m-.756-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1">
+                        </path>
+                    </svg>
+
+                    Share File
+                </div>
+
+                <div class="share-row">
+                    <input
+                        id="shareInput"
+                        class="share-input"
+                        readonly>
+
+                    <button
+                        id="copyShare"
+                        class="copy-button"
+                        onclick="copyShareLink()">
+                        Copy Link
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <div class="footer">
+        Powered by <strong>S-CLOUD</strong> · Secure file delivery
+    </div>
+
+    <div id="pageError" class="page-error">
+        <h2>File unavailable</h2>
+        <p id="pageErrorText">
+            This file could not be loaded.
+        </p>
+    </div>
+
+</main>
+
+<!-- TOAST -->
+<div id="toast" class="toast">
+
+    <div id="toastIcon" class="toast-icon success"></div>
+
+    <div class="min-w-0 flex-1">
+        <p id="toastTitle" class="toast-title">
+            Success
+        </p>
+
+        <p id="toastMessage" class="toast-message">
+            Done.
+        </p>
+    </div>
+
+</div>
+
+<script>
+/* =========================================================
+   STATE
+========================================================= */
+
+let shortId = "";
+let downloadReady = false;
+let instantLinks = null;
+let backgroundReady = false;
+let instantClicked = false;
+let statusTimer = null;
+let toastTimer = null;
+
+const POLL_INTERVAL = 2500;
+
+
+/* =========================================================
+   ELEMENTS
+========================================================= */
+
+const instantBtn =
+    document.getElementById("instantBtn");
+
+const instantText =
+    document.getElementById("instantText");
+
+const instantSpinner =
+    document.getElementById("instantSpinner");
+
+const instantIcon =
+    document.getElementById("instantIcon");
+
+const loadingBar =
+    document.getElementById("loadingBar");
+
+const hubcloudBtn =
+    document.getElementById("hubcloudBtn");
+
+const gdflixBtn =
+    document.getElementById("gdflixBtn");
+
+const hubcloudText =
+    document.getElementById("hubcloudText");
+
+const gdflixText =
+    document.getElementById("gdflixText");
+
+
+/* =========================================================
+   TOAST
+========================================================= */
+
+function showToast(type, title, message) {
+
+    const toast =
+        document.getElementById("toast");
+
+    const icon =
+        document.getElementById("toastIcon");
+
+    const titleElement =
+        document.getElementById("toastTitle");
+
+    const messageElement =
+        document.getElementById("toastMessage");
+
+    if (
+        !toast ||
+        !icon ||
+        !titleElement ||
+        !messageElement
+    ) {
+        return;
+    }
+
+    clearTimeout(toastTimer);
+
+    icon.className =
+        `toast-icon ${type}`;
+
+    if (type === "error") {
+
+        icon.innerHTML = `
+            <svg class="w-5 h-5"
+                 fill="none"
+                 stroke="currentColor"
+                 viewBox="0 0 24 24">
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 9v4m0 4h.01M10.29 3.86l-7.82 13.5A2 2 0 004.2 20h15.6a2 2 0 001.73-2.64l-7.82-13.5a2 2 0 00-3.42 0z">
+                </path>
+            </svg>
+        `;
+
+    } else if (type === "info") {
+
+        icon.innerHTML = `
+            <svg class="w-5 h-5"
+                 fill="none"
+                 stroke="currentColor"
+                 viewBox="0 0 24 24">
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M12 21a9 9 0 100-18 9 9 0 000 18z">
+                </path>
+            </svg>
+        `;
+
+    } else {
+
+        icon.innerHTML = `
+            <svg class="w-5 h-5"
+                 fill="none"
+                 stroke="currentColor"
+                 viewBox="0 0 24 24">
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M5 13l4 4L19 7">
+                </path>
+            </svg>
+        `;
+    }
+
+    titleElement.textContent =
+        title || "Notice";
+
+    messageElement.textContent =
+        message || "";
+
+    toast.classList.add("show");
+
+    toastTimer = setTimeout(() => {
+        toast.classList.remove("show");
+    }, 3500);
+}
+
+
+/* =========================================================
+   GET SHORT ID
+========================================================= */
+
+function getShortId() {
+
+    const parts =
+        window.location.pathname
+            .split("/")
+            .filter(Boolean);
+
+    /*
+     * Expected public URL:
+     *
+     * /d/SHORT_ID
+     */
+
+    if (
+        parts.length >= 2 &&
+        parts[0].toLowerCase() === "d"
+    ) {
+        return decodeURIComponent(
+            parts[1]
+        );
+    }
+
+    /*
+     * Temporary fallback:
+     *
+     * /download.html?file=SHORT_ID
+     */
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    return (
+        params.get("file") ||
+        params.get("id") ||
+        ""
+    );
+}
+
+
+/* =========================================================
+   FORMAT DATE
+========================================================= */
+
+function formatSharedDate(value) {
+
+    if (!value) {
+        return "—";
+    }
+
+    const date =
+        new Date(value);
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+        return String(value);
+    }
+
+    return date.toLocaleString(
+        "en-IN",
+        {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+        }
+    );
+}
+
+
+/* =========================================================
+   ERROR
+========================================================= */
+
+function showPageError(message) {
+
+    const errorBox =
+        document.getElementById(
+            "pageError"
+        );
+
+    const errorText =
+        document.getElementById(
+            "pageErrorText"
+        );
+
+    if (errorText) {
+        errorText.textContent =
+            message ||
+            "This file could not be loaded.";
+    }
+
+    if (errorBox) {
+        errorBox.style.display =
+            "block";
+    }
+
+    const panel =
+        document.querySelector(
+            ".file-panel"
+        );
+
+    if (panel) {
+        panel.style.display =
+            "none";
+    }
+}
+
+
+/* =========================================================
+   LOAD FILE INFORMATION
+========================================================= */
+
+async function loadFile() {
+
+    shortId =
+        getShortId();
+
+    if (!shortId) {
+
+        showPageError(
+            "Invalid download link."
+        );
+
+        return;
+    }
+
+    try {
+
+        const response =
+            await fetch(
+                `/file/${encodeURIComponent(shortId)}`,
+                {
+                    method: "GET",
+                    cache: "no-store"
+                }
+            );
+
+        if (!response.ok) {
+            throw new Error(
+                `HTTP ${response.status}`
+            );
+        }
+
+        const data =
+            await response.json();
+
+        if (
+            !data ||
+            data.status !== "success" ||
+            !data.file
+        ) {
+            throw new Error(
+                "Invalid file response."
+            );
+        }
+
+        renderFile(data);
+
+        startInstantLoading();
+
+        /*
+         * /file/:shortId already starts
+         * background preparation.
+         *
+         * Now we only check status.
+         */
+
+        startStatusPolling();
+
+    } catch (error) {
+
+        console.error(
+            "Download page load failed:",
+            error
+        );
+
+        showPageError(
+            "This file is unavailable or the download server could not be reached."
+        );
+    }
+}
+
+
+/* =========================================================
+   RENDER FILE
+========================================================= */
+
+function renderFile(data) {
+
+    const file =
+        data.file || {};
+
+    document.getElementById(
+        "fileName"
+    ).textContent =
+        file.name ||
+        "Unknown file";
+
+    document.getElementById(
+        "fileSize"
+    ).textContent =
+        file.size ||
+        "—";
+
+    document.getElementById(
+        "fileType"
+    ).textContent =
+        file.type ||
+        "—";
+
+    document.getElementById(
+        "fileShared"
+    ).textContent =
+        formatSharedDate(
+            file.shared
+        );
+
+    /*
+     * HubCloud / GDFlix already exist
+     * if backend says true.
+     */
+
+    const mirrors =
+        data.mirrors || {};
+
+    setMirrorState(
+        "hubcloud",
+        Boolean(
+            mirrors.hubcloud
+        )
+    );
+
+    setMirrorState(
+        "gdflix",
+        Boolean(
+            mirrors.gdflix
+        )
+    );
+
+    const instant =
+        data.instant || {};
+
+    if (
+        instant.ready &&
+        instant.links
+    ) {
+
+        backgroundReady = true;
+        downloadReady = true;
+
+        instantLinks =
+            instant.links;
+    }
+}
+
+
+/* =========================================================
+   MIRROR STATE
+========================================================= */
+
+function setMirrorState(
+    type,
+    available
+) {
+
+    const button =
+        type === "hubcloud"
+            ? hubcloudBtn
+            : gdflixBtn;
+
+    const text =
+        type === "hubcloud"
+            ? hubcloudText
+            : gdflixText;
+
+    if (!button || !text) {
+        return;
+    }
+
+    button.disabled =
+        !available;
+
+    button.classList.toggle(
+        "mirror-disabled",
+        !available
+    );
+
+    if (available) {
+
+        text.textContent =
+            type === "hubcloud"
+                ? "HubCloud"
+                : "GDFlix";
+
+    } else {
+
+        text.textContent =
+            type === "hubcloud"
+                ? "HubCloud Unavailable"
+                : "GDFlix Unavailable";
+    }
+}
+
+
+/* =========================================================
+   3.5 SECOND VISUAL LOADING
+========================================================= */
+
+function startInstantLoading() {
+
+    const duration = 3500;
+
+    const startTime =
+        Date.now();
+
+    instantBtn.disabled = true;
+
+    instantText.textContent =
+        "Loading...";
+
+    instantSpinner.style.display =
+        "block";
+
+    instantIcon.style.display =
+        "none";
+
+    loadingBar.style.width =
+        "0%";
+
+    function updateProgress() {
+
+        const elapsed =
+            Date.now() -
+            startTime;
+
+        const progress =
+            Math.min(
+                elapsed / duration,
+                1
+            );
+
+        loadingBar.style.width =
+            (progress * 100) +
+            "%";
+
+        if (progress < 1) {
+
+            requestAnimationFrame(
+                updateProgress
+            );
+
+        } else {
+
+            finishInstantLoading();
+        }
+    }
+
+    requestAnimationFrame(
+        updateProgress
+    );
+}
+
+
+/* =========================================================
+   FINISH VISUAL LOADING
+========================================================= */
+
+function finishInstantLoading() {
+
+    instantSpinner.style.display =
+        "none";
+
+    instantIcon.style.display =
+        "block";
+
+    loadingBar.style.width =
+        "100%";
+
+    instantText.textContent =
+        "Instant Download 10GBps";
+
+    /*
+     * Visual 3.5 sec loading is complete.
+     *
+     * Actual link may still be preparing.
+     */
+
+    if (backgroundReady) {
+
+        downloadReady = true;
+
+        instantBtn.disabled =
+            false;
+
+    } else {
+
+        instantBtn.disabled =
+            false;
+    }
+
+    instantIcon.innerHTML = `
+        <svg
+            class="w-5 h-5 text-cyan-300"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24">
+
+            <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 2L3 14h7l-1 8 11-14h-7l0-6z">
+            </path>
+        </svg>
+    `;
+}
+
+
+/* =========================================================
+   BACKGROUND STATUS POLLING
+========================================================= */
+
+function startStatusPolling() {
+
+    stopStatusPolling();
+
+    checkDownloadStatus();
+
+    statusTimer =
+        setInterval(
+            checkDownloadStatus,
+            POLL_INTERVAL
+        );
+}
+
+
+function stopStatusPolling() {
+
+    if (statusTimer) {
+
+        clearInterval(
+            statusTimer
+        );
+
+        statusTimer = null;
+    }
+}
+
+
+/* =========================================================
+   DOWNLOAD STATUS
+========================================================= */
+
+async function checkDownloadStatus() {
+
+    if (!shortId) {
+        return;
+    }
+
+    /*
+     * Endpoint will be added to Worker
+     * in the next backend step.
+     */
+
+    try {
+
+        const response =
+            await fetch(
+                `/api/download-status/${encodeURIComponent(shortId)}`,
+                {
+                    method: "GET",
+                    cache: "no-store"
+                }
+            );
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data =
+            await response.json();
+
+        if (
+            data.status === "ready" &&
+            data.links
+        ) {
+
+            backgroundReady = true;
+            downloadReady = true;
+            instantLinks =
+                data.links;
+
+            /*
+             * If user already clicked while
+             * preparation was running, continue
+             * the download automatically.
+             */
+
+            if (
+                instantClicked &&
+                instantLinks
+            ) {
+
+                instantClicked =
+                    false;
+
+                stopStatusPolling();
+
+                startTrackedDownload(
+                    "instant"
+                );
+
+                return;
+            }
+
+            /*
+             * If 3.5 sec visual loading is already
+             * complete, button is ready.
+             */
+
+            if (
+                instantText &&
+                instantText.textContent !==
+                    "Loading..."
+            ) {
+
+                instantBtn.disabled =
+                    false;
+            }
+
+            stopStatusPolling();
+
+        } else if (
+            data.status === "unavailable"
+        ) {
+
+            stopStatusPolling();
+
+            downloadReady =
+                false;
+
+            instantBtn.disabled =
+                false;
+
+            instantText.textContent =
+                "Instant Download Unavailable";
+
+            showToast(
+                "error",
+                "Link Unavailable",
+                "The instant download link could not be prepared."
+            );
+        }
+
+    } catch (error) {
+
+        /*
+         * Temporary polling/network errors
+         * are ignored so the page can continue
+         * polling.
+         */
+
+        console.debug(
+            "Download status check:",
+            error.message
+        );
+    }
+}
+
+
+/* =========================================================
+   INSTANT DOWNLOAD
+========================================================= */
+
+function instantDownload() {
+
+    if (!shortId) {
+        return;
+    }
+
+    /*
+     * User clicked.
+     *
+     * This is the moment where the eventual
+     * tracked download/earning route will
+     * be triggered.
+     */
+
+    instantClicked = true;
+
+    if (
+        backgroundReady &&
+        instantLinks
+    ) {
+
+        instantClicked = false;
+
+        stopStatusPolling();
+
+        startTrackedDownload(
+            "instant"
+        );
+
+        return;
+    }
+
+    instantBtn.disabled =
+        true;
+
+    instantSpinner.style.display =
+        "block";
+
+    instantIcon.style.display =
+        "none";
+
+    instantText.textContent =
+        "Preparing Download...";
+
+    showToast(
+        "info",
+        "Preparing Download",
+        "Your instant download link is still being prepared."
+    );
+
+    /*
+     * Polling will automatically continue
+     * the download when the link becomes ready.
+     */
+
+    checkDownloadStatus();
+}
+
+
+/* =========================================================
+   TRACKED DOWNLOAD
+========================================================= */
+
+function startTrackedDownload(type) {
+
+    if (!shortId) {
+        return;
+    }
+
+    let target = "";
+
+    if (type === "instant") {
+        target =
+            `/go/instant/${encodeURIComponent(shortId)}`;
+    }
+
+    if (type === "hubcloud") {
+        target =
+            `/go/hubcloud/${encodeURIComponent(shortId)}`;
+    }
+
+    if (type === "gdflix") {
+        target =
+            `/go/gdflix/${encodeURIComponent(shortId)}`;
+    }
+
+    if (!target) {
+        return;
+    }
+
+    /*
+     * Worker will perform:
+     *
+     * IP + 24h reward check
+     * ↓
+     * actual redirect
+     */
+
+    window.location.href =
+        target;
+}
+
+
+/* =========================================================
+   MIRROR BUTTONS
+========================================================= */
+
+function openMirror(type) {
+
+    if (!shortId) {
+        return;
+    }
+
+    if (type === "hubcloud") {
+
+        if (
+            hubcloudBtn.disabled
+        ) {
+            return;
+        }
+
+        startTrackedDownload(
+            "hubcloud"
+        );
+
+        return;
+    }
+
+    if (type === "gdflix") {
+
+        if (
+            gdflixBtn.disabled
+        ) {
+            return;
+        }
+
+        startTrackedDownload(
+            "gdflix"
+        );
+
+        return;
+    }
+}
+
+
+/* =========================================================
+   COPY SHARE LINK
+========================================================= */
+
+document.getElementById(
+    "shareInput"
+).value =
+    window.location.href;
+
+
+async function copyShareLink() {
+
+    const input =
+        document.getElementById(
+            "shareInput"
+        );
+
+    const button =
+        document.getElementById(
+            "copyShare"
+        );
+
+    try {
+
+        await navigator.clipboard
+            .writeText(
+                input.value
+            );
+
+    } catch (error) {
+
+        input.select();
+
+        document.execCommand(
+            "copy"
+        );
+    }
+
+    button.textContent =
+        "Copied ✓";
+
+    button.classList.add(
+        "copied"
+    );
+
+    showToast(
+        "success",
+        "Link Copied",
+        "Share link copied to clipboard."
+    );
+
+    setTimeout(() => {
+
+        button.textContent =
+            "Copy Link";
+
+        button.classList.remove(
+            "copied"
+        );
+
+    }, 1800);
+}
+
+
+/* =========================================================
+   START
+========================================================= */
+
+window.addEventListener(
+    "load",
+    () => {
+
+        loadFile();
+
+    }
+);
+
+
+/* =========================================================
+   CLEANUP
+========================================================= */
+
+window.addEventListener(
+    "beforeunload",
+    () => {
+
+        stopStatusPolling();
+
+    }
+);
+</script>
+
+</body>
+</html>
