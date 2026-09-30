@@ -1546,7 +1546,7 @@ async function prepareFastLinks(shortId, env) {
             if (drivetotUrl) {
                 const drivetotMatch =
                     String(drivetotUrl).match(
-                        /\/s\/([^/?#]+)/
+                        /\/(?:s\/)?([^/?#]+)\/?$/
                     );
 
                 if (
@@ -1585,7 +1585,7 @@ async function prepareFastLinks(shortId, env) {
                                 drivetotResult.share_id;
 
                             drivetotUrl =
-                                `https://drivetot.website/s/${drivetotShareId}`;
+                                `https://drivetot.website/${drivetotShareId}`;
 
                             await env.DB
                                 .prepare(
@@ -4702,7 +4702,7 @@ export default {
 
 
                             const drivetot_url =
-                                `https://drivetot.website/s/${drivetotResult.share_id}`;
+                                `https://drivetot.website/${drivetotResult.share_id}`;
 
 
                             await env.DB
