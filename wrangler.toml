@@ -5,7 +5,7 @@ compatibility_date = "2026-09-18"
 [assets]
 directory = "./public"
 binding = "ASSETS"
-run_worker_first = ["/api/*", "/file/*"]
+run_worker_first = ["/api/*", "/file/*", "/d/*"]
 
 [[d1_databases]]
 binding = "DB"
