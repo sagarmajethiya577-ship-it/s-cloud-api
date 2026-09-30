@@ -12,3 +12,13 @@ run_worker_first = ["/api/*", "/file/*", "/d/*"]
 binding = "DB"
 database_name = "scloud_db"
 database_id = "46c54f0b-d47b-4906-94a2-bbd0cb0e82f1"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
