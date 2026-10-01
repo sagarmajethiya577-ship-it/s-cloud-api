@@ -234,6 +234,54 @@ export async function bypassGDFlix(
                 busyRes.url;
 
             // --------------------------------------
+            // FASTDL WRAPPER URL
+            // --------------------------------------
+            //
+            // BusyCDN redirects to:
+            // https://fastdl-one.pages.dev/?url=REAL_DOWNLOAD_URL
+            //
+            // We only need the value after ?url=
+            // --------------------------------------
+
+            if (
+                targetUrl.includes(
+                    "fastdl-one.pages.dev"
+                )
+            ) {
+                try {
+                    const parsedUrl =
+                        new URL(targetUrl);
+
+                    const realUrl =
+                        parsedUrl.searchParams.get(
+                            "url"
+                        );
+
+                    if (
+                        realUrl &&
+                        realUrl.startsWith(
+                            "http"
+                        )
+                    ) {
+                        finalGoogleLinks.push(
+                            realUrl
+                        );
+
+                        console.log(
+                            "10GBPS link extracted from FastDL redirect."
+                        );
+
+                        continue;
+                    }
+                } catch (e) {
+                    console.log(
+                        "FastDL redirect parse failed:",
+                        e.message
+                    );
+                }
+            }
+
+            // --------------------------------------
             // DIRECT GOOGLE CONTENT URL
             // --------------------------------------
 
@@ -255,6 +303,55 @@ export async function bypassGDFlix(
 
             const busyHtml =
                 await busyRes.text();
+
+            // --------------------------------------
+            // FASTDL URL INSIDE HTML
+            // --------------------------------------
+
+            const fastDlRegex =
+                /https:\/\/fastdl-one\.pages\.dev\/\?url=([^"'<>\s]+)/i;
+
+            const fastDlMatch =
+                busyHtml.match(
+                    fastDlRegex
+                );
+
+            if (
+                fastDlMatch &&
+                fastDlMatch[1]
+            ) {
+                try {
+                    const realUrl =
+                        decodeURIComponent(
+                            fastDlMatch[1]
+                        );
+
+                    if (
+                        realUrl.startsWith(
+                            "http"
+                        )
+                    ) {
+                        finalGoogleLinks.push(
+                            realUrl
+                        );
+
+                        console.log(
+                            "10GBPS link extracted from FastDL HTML."
+                        );
+
+                        continue;
+                    }
+                } catch (e) {
+                    console.log(
+                        "FastDL HTML decode failed:",
+                        e.message
+                    );
+                }
+            }
+
+            // --------------------------------------
+            // DIRECT GOOGLE URL INSIDE HTML
+            // --------------------------------------
 
             const googleRegex =
                 /(https:\/\/[a-zA-Z0-9-]+\.googleusercontent\.com\/[^"'<>\s]+)/i;
