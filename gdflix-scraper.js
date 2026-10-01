@@ -137,7 +137,7 @@ export async function bypassGDFlix(
             // --------------------------------------
 
             const regex =
-                /href=["'](https:\/\/[^"']*(?:busycdn\.xyz|filesgram\.xyz|filebee\.xyz|gdflix\.io\/cloud)[^"']*)["']/gi;
+                /href=["'](https:\/\/instant\.busycdn\.xyz\/[^"']*)["']/gi;
 
             let match;
 
