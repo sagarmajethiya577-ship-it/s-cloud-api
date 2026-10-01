@@ -1503,11 +1503,25 @@ function hasValidFastLinks(record, currentTime) {
 
 async function prepareFastLinks(shortId, env) {
     if (fastLinkJobs.has(shortId)) {
+        console.log(`[FAST] Job already running for ${shortId}`);
         return fastLinkJobs.get(shortId);
     }
 
+    const startedAt = Date.now();
+
+    const elapsed = () =>
+        `${Date.now() - startedAt}ms`;
+
+    console.log(
+        `[FAST] START ${shortId} | elapsed=${elapsed()}`
+    );
+
     const job = (async () => {
         try {
+            console.log(
+                `[FAST] DB lookup START ${shortId} | elapsed=${elapsed()}`
+            );
+
             let record = await env.DB
                 .prepare(
                     `SELECT *
@@ -1518,9 +1532,29 @@ async function prepareFastLinks(shortId, env) {
                 .bind(shortId, shortId)
                 .first();
 
+            console.log(
+                `[FAST] DB lookup END ${shortId} | elapsed=${elapsed()}`
+            );
+
             if (!record || record.status === "deleted") {
+                console.log(
+                    `[FAST] Record missing/deleted ${shortId} | elapsed=${elapsed()}`
+                );
                 return;
             }
+
+            console.log(
+                `[FAST] Record loaded ${shortId} | ` +
+                `gdflix=${!!record.gdflix_url} | ` +
+                `hubcloud=${!!record.hubcloud_url} | ` +
+                `drivetot=${!!record.drivetot_url} | ` +
+                `fast_links=${!!record.fast_links} | ` +
+                `elapsed=${elapsed()}`
+            );
+
+            console.log(
+                `[FAST] Existing fast-link check START ${shortId} | elapsed=${elapsed()}`
+            );
 
             if (
                 hasValidFastLinks(
@@ -1528,10 +1562,18 @@ async function prepareFastLinks(shortId, env) {
                     Date.now()
                 )
             ) {
+                console.log(
+                    `[FAST] Existing fast links already valid ${shortId} | elapsed=${elapsed()}`
+                );
                 return;
             }
 
+            console.log(
+                `[FAST] No valid fast links found ${shortId} | elapsed=${elapsed()}`
+            );
+
             let drivetotShareId = null;
+
             let drivetotUrl =
                 record.drivetot_url || null;
 
@@ -1543,7 +1585,18 @@ async function prepareFastLinks(shortId, env) {
                 !record.gdflix_url ||
                 record.gdflix_url === "Not Found";
 
+            console.log(
+                `[FAST] Mirror status ${shortId} | ` +
+                `hubcloudMissing=${hubcloudMissing} | ` +
+                `gdflixMissing=${gdflixMissing} | ` +
+                `elapsed=${elapsed()}`
+            );
+
             if (drivetotUrl) {
+                console.log(
+                    `[FAST] Existing Drivetot URL found ${shortId} | elapsed=${elapsed()}`
+                );
+
                 const drivetotMatch =
                     String(drivetotUrl).match(
                         /\/(?:s\/)?([^/?#]+)\/?$/
@@ -1555,13 +1608,27 @@ async function prepareFastLinks(shortId, env) {
                 ) {
                     drivetotShareId =
                         drivetotMatch[1];
+
+                    console.log(
+                        `[FAST] Drivetot Share ID extracted ${shortId} | ` +
+                        `shareId=${drivetotShareId} | ` +
+                        `elapsed=${elapsed()}`
+                    );
                 }
+            } else {
+                console.log(
+                    `[FAST] No existing Drivetot URL ${shortId} | elapsed=${elapsed()}`
+                );
             }
 
             if (
                 (hubcloudMissing || gdflixMissing) &&
                 !drivetotShareId
             ) {
+                console.log(
+                    `[FAST] Drivetot upload REQUIRED ${shortId} | elapsed=${elapsed()}`
+                );
+
                 const scloudMatch =
                     String(
                         record.drive_url || ""
@@ -1570,12 +1637,22 @@ async function prepareFastLinks(shortId, env) {
                     );
 
                 if (scloudMatch) {
+                    console.log(
+                        `[FAST] Drivetot upload START ${shortId} | elapsed=${elapsed()}`
+                    );
+
                     try {
                         const drivetotResult =
                             await uploadToDrivetot(
                                 scloudMatch[0],
                                 env
                             );
+
+                        console.log(
+                            `[FAST] Drivetot upload END ${shortId} | ` +
+                            `success=${!!(drivetotResult && drivetotResult.share_id)} | ` +
+                            `elapsed=${elapsed()}`
+                        );
 
                         if (
                             drivetotResult &&
@@ -1586,6 +1663,10 @@ async function prepareFastLinks(shortId, env) {
 
                             drivetotUrl =
                                 `https://drivetot.website/${drivetotShareId}`;
+
+                            console.log(
+                                `[FAST] Saving Drivetot URL ${shortId} | elapsed=${elapsed()}`
+                            );
 
                             await env.DB
                                 .prepare(
@@ -1598,27 +1679,51 @@ async function prepareFastLinks(shortId, env) {
                                     record.id
                                 )
                                 .run();
+
+                            console.log(
+                                `[FAST] Drivetot URL saved ${shortId} | elapsed=${elapsed()}`
+                            );
                         }
                     } catch (error) {
                         console.error(
-                            "Background Drivetot upload failed for " +
-                            shortId + ":",
+                            `[FAST] Drivetot upload FAILED ${shortId} | ` +
+                            `elapsed=${elapsed()} |`,
                             error.message
                         );
                     }
+                } else {
+                    console.error(
+                        `[FAST] S-Cloud Drive ID missing ${shortId} | elapsed=${elapsed()}`
+                    );
                 }
+            } else {
+                console.log(
+                    `[FAST] Drivetot upload SKIPPED ${shortId} | ` +
+                    `reason=mirrors_already_available_or_share_exists | ` +
+                    `elapsed=${elapsed()}`
+                );
             }
 
             if (
                 (hubcloudMissing || gdflixMissing) &&
                 drivetotShareId
             ) {
+                console.log(
+                    `[FAST] Drivetot extraction START ${shortId} | elapsed=${elapsed()}`
+                );
+
                 try {
                     const extractedLinks =
                         await extractLinksFromDrivetot(
                             drivetotShareId,
                             env
                         );
+
+                    console.log(
+                        `[FAST] Drivetot extraction END ${shortId} | ` +
+                        `success=${!!(extractedLinks && !extractedLinks.error)} | ` +
+                        `elapsed=${elapsed()}`
+                    );
 
                     if (
                         extractedLinks &&
@@ -1633,6 +1738,10 @@ async function prepareFastLinks(shortId, env) {
                             extractedLinks.gdflix_url ||
                             record.gdflix_url ||
                             null;
+
+                        console.log(
+                            `[FAST] Saving extracted mirror URLs ${shortId} | elapsed=${elapsed()}`
+                        );
 
                         await env.DB
                             .prepare(
@@ -1651,15 +1760,29 @@ async function prepareFastLinks(shortId, env) {
                                 record.id
                             )
                             .run();
+
+                        console.log(
+                            `[FAST] Extracted mirror URLs saved ${shortId} | elapsed=${elapsed()}`
+                        );
                     }
                 } catch (error) {
                     console.error(
-                        "Background Drivetot extraction failed for " +
-                        shortId + ":",
+                        `[FAST] Drivetot extraction FAILED ${shortId} | ` +
+                        `elapsed=${elapsed()} |`,
                         error.message
                     );
                 }
+            } else {
+                console.log(
+                    `[FAST] Drivetot extraction SKIPPED ${shortId} | ` +
+                    `reason=mirrors_available_or_no_share | ` +
+                    `elapsed=${elapsed()}`
+                );
             }
+
+            console.log(
+                `[FAST] Final DB reload START ${shortId} | elapsed=${elapsed()}`
+            );
 
             record = await env.DB
                 .prepare(
@@ -1671,10 +1794,17 @@ async function prepareFastLinks(shortId, env) {
                 .bind(shortId, shortId)
                 .first();
 
+            console.log(
+                `[FAST] Final DB reload END ${shortId} | elapsed=${elapsed()}`
+            );
+
             if (
                 !record ||
                 record.status === "deleted"
             ) {
+                console.log(
+                    `[FAST] Record missing/deleted after reload ${shortId} | elapsed=${elapsed()}`
+                );
                 return;
             }
 
@@ -1684,6 +1814,9 @@ async function prepareFastLinks(shortId, env) {
                     Date.now()
                 )
             ) {
+                console.log(
+                    `[FAST] Fast links became available during preparation ${shortId} | elapsed=${elapsed()}`
+                );
                 return;
             }
 
@@ -1692,11 +1825,18 @@ async function prepareFastLinks(shortId, env) {
                 record.gdflix_url === "Not Found"
             ) {
                 console.error(
-                    "Background preparation: GDFlix URL unavailable for " +
-                    shortId
+                    `[FAST] GDFlix URL unavailable ${shortId} | elapsed=${elapsed()}`
                 );
                 return;
             }
+
+            console.log(
+                `[FAST] GDFlix URL available ${shortId} | elapsed=${elapsed()}`
+            );
+
+            console.log(
+                `[FAST] bypassGDFlix START ${shortId} | elapsed=${elapsed()}`
+            );
 
             const freshFastLinks =
                 await bypassGDFlix(
@@ -1704,17 +1844,29 @@ async function prepareFastLinks(shortId, env) {
                     env
                 );
 
+            console.log(
+                `[FAST] bypassGDFlix END ${shortId} | ` +
+                `links=${Array.isArray(freshFastLinks) ? freshFastLinks.length : "unknown"} | ` +
+                `elapsed=${elapsed()}`
+            );
+
             if (!freshFastLinks) {
                 console.error(
-                    "Background preparation returned empty links for " +
-                    shortId
+                    `[FAST] bypassGDFlix returned empty ${shortId} | elapsed=${elapsed()}`
                 );
                 return;
             }
 
-            const savedAt = Date.now();
+            const savedAt =
+                Date.now();
+
             const expiresAt =
-                savedAt + THREE_HOURS_IN_MS;
+                savedAt +
+                THREE_HOURS_IN_MS;
+
+            console.log(
+                `[FAST] Fast-link DB save START ${shortId} | elapsed=${elapsed()}`
+            );
 
             await env.DB
                 .prepare(
@@ -1735,18 +1887,26 @@ async function prepareFastLinks(shortId, env) {
                 .run();
 
             console.log(
-                "Background fast links prepared for " +
-                shortId
+                `[FAST] Fast-link DB save END ${shortId} | elapsed=${elapsed()}`
+            );
+
+            console.log(
+                `[FAST] COMPLETE ${shortId} | total=${elapsed()}`
             );
 
         } catch (error) {
             console.error(
-                "Background fast-link preparation failed for " +
-                shortId + ":",
+                `[FAST] FAILED ${shortId} | ` +
+                `elapsed=${elapsed()} |`,
                 error.message
             );
+
         } finally {
             fastLinkJobs.delete(shortId);
+
+            console.log(
+                `[FAST] JOB RELEASED ${shortId} | total=${elapsed()}`
+            );
         }
     })();
 
@@ -1754,7 +1914,6 @@ async function prepareFastLinks(shortId, env) {
 
     return job;
 }
-
 
 export default {
     async fetch(
