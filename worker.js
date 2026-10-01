@@ -5922,6 +5922,27 @@ export default {
         }
 
         // ==================================================
+        // PUBLIC ROOT / LOGIN PAGE
+        // ==================================================
+
+        if (
+            url.pathname === "/" &&
+            request.method === "GET" &&
+            env.ASSETS &&
+            typeof env.ASSETS.fetch === "function"
+        ) {
+            const indexRequest = new Request(
+                new URL("/index.html", request.url),
+                request
+            );
+
+            return env.ASSETS.fetch(
+                indexRequest
+            );
+        }
+
+
+        // ==================================================
         // STATIC FRONTEND
         // ==================================================
 
