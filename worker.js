@@ -5225,7 +5225,13 @@ export default {
                                 !!record.hubcloud_url,
 
                             gdflix:
-                                !!record.gdflix_url
+                                !!record.gdflix_url,
+
+                            gofile:
+                                !!record.pdlink_share_id,
+
+                            pixeldrain:
+                                !!record.pdlink_share_id
                         },
 
                         instant: {
