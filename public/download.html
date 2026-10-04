@@ -797,7 +797,7 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 
                 <button
                     id="instantBtn"
@@ -827,27 +827,10 @@
                     <div id="loadingBar" class="loading-bar"></div>
                 </button>
 
-                <button
-                    id="hubcloudBtn"
-                    onclick="openMirror('hubcloud')"
-                    disabled
-                    class="download-btn hub-btn rounded-2xl px-4 py-4 flex items-center justify-center gap-3 text-sm font-semibold text-white">
 
-                    <svg
-                        class="w-5 h-5 text-blue-300"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="1.8"
-                            d="M7 18h10a4 4 0 00.2-7.995A5 5 0 007.4 8.6 4.5 4.5 0 007 18z">
-                        </path>
-                    </svg>
 
-                    <span id="hubcloudText">HubCloud</span>
-                </button>
+
+
 
                 <button
                     id="gdflixBtn"
@@ -884,7 +867,82 @@
 
                     <span id="gdflixText">GDFlix</span>
                 </button>
+                <button
+                    id="gofileBtn"
+                    onclick="openMirror('gofile')"
+                    disabled
+                    class="download-btn hub-btn rounded-2xl px-4 py-4 flex items-center justify-center gap-3 text-sm font-semibold text-white">
 
+                    <svg
+                        class="w-5 h-5 text-green-300"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M12 3a9 9 0 100 18 9 9 0 000-18z">
+                        </path>
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M8 12h8M12 8v8">
+                        </path>
+                    </svg>
+
+                    <span id="gofileText">Gofile</span>
+                </button>
+
+                <button
+                    id="pixeldrainBtn"
+                    onclick="openMirror('pixeldrain')"
+                    disabled
+                    class="download-btn gdflix-btn rounded-2xl px-4 py-4 flex items-center justify-center gap-3 text-sm font-semibold text-white">
+
+                    <svg
+                        class="w-5 h-5 text-purple-300"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M7 12l5-9 5 9-5 9-5-9z">
+                        </path>
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M9.5 12h5">
+                        </path>
+                    </svg>
+
+                    <span id="pixeldrainText">Pixeldrain</span>
+                </button>
+                <button
+                    id="hubcloudBtn"
+                    onclick="openMirror('hubcloud')"
+                    disabled
+                    class="download-btn hub-btn rounded-2xl px-4 py-4 flex items-center justify-center gap-3 text-sm font-semibold text-white">
+
+                    <svg
+                        class="w-5 h-5 text-blue-300"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M7 18h10a4 4 0 00.2-7.995A5 5 0 007.4 8.6 4.5 4.5 0 007 18z">
+                        </path>
+                    </svg>
+
+                    <span id="hubcloudText">HubCloud</span>
+                </button>
             </div>
 
             <div class="share">
@@ -994,11 +1052,23 @@ const hubcloudBtn =
 const gdflixBtn =
     document.getElementById("gdflixBtn");
 
+const gofileBtn =
+    document.getElementById("gofileBtn");
+
+const pixeldrainBtn =
+    document.getElementById("pixeldrainBtn");
+
 const hubcloudText =
     document.getElementById("hubcloudText");
 
 const gdflixText =
     document.getElementById("gdflixText");
+
+const gofileText =
+    document.getElementById("gofileText");
+
+const pixeldrainText =
+    document.getElementById("pixeldrainText");
 
 
 /* =========================================================
@@ -1346,6 +1416,20 @@ function renderFile(data) {
         )
     );
 
+    setMirrorState(
+        "gofile",
+        Boolean(
+            mirrors.gofile
+        )
+    );
+
+    setMirrorState(
+        "pixeldrain",
+        Boolean(
+            mirrors.pixeldrain
+        )
+    );
+
     const instant =
         data.instant || {};
 
@@ -1372,15 +1456,38 @@ function setMirrorState(
     available
 ) {
 
-    const button =
-        type === "hubcloud"
-            ? hubcloudBtn
-            : gdflixBtn;
+    let button = null;
+    let text = null;
+    let availableText = "";
+    let unavailableText = "";
 
-    const text =
-        type === "hubcloud"
-            ? hubcloudText
-            : gdflixText;
+    if (type === "hubcloud") {
+        button = hubcloudBtn;
+        text = hubcloudText;
+        availableText = "HubCloud";
+        unavailableText = "HubCloud Unavailable";
+    }
+
+    if (type === "gdflix") {
+        button = gdflixBtn;
+        text = gdflixText;
+        availableText = "GDFlix";
+        unavailableText = "GDFlix Unavailable";
+    }
+
+    if (type === "gofile") {
+        button = gofileBtn;
+        text = gofileText;
+        availableText = "Gofile";
+        unavailableText = "Gofile Unavailable";
+    }
+
+    if (type === "pixeldrain") {
+        button = pixeldrainBtn;
+        text = pixeldrainText;
+        availableText = "Pixeldrain";
+        unavailableText = "Pixeldrain Unavailable";
+    }
 
     if (!button || !text) {
         return;
@@ -1394,20 +1501,10 @@ function setMirrorState(
         !available
     );
 
-    if (available) {
-
-        text.textContent =
-            type === "hubcloud"
-                ? "HubCloud"
-                : "GDFlix";
-
-    } else {
-
-        text.textContent =
-            type === "hubcloud"
-                ? "HubCloud Unavailable"
-                : "GDFlix Unavailable";
-    }
+    text.textContent =
+        available
+            ? availableText
+            : unavailableText;
 }
 
 
@@ -1768,6 +1865,16 @@ function startTrackedDownload(type) {
             `/go/gdflix/${encodeURIComponent(shortId)}`;
     }
 
+    if (type === "gofile") {
+        target =
+            `/go/gofile/${encodeURIComponent(shortId)}`;
+    }
+
+    if (type === "pixeldrain") {
+        target =
+            `/go/pixeldrain/${encodeURIComponent(shortId)}`;
+    }
+
     if (!target) {
         return;
     }
@@ -1820,6 +1927,36 @@ function openMirror(type) {
 
         startTrackedDownload(
             "gdflix"
+        );
+
+        return;
+    }
+
+    if (type === "gofile") {
+
+        if (
+            gofileBtn.disabled
+        ) {
+            return;
+        }
+
+        startTrackedDownload(
+            "gofile"
+        );
+
+        return;
+    }
+
+    if (type === "pixeldrain") {
+
+        if (
+            pixeldrainBtn.disabled
+        ) {
+            return;
+        }
+
+        startTrackedDownload(
+            "pixeldrain"
         );
 
         return;

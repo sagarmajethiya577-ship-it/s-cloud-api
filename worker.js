@@ -4,6 +4,10 @@ import {
     extractLinksFromDrivetot
 } from "./drivetot-scraper.js";
 import { bypassGDFlix } from "./gdflix-scraper.js";
+import {
+    queuePDLinkFile,
+    getPDLinkMirrorLinks
+} from "./pdlink.js";
 
 
 // ==================================================
@@ -4840,23 +4844,100 @@ export default {
                         try {
 
                             // =================================
-                            // STEP 2 - DRIVETOT
+                            // STEP 2 - DRIVETOT + PDLINK
+                            // =================================
+                            //
+                            // Both providers start in parallel.
+                            // A PDLink failure must NOT break
+                            // the existing Drivetot flow.
                             // =================================
 
-                            const drivetotResult =
-                                await uploadToDrivetot(
+                            const drivetotPromise =
+                                uploadToDrivetot(
+                                    scloudFileId,
+                                    env
+                                );
+
+                            const pdlinkPromise =
+                                queuePDLinkFile(
                                     scloudFileId,
                                     env
                                 );
 
 
+                            const [
+                                drivetotResultState,
+                                pdlinkResultState
+                            ] = await Promise.allSettled([
+                                drivetotPromise,
+                                pdlinkPromise
+                            ]);
+
+
+                            // =================================
+                            // DRIVETOT RESULT
+                            // =================================
+
                             if (
-                                !drivetotResult ||
-                                !drivetotResult.share_id
+                                drivetotResultState.status !==
+                                "fulfilled" ||
+                                !drivetotResultState.value ||
+                                !drivetotResultState.value.share_id
                             ) {
+
+                                const reason =
+                                    drivetotResultState.reason?.message ||
+                                    "Drivetot Upload Failed";
+
                                 throw new Error(
-                                    "Drivetot Upload Failed"
+                                    reason
                                 );
+                            }
+
+
+                            const drivetotResult =
+                                drivetotResultState.value;
+
+
+                            // =================================
+                            // PDLINK RESULT
+                            // =================================
+
+                            if (
+                                pdlinkResultState.status ===
+                                "fulfilled" &&
+                                pdlinkResultState.value?.share_id
+                            ) {
+
+                                const pdlinkResult =
+                                    pdlinkResultState.value;
+
+
+                                await env.DB
+                                    .prepare(
+                                        `UPDATE files
+                                         SET pdlink_share_id = ?
+                                         WHERE id = ?`
+                                    )
+                                    .bind(
+                                        pdlinkResult.share_id,
+                                        shortId
+                                    )
+                                    .run();
+
+
+                                console.log(
+                                    `[PDLINK] Share ID saved | file=${shortId} | share=${pdlinkResult.share_id}`
+                                );
+
+                            } else {
+
+                                console.error(
+                                    `[PDLINK] Queue failed for ${shortId}:`,
+                                    pdlinkResultState.reason?.message ||
+                                    "Unknown PDLink error"
+                                );
+
                             }
 
 
@@ -5278,6 +5359,7 @@ export default {
                                 status,
                                 hubcloud_url,
                                 gdflix_url,
+                                pdlink_share_id,
                                 fast_links,
                                 fast_links_expires_at,
                                 last_updated
@@ -5366,7 +5448,13 @@ export default {
                             gdflix:
                                 !!record.gdflix_url &&
                                 record.gdflix_url !==
-                                    "Not Found"
+                                    "Not Found",
+
+                            gofile:
+                                !!record.pdlink_share_id,
+
+                            pixeldrain:
+                                !!record.pdlink_share_id
                         }
                     }),
                     {
@@ -5425,7 +5513,9 @@ export default {
                 ![
                     "instant",
                     "hubcloud",
-                    "gdflix"
+                    "gdflix",
+                    "gofile",
+                    "pixeldrain"
                 ].includes(action)
             ) {
                 return new Response(
@@ -5474,6 +5564,111 @@ export default {
                             headers: corsHeaders
                         }
                     );
+                }
+
+
+                // ------------------------------------------
+                // PDLINK: GOFILE + PIXELDRAIN
+                // ------------------------------------------
+
+                if (
+                    action ===
+                        "gofile" ||
+                    action ===
+                        "pixeldrain"
+                ) {
+
+                    // ------------------------------------------
+                    // SHARE ID REQUIRED
+                    // ------------------------------------------
+
+                    if (
+                        !record.pdlink_share_id
+                    ) {
+                        return new Response(
+                            JSON.stringify({
+                                status:
+                                    "error",
+                                message:
+                                    `${action === "gofile" ? "Gofile" : "Pixeldrain"} link is not available yet.`
+                            }),
+                            {
+                                status: 404,
+                                headers: {
+                                    ...corsHeaders,
+                                    ...jsonHeaders()
+                                }
+                            }
+                        );
+                    }
+
+                    try {
+
+                        console.log(
+                            `[PDLINK] Generating ${action} link | file=${shortId} | share=${record.pdlink_share_id}`
+                        );
+
+                        const target =
+                            await getPDLinkMirrorLinks(
+                                record.pdlink_share_id,
+                                env,
+                                action
+                            );
+
+                        // ------------------------------------------
+                        // REQUESTED MIRROR NOT READY
+                        // ------------------------------------------
+
+                        if (!target) {
+                            return new Response(
+                                JSON.stringify({
+                                    status:
+                                        "error",
+                                    message:
+                                        `${action === "gofile" ? "Gofile" : "Pixeldrain"} link is not available yet.`
+                                }),
+                                {
+                                    status: 404,
+                                    headers: {
+                                        ...corsHeaders,
+                                        ...jsonHeaders()
+                                    }
+                                }
+                            );
+                        }
+
+                        console.log(
+                            `[PDLINK] ${action} redirect SUCCESS | file=${shortId}`
+                        );
+
+                        return Response.redirect(
+                            target,
+                            302
+                        );
+
+                    } catch (error) {
+
+                        console.error(
+                            `[PDLINK] ${action} route ERROR | file=${shortId}:`,
+                            error.message
+                        );
+
+                        return new Response(
+                            JSON.stringify({
+                                status:
+                                    "error",
+                                message:
+                                    `${action === "gofile" ? "Gofile" : "Pixeldrain"} link generation failed.`
+                            }),
+                            {
+                                status: 500,
+                                headers: {
+                                    ...corsHeaders,
+                                    ...jsonHeaders()
+                                }
+                            }
+                        );
+                    }
                 }
 
 
