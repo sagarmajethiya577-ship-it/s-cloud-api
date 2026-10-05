@@ -5619,6 +5619,7 @@ export default {
                                 hubcloud_url,
                                 gdflix_url,
                                 pdlink_share_id,
+                                toxcloud_url,
                                 fast_links,
                                 fast_links_expires_at,
                                 last_updated
