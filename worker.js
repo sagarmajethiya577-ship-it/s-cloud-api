@@ -1464,6 +1464,13 @@ function jsonHeaders() {
 
 const fastLinkJobs = new Map();
 
+// ==================================================
+// PDLINK BACKGROUND JOB GUARD
+// ==================================================
+
+const pdlinkJobs = new Map();
+
+
 const THREE_HOURS_IN_MS =
     3 *
     60 *
@@ -4844,100 +4851,83 @@ export default {
                         try {
 
                             // =================================
-                            // STEP 2 - DRIVETOT + PDLINK
+                            // STEP 2 - PDLINK FIRST
                             // =================================
                             //
-                            // Both providers start in parallel.
-                            // A PDLink failure must NOT break
-                            // the existing Drivetot flow.
+                            // PDLink upload starts first.
+                            // Share ID is saved immediately.
+                            // Only after PDLink succeeds, Drivetot
+                            // upload starts.
                             // =================================
 
-                            const drivetotPromise =
-                                uploadToDrivetot(
+                            console.log(
+                                `[PDLINK] Upload START | file=${shortId} | drive=${scloudFileId}`
+                            );
+
+                            const pdlinkResult =
+                                await queuePDLinkFile(
                                     scloudFileId,
                                     env
                                 );
 
-                            const pdlinkPromise =
-                                queuePDLinkFile(
-                                    scloudFileId,
-                                    env
-                                );
-
-
-                            const [
-                                drivetotResultState,
-                                pdlinkResultState
-                            ] = await Promise.allSettled([
-                                drivetotPromise,
-                                pdlinkPromise
-                            ]);
-
-
-                            // =================================
-                            // DRIVETOT RESULT
-                            // =================================
 
                             if (
-                                drivetotResultState.status !==
-                                "fulfilled" ||
-                                !drivetotResultState.value ||
-                                !drivetotResultState.value.share_id
+                                !pdlinkResult ||
+                                !pdlinkResult.share_id
                             ) {
-
-                                const reason =
-                                    drivetotResultState.reason?.message ||
-                                    "Drivetot Upload Failed";
-
                                 throw new Error(
-                                    reason
+                                    "PDLink Upload Failed: share_id missing."
                                 );
                             }
 
 
+                            // =================================
+                            // SAVE PDLINK SHARE ID IMMEDIATELY
+                            // =================================
+
+                            await env.DB
+                                .prepare(
+                                    `UPDATE files
+                                     SET pdlink_share_id = ?
+                                     WHERE id = ?`
+                                )
+                                .bind(
+                                    pdlinkResult.share_id,
+                                    shortId
+                                )
+                                .run();
+
+
+                            console.log(
+                                `[PDLINK] Share ID saved | file=${shortId} | share=${pdlinkResult.share_id}`
+                            );
+
+
+                            // =================================
+                            // STEP 3 - DRIVETOT
+                            // =================================
+                            //
+                            // PDLink is already safely saved.
+                            // Now start the existing Drivetot flow.
+                            // =================================
+
+                            console.log(
+                                `[DRIVETOT] Upload START | file=${shortId}`
+                            );
+
                             const drivetotResult =
-                                drivetotResultState.value;
-
-
-                            // =================================
-                            // PDLINK RESULT
-                            // =================================
+                                await uploadToDrivetot(
+                                    scloudFileId,
+                                    env
+                                );
 
                             if (
-                                pdlinkResultState.status ===
-                                "fulfilled" &&
-                                pdlinkResultState.value?.share_id
+                                !drivetotResult ||
+                                !drivetotResult.share_id
                             ) {
-
-                                const pdlinkResult =
-                                    pdlinkResultState.value;
-
-
-                                await env.DB
-                                    .prepare(
-                                        `UPDATE files
-                                         SET pdlink_share_id = ?
-                                         WHERE id = ?`
-                                    )
-                                    .bind(
-                                        pdlinkResult.share_id,
-                                        shortId
-                                    )
-                                    .run();
-
-
-                                console.log(
-                                    `[PDLINK] Share ID saved | file=${shortId} | share=${pdlinkResult.share_id}`
+                                throw new Error(
+                                    "Drivetot Upload Failed"
                                 );
-
-                            } else {
-
-                                console.error(
-                                    `[PDLINK] Queue failed for ${shortId}:`,
-                                    pdlinkResultState.reason?.message ||
-                                    "Unknown PDLink error"
-                                );
-
                             }
 
 
@@ -5197,6 +5187,108 @@ export default {
                         env
                     )
                 );
+
+                // ==================================================
+                // PDLINK SELF-HEALING
+                //
+                // If pdlink_share_id is missing, use the
+                // S-CLOUD copied Drive URL stored in drive_url.
+                //
+                // This runs completely in the background.
+                // The /file request does NOT wait for PDLink.
+                // ==================================================
+
+                if (
+                    !record.pdlink_share_id &&
+                    record.drive_url &&
+                    !pdlinkJobs.has(shortId)
+                ) {
+
+                    const driveMatch =
+                        record.drive_url.match(
+                            /\/file\/d\/([a-zA-Z0-9_-]+)/
+                        );
+
+                    const driveFileId =
+                        driveMatch?.[1] ||
+                        null;
+
+                    if (driveFileId) {
+
+                        const pdlinkJob =
+                            (async () => {
+
+                                try {
+
+                                    console.log(
+                                        `[PDLINK] Self-healing START | file=${shortId} | drive=${driveFileId}`
+                                    );
+
+                                    const pdlinkResult =
+                                        await queuePDLinkFile(
+                                            driveFileId,
+                                            env
+                                        );
+
+                                    if (
+                                        !pdlinkResult ||
+                                        !pdlinkResult.share_id
+                                    ) {
+                                        throw new Error(
+                                            "PDLink returned no share_id."
+                                        );
+                                    }
+
+                                    await env.DB
+                                        .prepare(
+                                            `UPDATE files
+                                             SET pdlink_share_id = ?
+                                             WHERE id = ?
+                                               AND (
+                                                   pdlink_share_id IS NULL
+                                                   OR pdlink_share_id = ''
+                                               )`
+                                        )
+                                        .bind(
+                                            pdlinkResult.share_id,
+                                            record.id
+                                        )
+                                        .run();
+
+                                    console.log(
+                                        `[PDLINK] Self-healing SUCCESS | file=${shortId} | share=${pdlinkResult.share_id}`
+                                    );
+
+                                } catch (
+                                    pdlinkError
+                                ) {
+
+                                    console.error(
+                                        `[PDLINK] Self-healing FAILED | file=${shortId}:`,
+                                        pdlinkError.message
+                                    );
+
+                                } finally {
+
+                                    pdlinkJobs.delete(
+                                        shortId
+                                    );
+
+                                }
+
+                            })();
+
+                        pdlinkJobs.set(
+                            shortId,
+                            pdlinkJob
+                        );
+
+                        ctx.waitUntil(
+                            pdlinkJob
+                        );
+                    }
+                }
+
 
                 return new Response(
                     JSON.stringify({
