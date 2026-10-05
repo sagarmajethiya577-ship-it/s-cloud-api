@@ -1,6 +1,5 @@
 const TOXCLOUD_API_URL =
-    "https://api.azonahub.biz/api/upload";
-
+    "https://cloud.azonahub.biz/api/upload";
 
 export async function uploadToToxCloud(
     googleDriveFileId,
@@ -14,32 +13,39 @@ export async function uploadToToxCloud(
 
     if (!env.TOXCLOUD_API_KEY) {
         throw new Error(
-            "TOXcloud: TOXCLOUD_API_KEY secret missing."
+            "TOXcloud: TOXcloud_API_KEY secret missing."
         );
     }
 
     const driveUrl =
         `https://drive.google.com/file/d/${googleDriveFileId}/view`;
 
+    const params = new URLSearchParams();
+
+    params.set(
+        "key",
+        env.TOXCLOUD_API_KEY
+    );
+
+    params.set(
+        "id",
+        driveUrl
+    );
+
+    const apiUrl =
+        `${TOXCLOUD_API_URL}?${params.toString()}`;
+
     console.log(
         `[TOXCLOUD] Upload START | drive=${googleDriveFileId}`
     );
 
     const response = await fetch(
-        TOXCLOUD_API_URL,
+        apiUrl,
         {
-            method: "POST",
-
+            method: "GET",
             headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "x-api-key":
-                    env.TOXCLOUD_API_KEY
-            },
-
-            body: JSON.stringify({
-                url: driveUrl
-            })
+                "Accept": "application/json"
+            }
         }
     );
 
@@ -49,8 +55,7 @@ export async function uploadToToxCloud(
     let data;
 
     try {
-        data =
-            JSON.parse(text);
+        data = JSON.parse(text);
     } catch {
         throw new Error(
             `TOXcloud invalid JSON response (${response.status}): ${text.slice(0, 500)}`
@@ -67,42 +72,56 @@ export async function uploadToToxCloud(
         );
     }
 
-    console.log(
-        `[TOXCLOUD] Upload RESPONSE | status=${data?.status || "unknown"} | http=${response.status}`
-    );
-
     const downloadUrl =
         data?.download_url ||
         data?.data?.download_url ||
         null;
 
+    console.log(
+        `[TOXCLOUD] Upload RESPONSE | http=${response.status} | status=${data?.status || "unknown"} | exists=${data?.exists === true}`
+    );
+
     /*
-     * TOXcloud can return a pending status.
-     * In that case there is no usable download URL yet.
+     * IMPORTANT:
+     * TOXcloud can return status=pending/processing while
+     * already providing a usable download_url.
+     *
+     * download_url is therefore the authoritative signal
+     * for saving the TOXcloud link.
      */
-    if (!downloadUrl) {
+    if (downloadUrl) {
         console.log(
-            `[TOXCLOUD] Download URL not ready | status=${data?.status || "unknown"}`
+            `[TOXCLOUD] Download URL AVAILABLE | status=${data?.status || "unknown"} | url=${downloadUrl}`
         );
 
         return {
-            ready: false,
-            download_url: null,
+            ready: true,
+            download_url: downloadUrl,
             status:
                 data?.status ||
-                "pending"
+                "available",
+            toxcloud_id:
+                data?.id ||
+                null,
+            exists:
+                data?.exists === true
         };
     }
 
     console.log(
-        `[TOXCLOUD] Upload SUCCESS | download_url=${downloadUrl}`
+        `[TOXCLOUD] Download URL NOT AVAILABLE | status=${data?.status || "unknown"}`
     );
 
     return {
-        ready: true,
-        download_url: downloadUrl,
+        ready: false,
+        download_url: null,
         status:
             data?.status ||
-            "success"
+            "unknown",
+        toxcloud_id:
+            data?.id ||
+            null,
+        exists:
+            data?.exists === true
     };
 }
