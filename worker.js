@@ -8,6 +8,7 @@ import {
     queuePDLinkFile,
     getPDLinkMirrorLinks
 } from "./pdlink.js";
+import { uploadToToxCloud } from "./toxcloud.js";
 
 
 // ==================================================
@@ -1469,6 +1470,7 @@ const fastLinkJobs = new Map();
 // ==================================================
 
 const pdlinkJobs = new Map();
+const toxcloudJobs = new Map();
 
 
 const THREE_HOURS_IN_MS =
@@ -4870,7 +4872,6 @@ export default {
                                     env
                                 );
 
-
                             if (
                                 !pdlinkResult ||
                                 !pdlinkResult.share_id
@@ -4879,7 +4880,6 @@ export default {
                                     "PDLink Upload Failed: share_id missing."
                                 );
                             }
-
 
                             // =================================
                             // SAVE PDLINK SHARE ID IMMEDIATELY
@@ -4897,18 +4897,69 @@ export default {
                                 )
                                 .run();
 
-
                             console.log(
                                 `[PDLINK] Share ID saved | file=${shortId} | share=${pdlinkResult.share_id}`
                             );
 
-
                             // =================================
-                            // STEP 3 - DRIVETOT
+                            // STEP 3 - TOXCLOUD
                             // =================================
                             //
-                            // PDLink is already safely saved.
-                            // Now start the existing Drivetot flow.
+                            // PDLink share ID is already safely saved.
+                            // Now send the S-Cloud Drive file to
+                            // TOXcloud and save its download URL.
+                            //
+                            // If TOXcloud is pending or fails, the
+                            // existing Drivetot flow continues normally.
+                            // =================================
+
+                            console.log(
+                                `[TOXCLOUD] Upload START | file=${shortId} | drive=${scloudFileId}`
+                            );
+
+                            try {
+                                const toxcloudResult =
+                                    await uploadToToxCloud(
+                                        scloudFileId,
+                                        env
+                                    );
+
+                                if (
+                                    toxcloudResult &&
+                                    toxcloudResult.ready &&
+                                    toxcloudResult.download_url
+                                ) {
+                                    await env.DB
+                                        .prepare(
+                                            `UPDATE files
+                                             SET toxcloud_url = ?
+                                             WHERE id = ?`
+                                        )
+                                        .bind(
+                                            toxcloudResult.download_url,
+                                            shortId
+                                        )
+                                        .run();
+
+                                    console.log(
+                                        `[TOXCLOUD] Download URL saved | file=${shortId}`
+                                    );
+                                } else {
+                                    console.log(
+                                        `[TOXCLOUD] Download URL not ready | file=${shortId} | status=${toxcloudResult?.status || "unknown"}`
+                                    );
+                                }
+
+                            } catch (toxcloudError) {
+                                console.error(
+                                    `[TOXCLOUD] Upload FAILED | file=${shortId}:`,
+                                    toxcloudError.message
+                                );
+                            }
+
+
+                            // =================================
+                            // STEP 4 - DRIVETOT
                             // =================================
 
                             console.log(
@@ -5286,6 +5337,113 @@ export default {
                         ctx.waitUntil(
                             pdlinkJob
                         );
+
+                        // ==================================================
+                        // TOXCLOUD SELF-HEALING
+                        //
+                        // If toxcloud_url is missing, use the
+                        // S-CLOUD copied Drive URL stored in drive_url.
+                        //
+                        // This runs completely in the background.
+                        // The /file request does NOT wait for TOXcloud.
+                        // ==================================================
+
+                        if (
+                            !record.toxcloud_url &&
+                            record.drive_url &&
+                            !toxcloudJobs.has(shortId)
+                        ) {
+
+                            const toxDriveMatch =
+                                record.drive_url.match(
+                                    /\/file\/d\/([a-zA-Z0-9_-]+)/
+                                );
+
+                            const toxDriveFileId =
+                                toxDriveMatch?.[1] ||
+                                null;
+
+                            if (toxDriveFileId) {
+
+                                const toxcloudJob =
+                                    (async () => {
+
+                                        try {
+
+                                            console.log(
+                                                `[TOXCLOUD] Self-healing START | file=${shortId} | drive=${toxDriveFileId}`
+                                            );
+
+                                            const toxcloudResult =
+                                                await uploadToToxCloud(
+                                                    toxDriveFileId,
+                                                    env
+                                                );
+
+                                            if (
+                                                toxcloudResult &&
+                                                toxcloudResult.ready &&
+                                                toxcloudResult.download_url
+                                            ) {
+
+                                                await env.DB
+                                                    .prepare(
+                                                        `UPDATE files
+                                                         SET toxcloud_url = ?
+                                                         WHERE id = ?
+                                                           AND (
+                                                               toxcloud_url IS NULL
+                                                               OR toxcloud_url = ''
+                                                           )`
+                                                    )
+                                                    .bind(
+                                                        toxcloudResult.download_url,
+                                                        record.id
+                                                    )
+                                                    .run();
+
+                                                console.log(
+                                                    `[TOXCLOUD] Self-healing SUCCESS | file=${shortId}`
+                                                );
+
+                                            } else {
+
+                                                console.log(
+                                                    `[TOXCLOUD] Self-healing PENDING | file=${shortId} | status=${toxcloudResult?.status || "unknown"}`
+                                                );
+
+                                            }
+
+                                        } catch (
+                                            toxcloudError
+                                        ) {
+
+                                            console.error(
+                                                `[TOXCLOUD] Self-healing FAILED | file=${shortId}:`,
+                                                toxcloudError.message
+                                            );
+
+                                        } finally {
+
+                                            toxcloudJobs.delete(
+                                                shortId
+                                            );
+
+                                        }
+
+                                    })();
+
+                                toxcloudJobs.set(
+                                    shortId,
+                                    toxcloudJob
+                                );
+
+                                ctx.waitUntil(
+                                    toxcloudJob
+                                );
+                            }
+                        }
+
                     }
                 }
 
@@ -5321,6 +5479,9 @@ export default {
 
                             gofile:
                                 !!record.pdlink_share_id,
+
+                            toxcloud:
+                                !!record.toxcloud_url,
 
                             pixeldrain:
                                 !!record.pdlink_share_id
@@ -5551,6 +5712,9 @@ export default {
                             gofile:
                                 !!record.pdlink_share_id,
 
+                            toxcloud:
+                                !!record.toxcloud_url,
+
                             pixeldrain:
                                 !!record.pdlink_share_id
                         }
@@ -5613,6 +5777,7 @@ export default {
                     "hubcloud",
                     "gdflix",
                     "gofile",
+                    "toxcloud",
                     "pixeldrain"
                 ].includes(action)
             ) {
@@ -5768,6 +5933,77 @@ export default {
                         );
                     }
                 }
+
+
+                // ------------------------------------------
+                // TOXCLOUD
+                // ------------------------------------------
+
+                if (
+                    action ===
+                    "toxcloud"
+                ) {
+
+                    if (
+                        !record.toxcloud_url
+                    ) {
+                        return new Response(
+                            JSON.stringify({
+                                status:
+                                    "error",
+                                message:
+                                    "TOXcloud link is not available yet."
+                            }),
+                            {
+                                status: 404,
+                                headers: {
+                                    ...corsHeaders,
+                                    ...jsonHeaders()
+                                }
+                            }
+                        );
+                    }
+
+                    try {
+
+                        console.log(
+                            `[TOXCLOUD] Redirect START | file=${shortId}`
+                        );
+
+                        console.log(
+                            `[TOXCLOUD] Redirect SUCCESS | file=${shortId}`
+                        );
+
+                        return Response.redirect(
+                            record.toxcloud_url,
+                            302
+                        );
+
+                    } catch (error) {
+
+                        console.error(
+                            `[TOXCLOUD] Route ERROR | file=${shortId}:`,
+                            error.message
+                        );
+
+                        return new Response(
+                            JSON.stringify({
+                                status:
+                                    "error",
+                                message:
+                                    "TOXcloud redirect failed."
+                            }),
+                            {
+                                status: 500,
+                                headers: {
+                                    ...corsHeaders,
+                                    ...jsonHeaders()
+                                }
+                            }
+                        );
+                    }
+                }
+
 
 
                 // ------------------------------------------

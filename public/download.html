@@ -895,6 +895,34 @@
                     <span id="gofileText">Gofile</span>
                 </button>
 
+<button
+                    id="toxcloudBtn"
+                    onclick="openMirror('toxcloud')"
+                    disabled
+                    class="download-btn hub-btn rounded-2xl px-4 py-4 flex items-center justify-center gap-3 text-sm font-semibold text-white">
+
+                    <svg
+                        class="w-5 h-5 text-green-300"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M12 3a9 9 0 100 18 9 9 0 000-18z">
+                        </path>
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.8"
+                            d="M8 12h8M12 8v8">
+                        </path>
+                    </svg>
+
+                    <span id="toxcloudText">TOXcloud</span>
+                </button>
+
                 <button
                     id="pixeldrainBtn"
                     onclick="openMirror('pixeldrain')"
@@ -1055,6 +1083,9 @@ const gdflixBtn =
 const gofileBtn =
     document.getElementById("gofileBtn");
 
+const toxcloudBtn =
+    document.getElementById("toxcloudBtn");
+
 const pixeldrainBtn =
     document.getElementById("pixeldrainBtn");
 
@@ -1067,8 +1098,18 @@ const gdflixText =
 const gofileText =
     document.getElementById("gofileText");
 
+const toxcloudText =
+    document.getElementById("toxcloudText");
+
 const pixeldrainText =
     document.getElementById("pixeldrainText");
+
+// Mirror buttons stay hidden until availability is known.
+hubcloudBtn.style.display = "none";
+gdflixBtn.style.display = "none";
+gofileBtn.style.display = "none";
+toxcloudBtn.style.display = "none";
+pixeldrainBtn.style.display = "none";
 
 
 /* =========================================================
@@ -1424,6 +1465,13 @@ function renderFile(data) {
     );
 
     setMirrorState(
+        "toxcloud",
+        Boolean(
+            mirrors.toxcloud
+        )
+    );
+
+    setMirrorState(
         "pixeldrain",
         Boolean(
             mirrors.pixeldrain
@@ -1482,6 +1530,13 @@ function setMirrorState(
         unavailableText = "Gofile Unavailable";
     }
 
+    if (type === "toxcloud") {
+        button = toxcloudBtn;
+        text = toxcloudText;
+        availableText = "TOXcloud";
+        unavailableText = "TOXcloud Unavailable";
+    }
+
     if (type === "pixeldrain") {
         button = pixeldrainBtn;
         text = pixeldrainText;
@@ -1492,6 +1547,10 @@ function setMirrorState(
     if (!button || !text) {
         return;
     }
+
+    // Completely hide unavailable mirrors.
+    button.style.display =
+        available ? "" : "none";
 
     button.disabled =
         !available;
@@ -1686,6 +1745,38 @@ async function checkDownloadStatus() {
         const data =
             await response.json();
 
+        /*
+         * Keep all mirror buttons synchronized with
+         * the latest backend availability state.
+         */
+        const mirrors =
+            data.mirrors || {};
+
+        setMirrorState(
+            "hubcloud",
+            Boolean(mirrors.hubcloud)
+        );
+
+        setMirrorState(
+            "gdflix",
+            Boolean(mirrors.gdflix)
+        );
+
+        setMirrorState(
+            "gofile",
+            Boolean(mirrors.gofile)
+        );
+
+        setMirrorState(
+            "toxcloud",
+            Boolean(mirrors.toxcloud)
+        );
+
+        setMirrorState(
+            "pixeldrain",
+            Boolean(mirrors.pixeldrain)
+        );
+
         if (
             data.status === "success" &&
             data.ready &&
@@ -1870,6 +1961,11 @@ function startTrackedDownload(type) {
             `/go/gofile/${encodeURIComponent(shortId)}`;
     }
 
+    if (type === "toxcloud") {
+        target =
+            `/go/toxcloud/${encodeURIComponent(shortId)}`;
+    }
+
     if (type === "pixeldrain") {
         target =
             `/go/pixeldrain/${encodeURIComponent(shortId)}`;
@@ -1942,6 +2038,21 @@ function openMirror(type) {
 
         startTrackedDownload(
             "gofile"
+        );
+
+        return;
+    }
+
+    if (type === "toxcloud") {
+
+        if (
+            toxcloudBtn.disabled
+        ) {
+            return;
+        }
+
+        startTrackedDownload(
+            "toxcloud"
         );
 
         return;
