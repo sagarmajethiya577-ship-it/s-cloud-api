@@ -5338,6 +5338,9 @@ export default {
                             pdlinkJob
                         );
 
+                    }
+                }
+
                         // ==================================================
                         // TOXCLOUD SELF-HEALING
                         //
@@ -5444,8 +5447,6 @@ export default {
                             }
                         }
 
-                    }
-                }
 
 
                 return new Response(
