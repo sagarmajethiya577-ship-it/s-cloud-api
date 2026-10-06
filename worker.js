@@ -5158,10 +5158,15 @@ export default {
                 const record =
                     await env.DB
                         .prepare(
-                            `SELECT *
+                            `SELECT
+                                 files.*,
+                                 users.name AS publisher_name
                              FROM files
-                             WHERE short_id = ?
-                                OR id = ?`
+                             LEFT JOIN users
+                                 ON users.id = files.user_id
+                             WHERE files.short_id = ?
+                                OR files.id = ?
+                             LIMIT 1`
                         )
                         .bind(
                             shortId,
@@ -5468,7 +5473,11 @@ export default {
                             shared:
                                 record.created_at ||
                                 record.last_updated ||
-                                null
+                                null,
+
+                            sharedBy:
+                                record.publisher_name ||
+                                "Unknown Publisher"
                         },
 
                         mirrors: {
