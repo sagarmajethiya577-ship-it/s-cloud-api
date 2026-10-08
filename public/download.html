@@ -726,7 +726,7 @@
 
             <div class="file-details">
 
-                <div class="detail">
+                <div id="fileSharedByRow" class="detail">
                     <div class="detail-icon">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
@@ -1453,11 +1453,34 @@ function renderFile(data) {
             file.shared
         );
 
-    document.getElementById(
-        "fileSharedBy"
-    ).textContent =
-        file.sharedBy ||
-        "Unknown Publisher";
+    const fileSharedBy =
+        document.getElementById(
+            "fileSharedBy"
+        );
+
+    const fileSharedByRow =
+        document.getElementById(
+            "fileSharedByRow"
+        );
+
+    const sharedBy =
+        typeof file.sharedBy ===
+        "string"
+            ? file.sharedBy.trim()
+            : "";
+
+    if (fileSharedBy) {
+        fileSharedBy.textContent =
+            sharedBy;
+    }
+
+    if (fileSharedByRow) {
+        fileSharedByRow.style.display =
+            sharedBy
+                ? ""
+                : "none";
+    }
+
 
     /*
      * HubCloud / GDFlix already exist

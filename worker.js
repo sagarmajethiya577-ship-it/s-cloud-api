@@ -808,6 +808,8 @@ async function getCurrentUser(
                     u.id,
                     u.name,
                     u.email,
+                    u.shared_by,
+                    u.shared_by_enabled,
                     u.role,
                     u.balance,
                     u.custom_cpm,
@@ -864,6 +866,8 @@ async function getCurrentUser(
         id: session.id,
         name: session.name,
         email: session.email,
+        shared_by: session.shared_by,
+        shared_by_enabled: session.shared_by_enabled,
         role: session.role,
         balance: session.balance,
         custom_cpm: session.custom_cpm,
@@ -1451,6 +1455,252 @@ function jsonHeaders() {
         "Cache-Control":
             "no-store"
     };
+}
+
+
+// ==================================================
+// DOWNLOAD EARNING / UNIQUE PAID VIEW
+// ==================================================
+
+async function creditDownloadEarning(
+    record,
+    request,
+    env
+) {
+    try {
+        if (
+            !record ||
+            !record.id ||
+            !record.user_id
+        ) {
+            return {
+                credited: false,
+                reason: "invalid_file"
+            };
+        }
+
+        const visitorIP =
+            request.headers.get(
+                "CF-Connecting-IP"
+            ) ||
+            request.headers.get(
+                "X-Real-IP"
+            ) ||
+            (
+                request.headers.get(
+                    "X-Forwarded-For"
+                ) || ""
+            )
+                .split(",")[0]
+                .trim();
+
+        if (!visitorIP) {
+            console.log(
+                `[EARNING] SKIPPED | file=${record.short_id || record.id} | reason=no_ip`
+            );
+
+            return {
+                credited: false,
+                reason: "no_ip"
+            };
+        }
+
+        const user =
+            await env.DB
+                .prepare(
+                    `SELECT
+                        id,
+                        status,
+                        custom_cpm
+                     FROM users
+                     WHERE id = ?
+                     LIMIT 1`
+                )
+                .bind(
+                    record.user_id
+                )
+                .first();
+
+        if (
+            !user ||
+            user.status !==
+                "active"
+        ) {
+            console.log(
+                `[EARNING] SKIPPED | file=${record.short_id || record.id} | reason=user_inactive`
+            );
+
+            return {
+                credited: false,
+                reason: "user_inactive"
+            };
+        }
+
+        const cpm =
+            Number(
+                user.custom_cpm
+            );
+
+        if (
+            !Number.isFinite(cpm) ||
+            cpm <= 0
+        ) {
+            console.log(
+                `[EARNING] SKIPPED | file=${record.short_id || record.id} | reason=invalid_cpm`
+            );
+
+            return {
+                credited: false,
+                reason: "invalid_cpm"
+            };
+        }
+
+        const indiaDate =
+            new Intl.DateTimeFormat(
+                "en-CA",
+                {
+                    timeZone:
+                        "Asia/Kolkata",
+                    year:
+                        "numeric",
+                    month:
+                        "2-digit",
+                    day:
+                        "2-digit"
+                }
+            ).format(
+                new Date()
+            );
+
+        const ipHash =
+            await sha256Hex(
+                visitorIP
+            );
+
+        const downloadId =
+            `paid:${indiaDate}:${ipHash}`;
+
+        const earningAmount =
+            Number(
+                (
+                    cpm /
+                    1000
+                ).toFixed(6)
+            );
+
+        if (
+            !Number.isFinite(
+                earningAmount
+            ) ||
+            earningAmount <= 0
+        ) {
+            return {
+                credited: false,
+                reason: "invalid_amount"
+            };
+        }
+
+        /*
+         * The UNIQUE partial index on
+         * earnings(download_id) guarantees
+         * one paid view per IP per India day.
+         *
+         * SQLite changes() is checked by the
+         * following UPDATE. If INSERT OR IGNORE
+         * was ignored because the IP already earned
+         * today, changes() is 0 and balance is not
+         * increased.
+         */
+        const batchResult =
+            await env.DB.batch([
+                env.DB
+                    .prepare(
+                        `INSERT OR IGNORE INTO earnings
+                        (
+                            user_id,
+                            file_id,
+                            download_id,
+                            amount,
+                            type,
+                            status,
+                            description
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)`
+                    )
+                    .bind(
+                        record.user_id,
+                        record.id,
+                        downloadId,
+                        earningAmount,
+                        "download",
+                        "credited",
+                        "Unique download earning"
+                    ),
+
+                env.DB
+                    .prepare(
+                        `UPDATE users
+                         SET balance =
+                             COALESCE(balance, 0) + ?
+                         WHERE id = ?
+                           AND changes() > 0`
+                    )
+                    .bind(
+                        earningAmount,
+                        record.user_id
+                    )
+            ]);
+
+        const insertResult =
+            batchResult &&
+            batchResult[0];
+
+        const credited =
+            Number(
+                insertResult?.meta
+                    ?.changes || 0
+            ) > 0;
+
+        if (credited) {
+            console.log(
+                `[EARNING] CREDITED | file=${record.short_id || record.id} | user=${record.user_id} | amount=${earningAmount} | date=${indiaDate}`
+            );
+
+            return {
+                credited: true,
+                amount:
+                    earningAmount,
+                date:
+                    indiaDate
+            };
+        }
+
+        console.log(
+            `[EARNING] SKIPPED | file=${record.short_id || record.id} | reason=already_earned_today`
+        );
+
+        return {
+            credited: false,
+            reason:
+                "already_earned_today"
+        };
+
+    } catch (error) {
+        /*
+         * Earning failure must NEVER break
+         * the actual download redirect.
+         */
+        console.error(
+            "[EARNING] ERROR:",
+            error.message
+        );
+
+        return {
+            credited: false,
+            reason:
+                "earning_error"
+        };
+    }
 }
 
 
@@ -3237,6 +3487,181 @@ export default {
             }
         }
 
+        // ==================================================
+        // 3.6. UPDATE SHARED BY SETTINGS
+        // ==================================================
+
+        if (
+            url.pathname ===
+                "/api/shared-by/update" &&
+            request.method ===
+                "POST"
+        ) {
+            try {
+
+                const user =
+                    await getCurrentUser(
+                        request,
+                        env
+                    );
+
+                if (
+                    !user
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Authentication required"
+                        }),
+                        {
+                            status: 401,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                let body;
+
+                try {
+                    body =
+                        await request.json();
+                } catch (
+                    error
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Invalid JSON request"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                const rawSharedBy =
+                    typeof body?.sharedBy ===
+                    "string"
+                        ? body.sharedBy.trim()
+                        : "";
+
+                const requestedEnabled =
+                    body?.enabled === true ||
+                    body?.enabled === 1 ||
+                    body?.enabled === "1";
+
+                if (
+                    rawSharedBy.length > 120
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Shared by name cannot exceed 120 characters."
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                const sharedBy =
+                    rawSharedBy ||
+                    null;
+
+                /*
+                 * Blank Shared by always forces the setting OFF.
+                 */
+                const enabled =
+                    sharedBy &&
+                    requestedEnabled
+                        ? 1
+                        : 0;
+
+                await env.DB
+                    .prepare(
+                        `UPDATE users
+                         SET
+                            shared_by = ?,
+                            shared_by_enabled = ?
+                         WHERE id = ?`
+                    )
+                    .bind(
+                        sharedBy,
+                        enabled,
+                        user.id
+                    )
+                    .run();
+
+                const updatedUser =
+                    await getCurrentUser(
+                        request,
+                        env
+                    );
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "success",
+                        message:
+                            "Shared by settings updated successfully.",
+                        userData:
+                            updatedUser
+                    }),
+                    {
+                        status: 200,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Shared by update error:",
+                    error
+                );
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "error",
+                        message:
+                            "Unable to update Shared by settings."
+                    }),
+                    {
+                        status: 500,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+            }
+        }
+
+
+
 
         // ==================================================
         // 3.6. CHANGE PASSWORD
@@ -4002,10 +4427,24 @@ export default {
                 } =
                     await env.DB
                         .prepare(
-                            `SELECT *
-                             FROM files
-                             WHERE user_id = ?
-                             ORDER BY created_at DESC`
+                            `SELECT
+                                f.*,
+                                COALESCE(
+                                    SUM(
+                                        CASE
+                                            WHEN e.status = 'credited'
+                                            THEN e.amount
+                                            ELSE 0
+                                        END
+                                    ),
+                                    0
+                                ) AS earnings
+                             FROM files f
+                             LEFT JOIN earnings e
+                                ON e.file_id = f.id
+                             WHERE f.user_id = ?
+                             GROUP BY f.id
+                             ORDER BY f.created_at DESC`
                         )
                         .bind(
                             currentUser.id
@@ -5160,7 +5599,8 @@ export default {
                         .prepare(
                             `SELECT
                                  files.*,
-                                 users.name AS publisher_name
+                                 users.shared_by,
+                                 users.shared_by_enabled
                              FROM files
                              LEFT JOIN users
                                  ON users.id = files.user_id
@@ -5209,6 +5649,54 @@ export default {
                         record.id
                     )
                     .run();
+
+                // ==========================================
+                // VIEW LOGGING
+                // ==========================================
+
+                const viewerIp =
+                    request.headers.get("CF-Connecting-IP") ||
+                    request.headers.get("X-Real-IP") ||
+                    (
+                        request.headers.get("X-Forwarded-For") || ""
+                    )
+                        .split(",")[0]
+                        .trim() ||
+                    "unknown";
+
+                const viewerUserAgent =
+                    request.headers.get("User-Agent") ||
+                    null;
+
+                try {
+                    await env.DB
+                        .prepare(
+                            `INSERT INTO views_log
+                             (
+                                 file_id,
+                                 ip_address,
+                                 user_agent
+                             )
+                             VALUES (?, ?, ?)`
+                        )
+                        .bind(
+                            record.id,
+                            viewerIp,
+                            viewerUserAgent
+                        )
+                        .run();
+
+                    console.log(
+                        `[VIEWS] Logged | file=${shortId} | ip=${viewerIp}`
+                    );
+
+                } catch (viewLogError) {
+
+                    console.error(
+                        `[VIEWS] Log failed | file=${shortId}:`,
+                        viewLogError.message
+                    );
+                }
 
                 const currentTime =
                     Date.now();
@@ -5476,8 +5964,27 @@ export default {
                                 null,
 
                             sharedBy:
-                                record.publisher_name ||
-                                "Unknown Publisher"
+
+
+                                Number(
+
+
+                                    record.shared_by_enabled
+
+
+                                ) === 1 &&
+
+
+                                typeof record.shared_by === "string" &&
+
+
+                                record.shared_by.trim()
+
+
+                                    ? record.shared_by.trim()
+
+
+                                    : null
                         },
 
                         mirrors: {
@@ -5915,6 +6422,12 @@ export default {
                             `[PDLINK] ${action} redirect SUCCESS | file=${shortId}`
                         );
 
+                        await creditDownloadEarning(
+                            record,
+                            request,
+                            env
+                        );
+
                         return Response.redirect(
                             target,
                             302
@@ -5983,6 +6496,12 @@ export default {
 
                         console.log(
                             `[TOXCLOUD] Redirect SUCCESS | file=${shortId}`
+                        );
+
+                        await creditDownloadEarning(
+                            record,
+                            request,
+                            env
                         );
 
                         return Response.redirect(
@@ -6186,6 +6705,12 @@ export default {
                         );
                     }
 
+                    await creditDownloadEarning(
+                        record,
+                        request,
+                        env
+                    );
+
                     return Response.redirect(
                         instantUrl,
                         302
@@ -6226,6 +6751,12 @@ export default {
                         );
                     }
 
+                    await creditDownloadEarning(
+                        record,
+                        request,
+                        env
+                    );
+
                     return Response.redirect(
                         hubcloudUrl,
                         302
@@ -6265,6 +6796,12 @@ export default {
                             }
                         );
                     }
+
+                    await creditDownloadEarning(
+                        record,
+                        request,
+                        env
+                    );
 
                     return Response.redirect(
                         gdflixUrl,

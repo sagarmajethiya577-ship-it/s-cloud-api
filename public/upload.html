@@ -255,8 +255,7 @@
 
             <!-- API Document -->
             <a
-                href="#"
-                onclick="showComingSoon(event, 'API Document')"
+                href="/api" "
                 class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-[rgba(255,255,255,0.05)] hover:text-white rounded-xl font-medium transition"
             >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -267,8 +266,7 @@
 
             <!-- Telegram Support -->
             <a
-                href="#"
-                onclick="showComingSoon(event, 'Telegram Support')"
+                href="https://t.me/moviesrequest044" target="_blank" rel="noopener noreferrer" "
                 class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-[rgba(255,255,255,0.05)] hover:text-white rounded-xl font-medium transition"
             >
                 <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
@@ -344,7 +342,7 @@
                                 </a>
 
                                 <!-- Withdraw Funds -->
-                                <a href="#" onclick="showComingSoon(event, 'Withdraw Funds')" class="block px-5 py-3 text-sm text-gray-300 hover:bg-[rgba(255,255,255,0.05)] hover:text-white transition">
+                                <a href="/withdraw" " class="block px-5 py-3 text-sm text-gray-300 hover:bg-[rgba(255,255,255,0.05)] hover:text-white transition">
                                     Withdraw Funds
                                 </a>
 
@@ -587,19 +585,6 @@
             if (toast) toast.classList.remove("show");
             clearTimeout(toastTimer);
         }
-
-        function showComingSoon(event, name) {
-            if (event) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
-            // Close dropdown if open
-            const container = document.querySelector(".profile-dropdown-container");
-            if (container) container.classList.remove("active");
-            
-            showToast("info", "Coming Soon", `${name} will be available soon.`);
-        }
-
 
         /* =====================================================
            TAB SWITCHING

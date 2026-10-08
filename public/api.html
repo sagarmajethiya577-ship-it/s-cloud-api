@@ -123,7 +123,7 @@
             <a href="/api" class="flex items-center gap-3 px-4 py-3 bg-[rgba(34,211,238,0.1)] text-cyan-400 rounded-xl font-medium transition">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg> API Document
             </a>
-            <a href="#" onclick="showComingSoon(event, 'Telegram Support')" class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-[rgba(255,255,255,0.05)] hover:text-white rounded-xl font-medium transition">
+            <a href="https://t.me/moviesrequest044" target="_blank" rel="noopener noreferrer" class="flex items-center gap-3 px-4 py-3 text-gray-400 hover:bg-[rgba(255,255,255,0.05)] hover:text-white rounded-xl font-medium transition">
                 <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.06-.2-.07-.06-.17-.04-.25-.02-.11.02-1.79 1.14-5.06 3.34-.48.33-.91.49-1.3.48-.43-.01-1.24-.24-1.84-.44-.74-.24-1.32-.37-1.27-.79.03-.22.32-.44.88-.67 3.45-1.5 5.76-2.5 6.93-2.99 3.29-1.36 3.98-1.6 4.43-1.61.1 0 .32.02.44.11.1.08.13.19.14.28-.01.05-.01.12-.02.21z"></path></svg> Telegram Support
             </a>
         </nav>
@@ -158,7 +158,7 @@
                         <div id="profileDropdown" class="dropdown-menu absolute right-0 top-12 w-52 z-50">
                             <div class="glass-card overflow-hidden">
                                 <a href="/settings" class="block px-5 py-3 text-sm text-gray-300 hover:bg-[rgba(255,255,255,0.05)] hover:text-white transition">Account Settings</a>
-                                <a href="#" onclick="showComingSoon(event, 'Withdraw Funds')" class="block px-5 py-3 text-sm text-gray-300 hover:bg-[rgba(255,255,255,0.05)] hover:text-white transition">Withdraw Funds</a>
+                                <a href="/withdraw" class="block px-5 py-3 text-sm text-gray-300 hover:bg-[rgba(255,255,255,0.05)] hover:text-white transition">Withdraw Funds</a>
                                 <div class="border-t border-gray-700/50"></div>
                                 <button type="button" onclick="logout(event)" class="w-full text-left block px-5 py-3 text-sm text-red-400 hover:bg-[rgba(255,255,255,0.05)] flex items-center gap-2 transition">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
@@ -392,13 +392,6 @@ echo $response;
             clearTimeout(toastTimer);
         }
 
-        function showComingSoon(event, name) {
-            if (event) { event.preventDefault(); event.stopPropagation(); }
-            const container = document.querySelector(".profile-dropdown-container");
-            if (container) container.classList.remove("active");
-            showToast("info", "Coming Soon", `${name} will be available soon.`);
-        }
-
         // ==========================================
         // API KEY LOGIC (UI Shell)
         // ==========================================
@@ -444,10 +437,49 @@ echo $response;
             }, 2000);
         }
 
+        function openApiConfirm(title, message) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById("apiConfirmModal");
+
+                if (!modal) {
+                    resolve(false);
+                    return;
+                }
+
+                modal.__resolve = resolve;
+
+                const titleEl = modal.querySelector("[data-confirm-title]");
+                const messageEl = modal.querySelector("[data-confirm-message]");
+
+                if (titleEl) titleEl.textContent = title;
+                if (messageEl) messageEl.textContent = message;
+
+                modal.classList.remove("hidden");
+            });
+        }
+
+        function closeApiConfirm(result) {
+            const modal = document.getElementById("apiConfirmModal");
+
+            if (!modal) return;
+
+            const resolve = modal.__resolve;
+            modal.__resolve = null;
+
+            modal.classList.add("hidden");
+
+            if (typeof resolve === "function") {
+                resolve(result);
+            }
+        }
+
         async function regenerateKey() {
-            if (!confirm(
-                "Are you sure? Your existing API key will immediately stop working."
-            )) {
+            const confirmed = await openApiConfirm(
+                "Regenerate API Key",
+                "Your existing API key will immediately stop working. Continue?"
+            );
+
+            if (!confirmed) {
                 return;
             }
 
@@ -725,5 +757,48 @@ echo $response;
         });
 
     </script>
+    <div
+        id="apiConfirmModal"
+        class="hidden fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+    >
+        <div class="w-full max-w-md rounded-2xl border border-white/10 bg-[#111827] shadow-2xl p-6">
+            <div class="flex items-start gap-4">
+                <div class="w-11 h-11 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-xl">
+                    ⚠️
+                </div>
+
+                <div class="flex-1">
+                    <h3
+                        data-confirm-title
+                        class="text-lg font-semibold text-white"
+                    ></h3>
+
+                    <p
+                        data-confirm-message
+                        class="mt-2 text-sm text-gray-400 leading-relaxed"
+                    ></p>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button
+                    type="button"
+                    onclick="closeApiConfirm(false)"
+                    class="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-sm font-medium transition"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="button"
+                    onclick="closeApiConfirm(true)"
+                    class="px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition"
+                >
+                    Regenerate
+                </button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
