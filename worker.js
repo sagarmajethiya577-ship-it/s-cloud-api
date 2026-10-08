@@ -4505,15 +4505,15 @@ export default {
                                 COALESCE(
                                     SUM(
                                         CASE
-                                            WHEN status = 'credited'
+                                            WHEN e.status = 'credited'
                                             THEN amount
                                             ELSE 0
                                         END
                                     ),
                                     0
                                 ) AS total
-                             FROM earnings
-                             WHERE user_id = ?`
+                             FROM earnings e
+                             WHERE e.user_id = ?`
                         )
                         .bind(
                             currentUser.id
@@ -4529,9 +4529,9 @@ export default {
                                     SUM(amount),
                                     0
                                 ) AS total
-                             FROM withdrawals
-                             WHERE user_id = ?
-                             AND status = 'completed'`
+                             FROM withdrawals w
+                             WHERE w.user_id = ?
+                             AND w.status = 'completed'`
                         )
                         .bind(
                             currentUser.id
@@ -4547,9 +4547,9 @@ export default {
                                     SUM(amount),
                                     0
                                 ) AS total
-                             FROM withdrawals
-                             WHERE user_id = ?
-                             AND status = 'approved'`
+                             FROM withdrawals w
+                             WHERE w.user_id = ?
+                             AND w.status = 'approved'`
                         )
                         .bind(
                             currentUser.id
@@ -4565,9 +4565,9 @@ export default {
                                     SUM(amount),
                                     0
                                 ) AS total
-                             FROM withdrawals
-                             WHERE user_id = ?
-                             AND status = 'pending'`
+                             FROM withdrawals w
+                             WHERE w.user_id = ?
+                             AND w.status = 'pending'`
                         )
                         .bind(
                             currentUser.id
@@ -4636,7 +4636,7 @@ export default {
                                 COALESCE(
                                     SUM(
                                         CASE
-                                            WHEN status = 'credited'
+                                            WHEN e.status = 'credited'
                                             THEN amount
                                             ELSE 0
                                         END
