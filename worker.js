@@ -4362,6 +4362,8 @@ export default {
             url.pathname ===
                 "/api/withdraw" ||
             url.pathname ===
+                "/api/dashboard" ||
+            url.pathname ===
                 "/v1/upload"
         ) {
 
@@ -4400,6 +4402,641 @@ export default {
                     }),
                     {
                         status: 401,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+            }
+        }
+
+
+        // ==================================================
+        // DASHBOARD API
+        // ==================================================
+
+        if (
+            url.pathname ===
+                "/api/dashboard" &&
+            request.method ===
+                "GET"
+        ) {
+            try {
+
+                const now = new Date();
+
+                const indiaDate =
+                    new Intl.DateTimeFormat(
+                        "en-CA",
+                        {
+                            timeZone:
+                                "Asia/Kolkata",
+                            year:
+                                "numeric",
+                            month:
+                                "2-digit",
+                            day:
+                                "2-digit"
+                        }
+                    ).format(now);
+
+                const requestedDate =
+                    url.searchParams.get("date") ||
+                    indiaDate;
+
+                const requestedMonth =
+                    url.searchParams.get("month") ||
+                    requestedDate.slice(0, 7);
+
+                if (
+                    !/^\d{4}-\d{2}-\d{2}$/.test(
+                        requestedDate
+                    )
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Invalid date"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+                if (
+                    !/^\d{4}-\d{2}$/.test(
+                        requestedMonth
+                    )
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Invalid month"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
+                }
+
+
+                // ==========================================
+                // LIFETIME REVENUE
+                // ==========================================
+
+                const lifetimeEarnings =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COALESCE(
+                                    SUM(
+                                        CASE
+                                            WHEN status = 'credited'
+                                            THEN amount
+                                            ELSE 0
+                                        END
+                                    ),
+                                    0
+                                ) AS total
+                             FROM earnings
+                             WHERE user_id = ?`
+                        )
+                        .bind(
+                            currentUser.id
+                        )
+                        .first();
+
+
+                const paidWithdrawals =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COALESCE(
+                                    SUM(amount),
+                                    0
+                                ) AS total
+                             FROM withdrawals
+                             WHERE user_id = ?
+                             AND status = 'completed'`
+                        )
+                        .bind(
+                            currentUser.id
+                        )
+                        .first();
+
+
+                const approvedWithdrawals =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COALESCE(
+                                    SUM(amount),
+                                    0
+                                ) AS total
+                             FROM withdrawals
+                             WHERE user_id = ?
+                             AND status = 'approved'`
+                        )
+                        .bind(
+                            currentUser.id
+                        )
+                        .first();
+
+
+                const pendingWithdrawals =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COALESCE(
+                                    SUM(amount),
+                                    0
+                                ) AS total
+                             FROM withdrawals
+                             WHERE user_id = ?
+                             AND status = 'pending'`
+                        )
+                        .bind(
+                            currentUser.id
+                        )
+                        .first();
+
+
+                // ==========================================
+                // DAILY UPLOADS
+                // ==========================================
+
+                const dailyUploads =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COUNT(*) AS total
+                             FROM files
+                             WHERE user_id = ?
+                             AND status != 'deleted'
+                             AND date(
+                                 created_at,
+                                 '+05:30'
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedDate
+                        )
+                        .first();
+
+
+                // ==========================================
+                // DAILY VIEWS
+                // ==========================================
+
+                const dailyViews =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COUNT(*) AS total
+                             FROM views_log vl
+                             INNER JOIN files f
+                                ON f.id = vl.file_id
+                             WHERE f.user_id = ?
+                             AND f.status != 'deleted'
+                             AND date(
+                                 vl.viewed_at,
+                                 '+05:30'
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedDate
+                        )
+                        .first();
+
+
+                // ==========================================
+                // DAILY EARNINGS
+                // ==========================================
+
+                const dailyEarnings =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COALESCE(
+                                    SUM(
+                                        CASE
+                                            WHEN status = 'credited'
+                                            THEN amount
+                                            ELSE 0
+                                        END
+                                    ),
+                                    0
+                                ) AS total
+                             FROM earnings e
+                             INNER JOIN files f
+                                ON f.id = e.file_id
+                             WHERE e.user_id = ?
+                             AND f.status != 'deleted'
+                             AND date(
+                                 e.created_at,
+                                 '+05:30'
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedDate
+                        )
+                        .first();
+
+
+                // ==========================================
+                // MONTHLY UPLOADS
+                // ==========================================
+
+                const monthlyUploads =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COUNT(*) AS total
+                             FROM files
+                             WHERE user_id = ?
+                             AND status != 'deleted'
+                             AND strftime(
+                                 '%Y-%m',
+                                 created_at,
+                                 '+05:30'
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedMonth
+                        )
+                        .first();
+
+
+                // ==========================================
+                // MONTHLY VIEWS
+                // ==========================================
+
+                const monthlyViews =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COUNT(*) AS total
+                             FROM views_log vl
+                             INNER JOIN files f
+                                ON f.id = vl.file_id
+                             WHERE f.user_id = ?
+                             AND f.status != 'deleted'
+                             AND strftime(
+                                 '%Y-%m',
+                                 vl.viewed_at,
+                                 '+05:30'
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedMonth
+                        )
+                        .first();
+
+
+                // ==========================================
+                // MONTHLY EARNINGS
+                // ==========================================
+
+                const monthlyEarnings =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COALESCE(
+                                    SUM(
+                                        CASE
+                                            WHEN e.status = 'credited'
+                                            THEN e.amount
+                                            ELSE 0
+                                        END
+                                    ),
+                                    0
+                                ) AS total
+                             FROM earnings e
+                             INNER JOIN files f
+                                ON f.id = e.file_id
+                             WHERE e.user_id = ?
+                             AND f.status != 'deleted'
+                             AND strftime(
+                                 '%Y-%m',
+                                 e.created_at,
+                                 '+05:30'
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedMonth
+                        )
+                        .first();
+
+
+                // ==========================================
+                // LAST 7 DAYS CHART
+                // ==========================================
+
+                const chartResult =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                date(
+                                    vl.viewed_at,
+                                    '+05:30'
+                                ) AS day,
+                                COUNT(*) AS views
+                             FROM views_log vl
+                             INNER JOIN files f
+                                ON f.id = vl.file_id
+                             WHERE f.user_id = ?
+                             AND f.status != 'deleted'
+                             AND date(
+                                 vl.viewed_at,
+                                 '+05:30'
+                             ) BETWEEN
+                                 date(?, '-6 days')
+                                 AND ?
+                             GROUP BY day
+                             ORDER BY day ASC`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedDate,
+                            requestedDate
+                        )
+                        .all();
+
+
+                const chartMap =
+                    new Map();
+
+                for (
+                    const row of
+                    chartResult.results ||
+                    []
+                ) {
+                    chartMap.set(
+                        row.day,
+                        Number(
+                            row.views || 0
+                        )
+                    );
+                }
+
+
+                const chart = [];
+
+                for (
+                    let i = 6;
+                    i >= 0;
+                    i--
+                ) {
+                    const date =
+                        new Date(
+                            `${requestedDate}T00:00:00+05:30`
+                        );
+
+                    date.setUTCDate(
+                        date.getUTCDate() -
+                        i
+                    );
+
+                    const day =
+                        date
+                            .toISOString()
+                            .slice(
+                                0,
+                                10
+                            );
+
+                    chart.push({
+                        date:
+                            day,
+                        views:
+                            chartMap.get(
+                                day
+                            ) || 0
+                    });
+                }
+
+
+                // ==========================================
+                // RECENT FILES
+                // ==========================================
+
+                const recentFiles =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                f.id,
+                                f.short_id,
+                                f.file_name,
+                                f.views,
+                                f.created_at,
+                                COALESCE(
+                                    SUM(
+                                        CASE
+                                            WHEN e.status = 'credited'
+                                            THEN e.amount
+                                            ELSE 0
+                                        END
+                                    ),
+                                    0
+                                ) AS earnings
+                             FROM files f
+                             LEFT JOIN earnings e
+                                ON e.file_id = f.id
+                             WHERE f.user_id = ?
+                             AND f.status != 'deleted'
+                             GROUP BY
+                                f.id,
+                                f.short_id,
+                                f.file_name,
+                                f.views,
+                                f.created_at
+                             ORDER BY
+                                f.created_at DESC
+                             LIMIT 5`
+                        )
+                        .bind(
+                            currentUser.id
+                        )
+                        .all();
+
+
+                // ==========================================
+                // MONTH OPTIONS
+                // ==========================================
+
+                const monthOptions = [];
+
+                for (
+                    let i = 0;
+                    i < 12;
+                    i++
+                ) {
+                    const d =
+                        new Date(
+                            `${requestedMonth}-01T00:00:00+05:30`
+                        );
+
+                    d.setUTCMonth(
+                        d.getUTCMonth() -
+                        i
+                    );
+
+                    const value =
+                        d
+                            .toISOString()
+                            .slice(
+                                0,
+                                7
+                            );
+
+                    const label =
+                        new Intl.DateTimeFormat(
+                            "en-US",
+                            {
+                                month:
+                                    "short",
+                                year:
+                                    "numeric",
+                                timeZone:
+                                    "Asia/Kolkata"
+                            }
+                        ).format(d);
+
+                    monthOptions.push({
+                        value,
+                        label
+                    });
+                }
+
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "success",
+
+                        revenue: {
+                            total:
+                                Number(
+                                    lifetimeEarnings?.total ||
+                                    0
+                                ),
+                            paid:
+                                Number(
+                                    paidWithdrawals?.total ||
+                                    0
+                                ),
+                            available:
+                                Number(
+                                    currentUser.balance ||
+                                    0
+                                ),
+                            approved:
+                                Number(
+                                    approvedWithdrawals?.total ||
+                                    0
+                                ),
+                            pending:
+                                Number(
+                                    pendingWithdrawals?.total ||
+                                    0
+                                )
+                        },
+
+                        daily: {
+                            date:
+                                requestedDate,
+                            uploadedFiles:
+                                Number(
+                                    dailyUploads?.total ||
+                                    0
+                                ),
+                            views:
+                                Number(
+                                    dailyViews?.total ||
+                                    0
+                                ),
+                            earnings:
+                                Number(
+                                    dailyEarnings?.total ||
+                                    0
+                                )
+                        },
+
+                        monthly: {
+                            month:
+                                requestedMonth,
+                            uploadedFiles:
+                                Number(
+                                    monthlyUploads?.total ||
+                                    0
+                                ),
+                            views:
+                                Number(
+                                    monthlyViews?.total ||
+                                    0
+                                ),
+                            earnings:
+                                Number(
+                                    monthlyEarnings?.total ||
+                                    0
+                                )
+                        },
+
+                        chart,
+
+                        recentFiles:
+                            recentFiles.results ||
+                            [],
+
+                        monthOptions
+                    }),
+                    {
+                        status: 200,
+                        headers: {
+                            ...corsHeaders,
+                            ...jsonHeaders()
+                        }
+                    }
+                );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Dashboard API Error:",
+                    error
+                );
+
+                return new Response(
+                    JSON.stringify({
+                        status:
+                            "error",
+                        message:
+                            error.message
+                    }),
+                    {
+                        status: 500,
                         headers: {
                             ...corsHeaders,
                             ...jsonHeaders()

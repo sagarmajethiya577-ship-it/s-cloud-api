@@ -752,8 +752,8 @@
                             Total
                         </p>
 
-                        <p class="text-xl md:text-2xl font-bold text-white">
-                            $750.694
+                        <p id="totalRevenue" class="text-xl md:text-2xl font-bold text-white">
+                            $0.000
                         </p>
 
                     </div>
@@ -796,8 +796,8 @@
                             Paid
                         </p>
 
-                        <p class="text-xl md:text-2xl font-bold text-emerald-400">
-                            $725.052
+                        <p id="paidRevenue" class="text-xl md:text-2xl font-bold text-emerald-400">
+                            $0.000
                         </p>
 
                     </div>
@@ -840,8 +840,8 @@
                             Available
                         </p>
 
-                        <p class="text-xl md:text-2xl font-bold text-cyan-400">
-                            $25.641
+                        <p id="availableRevenue" class="text-xl md:text-2xl font-bold text-cyan-400">
+                            $0.000
                         </p>
 
                     </div>
@@ -884,8 +884,8 @@
                             Approved
                         </p>
 
-                        <p class="text-xl md:text-2xl font-bold text-yellow-400">
-                            $0
+                        <p id="approvedRevenue" class="text-xl md:text-2xl font-bold text-yellow-400">
+                            $0.000
                         </p>
 
                     </div>
@@ -928,8 +928,8 @@
                             Pending
                         </p>
 
-                        <p class="text-xl md:text-2xl font-bold text-orange-400">
-                            $0
+                        <p id="pendingRevenue" class="text-xl md:text-2xl font-bold text-orange-400">
+                            $0.000
                         </p>
 
                     </div>
@@ -1029,8 +1029,8 @@
 
                     <div>
 
-                        <p class="text-2xl md:text-3xl font-bold text-white mb-1">
-                            61
+                        <p id="dailyUploaded" class="text-2xl md:text-3xl font-bold text-white mb-1">
+                            0
                         </p>
 
                         <p class="text-xs md:text-sm text-gray-400">
@@ -1070,8 +1070,8 @@
 
                     <div>
 
-                        <p class="text-2xl md:text-3xl font-bold text-white mb-1">
-                            113
+                        <p id="dailyViews" class="text-2xl md:text-3xl font-bold text-white mb-1">
+                            0
                         </p>
 
                         <p class="text-xs md:text-sm text-gray-400">
@@ -1119,8 +1119,8 @@
 
                     <div>
 
-                        <p class="text-2xl md:text-3xl font-bold text-emerald-400 mb-1">
-                            $0.11
+                        <p id="dailyEarnings" class="text-2xl md:text-3xl font-bold text-emerald-400 mb-1">
+                            $0.00
                         </p>
 
                         <p class="text-xs md:text-sm text-emerald-400/70">
@@ -1202,15 +1202,9 @@
                 <div class="relative w-40 mb-5">
 
                     <select
+                        id="monthlyMonth"
                         class="w-full bg-[rgba(12,18,29,.8)] border border-gray-600 rounded-full px-4 py-2.5 text-white text-xs md:text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
                     >
-                        <option class="bg-gray-900 text-white">
-                            Sep 2026
-                        </option>
-
-                        <option class="bg-gray-900 text-white">
-                            Aug 2026
-                        </option>
                     </select>
 
                     <div
@@ -1247,8 +1241,8 @@
 
                         <div>
 
-                            <p class="text-xl md:text-2xl font-bold text-white mb-1">
-                                541
+                            <p id="monthlyUploaded" class="text-xl md:text-2xl font-bold text-white mb-1">
+                                0
                             </p>
 
                             <p class="text-xs text-gray-400">
@@ -1288,8 +1282,8 @@
 
                         <div>
 
-                            <p class="text-xl md:text-2xl font-bold text-white mb-1">
-                                1,902
+                            <p id="monthlyViews" class="text-xl md:text-2xl font-bold text-white mb-1">
+                                0
                             </p>
 
                             <p class="text-xs text-gray-400">
@@ -1337,8 +1331,8 @@
 
                         <div>
 
-                            <p class="text-xl md:text-2xl font-bold text-emerald-400 mb-1">
-                                $71.82
+                            <p id="monthlyEarnings" class="text-xl md:text-2xl font-bold text-emerald-400 mb-1">
+                                $0.00
                             </p>
 
                             <p class="text-xs text-emerald-400/70">
@@ -1481,72 +1475,9 @@
 
 
                     <tbody
+                        id="recentFilesBody"
                         class="divide-y divide-[rgba(148,163,184,.085)]"
                     >
-
-                        <tr class="hover:bg-[rgba(34,211,238,.025)] transition">
-
-                            <td class="px-6 py-4">
-
-                                <a
-                                    href="#"
-                                    class="text-cyan-400 font-semibold hover:underline"
-                                >
-                                    scloud.site/f/k9Zx2
-                                </a>
-
-                            </td>
-
-                            <td class="px-6 py-4 text-gray-300 truncate max-w-[200px]">
-                                Kalki_2898_AD_1080p.mkv
-                            </td>
-
-                            <td class="px-6 py-4 text-center font-bold">
-                                1,204
-                            </td>
-
-                            <td class="px-6 py-4 text-center text-emerald-400 font-bold">
-                                $1.20
-                            </td>
-
-                            <td class="px-6 py-4 text-right text-gray-500 text-xs">
-                                Today
-                            </td>
-
-                        </tr>
-
-
-                        <tr class="hover:bg-[rgba(34,211,238,.025)] transition">
-
-                            <td class="px-6 py-4">
-
-                                <a
-                                    href="#"
-                                    class="text-cyan-400 font-semibold hover:underline"
-                                >
-                                    scloud.site/f/p4Lx9
-                                </a>
-
-                            </td>
-
-                            <td class="px-6 py-4 text-gray-300 truncate max-w-[200px]">
-                                Mirzapur_S3_EP1_720p.mp4
-                            </td>
-
-                            <td class="px-6 py-4 text-center font-bold">
-                                850
-                            </td>
-
-                            <td class="px-6 py-4 text-center text-emerald-400 font-bold">
-                                $0.85
-                            </td>
-
-                            <td class="px-6 py-4 text-right text-gray-500 text-xs">
-                                Yesterday
-                            </td>
-
-                        </tr>
-
                     </tbody>
 
                 </table>
@@ -1733,38 +1664,36 @@
                     return;
                 }
 
-
                 const data =
                     await response.json();
 
-
                 const user =
-                    data.user || data;
-
+                    data.userData ||
+                    data.user ||
+                    data;
 
                 const name =
                     user.name ||
                     user.email ||
                     'Publisher';
 
-
                 const email =
                     user.email ||
                     '-';
 
+                const dropdownName =
+                    document.getElementById('dropdownUserName');
 
-                if (document.getElementById("profileName")) {
-                    document.getElementById("profileName").textContent = name;
-                }
-                
-                if (document.getElementById("profileMenuName")) {
-                    document.getElementById("profileMenuName").textContent = name;
-                }
-                
-                if (document.getElementById("profileMenuEmail")) {
-                    document.getElementById("profileMenuEmail").textContent = email;
+                const dropdownEmail =
+                    document.getElementById('dropdownUserEmail');
+
+                if (dropdownName) {
+                    dropdownName.textContent = name;
                 }
 
+                if (dropdownEmail) {
+                    dropdownEmail.textContent = email;
+                }
 
             } catch (error) {
 
@@ -1774,6 +1703,84 @@
                 );
 
             }
+
+        }
+
+
+        /* =========================================================
+           HELPERS
+        ========================================================== */
+
+        function formatMoney(value, decimals = 2) {
+
+            const number =
+                Number(value || 0);
+
+            return '$' + number.toFixed(decimals);
+
+        }
+
+
+        function formatNumber(value) {
+
+            return Number(value || 0)
+                .toLocaleString('en-US');
+
+        }
+
+
+        function formatDateLabel(dateString) {
+
+            if (!dateString) {
+                return '-';
+            }
+
+            const date =
+                new Date(dateString);
+
+            if (Number.isNaN(date.getTime())) {
+                return dateString;
+            }
+
+            const now =
+                new Date();
+
+            const today =
+                new Date(
+                    now.getFullYear(),
+                    now.getMonth(),
+                    now.getDate()
+                );
+
+            const target =
+                new Date(
+                    date.getFullYear(),
+                    date.getMonth(),
+                    date.getDate()
+                );
+
+            const diff =
+                Math.round(
+                    (today - target) /
+                    86400000
+                );
+
+            if (diff === 0) {
+                return 'Today';
+            }
+
+            if (diff === 1) {
+                return 'Yesterday';
+            }
+
+            return date.toLocaleDateString(
+                'en-US',
+                {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric'
+                }
+            );
 
         }
 
@@ -1789,24 +1796,19 @@
 
             if (!input) return;
 
-
             const now =
                 new Date();
 
-
             const year =
                 now.getFullYear();
-
 
             const month =
                 String(now.getMonth() + 1)
                     .padStart(2, '0');
 
-
             const day =
                 String(now.getDate())
                     .padStart(2, '0');
-
 
             input.value =
                 `${year}-${month}-${day}`;
@@ -1818,6 +1820,9 @@
            CHART
         ========================================================== */
 
+        let analyticsChart = null;
+
+
         function initChart() {
 
             const canvas =
@@ -1825,10 +1830,8 @@
 
             if (!canvas) return;
 
-
             const ctx =
                 canvas.getContext('2d');
-
 
             const gradient =
                 ctx.createLinearGradient(
@@ -1838,139 +1841,147 @@
                     350
                 );
 
-
             gradient.addColorStop(
                 0,
                 'rgba(34,211,238,0.25)'
             );
-
 
             gradient.addColorStop(
                 1,
                 'rgba(34,211,238,0)'
             );
 
+            analyticsChart =
+                new Chart(ctx, {
 
-            new Chart(ctx, {
+                    type: 'line',
 
-                type: 'line',
+                    data: {
 
-                data: {
+                        labels: [],
 
-                    labels: [
-                        'Mon',
-                        'Tue',
-                        'Wed',
-                        'Thu',
-                        'Fri',
-                        'Sat',
-                        'Sun'
-                    ],
+                        datasets: [
 
-                    datasets: [
+                            {
 
-                        {
+                                label: 'Views',
 
-                            label: 'Views',
+                                data: [],
 
-                            data: [
-                                120,
-                                300,
-                                150,
-                                400,
-                                250,
-                                600,
-                                850
-                            ],
+                                borderColor: '#22d3ee',
 
-                            borderColor: '#22d3ee',
+                                backgroundColor: gradient,
 
-                            backgroundColor: gradient,
+                                borderWidth: 2.5,
 
-                            borderWidth: 2.5,
+                                tension: 0.4,
 
-                            tension: 0.4,
+                                fill: true,
 
-                            fill: true,
+                                pointBackgroundColor: '#1f2937',
 
-                            pointBackgroundColor: '#1f2937',
+                                pointBorderColor: '#22d3ee',
 
-                            pointBorderColor: '#22d3ee',
+                                pointBorderWidth: 2,
 
-                            pointBorderWidth: 2,
+                                pointRadius: 3.5,
 
-                            pointRadius: 3.5,
+                                pointHoverRadius: 6
 
-                            pointHoverRadius: 6
+                            }
 
-                        }
-
-                    ]
-
-                },
-
-
-                options: {
-
-                    responsive: true,
-
-                    maintainAspectRatio: false,
-
-
-                    plugins: {
-
-                        legend: {
-                            display: false
-                        },
-
-
-                        tooltip: {
-
-                            backgroundColor:
-                                'rgba(31,41,55,.94)',
-
-                            titleColor: '#fff',
-
-                            bodyColor: '#22d3ee',
-
-                            borderColor:
-                                'rgba(255,255,255,.1)',
-
-                            borderWidth: 1,
-
-                            padding: 10,
-
-                            displayColors: false,
-
-                            cornerRadius: 10
-
-                        }
+                        ]
 
                     },
 
 
-                    scales: {
+                    options: {
 
-                        y: {
+                        responsive: true,
 
-                            beginAtZero: true,
+                        maintainAspectRatio: false,
 
-                            grid: {
-                                color:
-                                    'rgba(255,255,255,.045)'
-                            },
 
-                            border: {
+                        plugins: {
+
+                            legend: {
                                 display: false
                             },
 
-                            ticks: {
 
-                                color: '#9ca3af',
+                            tooltip: {
 
-                                font: {
-                                    family: 'Poppins',
-                                    size: 11
+                                backgroundColor:
+                                    'rgba(31,41,55,.94)',
+
+                                titleColor: '#fff',
+
+                                bodyColor: '#22d3ee',
+
+                                borderColor:
+                                    'rgba(255,255,255,.1)',
+
+                                borderWidth: 1,
+
+                                padding: 10,
+
+                                displayColors: false,
+
+                                cornerRadius: 10
+
+                            }
+
+                        },
+
+
+                        scales: {
+
+                            y: {
+
+                                beginAtZero: true,
+
+                                grid: {
+                                    color:
+                                        'rgba(255,255,255,.045)'
+                                },
+
+                                border: {
+                                    display: false
+                                },
+
+                                ticks: {
+
+                                    color: '#9ca3af',
+
+                                    font: {
+                                        family: 'Poppins',
+                                        size: 11
+                                    }
+
+                                }
+
+                            },
+
+
+                            x: {
+
+                                grid: {
+                                    display: false
+                                },
+
+                                border: {
+                                    display: false
+                                },
+
+                                ticks: {
+
+                                    color: '#9ca3af',
+
+                                    font: {
+                                        family: 'Poppins',
+                                        size: 11
+                                    }
+
                                 }
 
                             }
@@ -1978,45 +1989,628 @@
                         },
 
 
-                        x: {
+                        interaction: {
 
-                            grid: {
-                                display: false
-                            },
+                            intersect: false,
 
-                            border: {
-                                display: false
-                            },
-
-                            ticks: {
-
-                                color: '#9ca3af',
-
-                                font: {
-                                    family: 'Poppins',
-                                    size: 11
-                                }
-
-                            }
+                            mode: 'index'
 
                         }
-
-                    },
-
-
-                    interaction: {
-
-                        intersect: false,
-
-                        mode: 'index'
 
                     }
 
+                });
+
+        }
+
+
+        function updateChart(chartData) {
+
+            if (!analyticsChart) return;
+
+            const rows =
+                Array.isArray(chartData)
+                    ? chartData
+                    : [];
+
+            const labels =
+                rows.map(function(item) {
+
+                    const date =
+                        new Date(item.date + 'T00:00:00');
+
+                    if (Number.isNaN(date.getTime())) {
+                        return item.date || '';
+                    }
+
+                    return date.toLocaleDateString(
+                        'en-US',
+                        {
+                            weekday: 'short'
+                        }
+                    );
+
+                });
+
+            const values =
+                rows.map(function(item) {
+
+                    return Number(
+                        item.views || 0
+                    );
+
+                });
+
+            analyticsChart.data.labels =
+                labels;
+
+            analyticsChart.data.datasets[0].data =
+                values;
+
+            analyticsChart.update();
+
+        }
+
+
+        /* =========================================================
+           MONTH SELECT
+        ========================================================== */
+
+        function populateMonthOptions(options, selectedMonth) {
+
+            const select =
+                document.getElementById('monthlyMonth');
+
+            if (!select) return;
+
+            select.innerHTML = '';
+
+            const months =
+                Array.isArray(options)
+                    ? options
+                    : [];
+
+            months.forEach(function(item) {
+
+                const value =
+                    typeof item === 'string'
+                        ? item
+                        : item.value || item.month;
+
+                const label =
+                    typeof item === 'string'
+                        ? item
+                        : item.label || item.month;
+
+                if (!value) return;
+
+                const option =
+                    document.createElement('option');
+
+                option.value =
+                    value;
+
+                option.textContent =
+                    label || value;
+
+                option.className =
+                    'bg-gray-900 text-white';
+
+                if (value === selectedMonth) {
+                    option.selected = true;
                 }
+
+                select.appendChild(option);
 
             });
 
         }
+
+
+        /* =========================================================
+           RECENT FILES
+        ========================================================== */
+
+        function renderRecentFiles(files) {
+
+            const tbody =
+                document.getElementById('recentFilesBody');
+
+            if (!tbody) return;
+
+            tbody.innerHTML = '';
+
+            const rows =
+                Array.isArray(files)
+                    ? files
+                    : [];
+
+            if (!rows.length) {
+
+                tbody.innerHTML = `
+                    <tr>
+                        <td
+                            colspan="5"
+                            class="px-6 py-8 text-center text-gray-500 text-sm"
+                        >
+                            No files found.
+                        </td>
+                    </tr>
+                `;
+
+                return;
+            }
+
+
+            rows.forEach(function(file) {
+
+                const tr =
+                    document.createElement('tr');
+
+                tr.className =
+                    'hover:bg-[rgba(34,211,238,.025)] transition';
+
+
+                const shortId =
+                    file.short_id ||
+                    file.shortId ||
+                    file.id ||
+                    '';
+
+
+                const fileName =
+                    file.file_name ||
+                    file.name ||
+                    'Unnamed File';
+
+
+                const views =
+                    Number(file.views || 0);
+
+
+                const earnings =
+                    Number(
+                        file.earnings ??
+                        file.earning ??
+                        file.total_earnings ??
+                        0
+                    );
+
+
+                const createdAt =
+                    file.created_at ||
+                    file.createdAt ||
+                    null;
+
+
+                const href =
+                    shortId
+                        ? '/f/' + encodeURIComponent(shortId)
+                        : '#';
+
+
+                tr.innerHTML = `
+
+                    <td class="px-6 py-4">
+
+                        <a
+                            href="${href}"
+                            class="text-cyan-400 font-semibold hover:underline"
+                        >
+                            scloud.site/f/${shortId || '-'}
+                        </a>
+
+                    </td>
+
+
+                    <td class="px-6 py-4 text-gray-300 truncate max-w-[200px]">
+                        ${escapeHtml(fileName)}
+                    </td>
+
+
+                    <td class="px-6 py-4 text-center font-bold">
+                        ${formatNumber(views)}
+                    </td>
+
+
+                    <td class="px-6 py-4 text-center text-emerald-400 font-bold">
+                        ${formatMoney(earnings, 2)}
+                    </td>
+
+
+                    <td class="px-6 py-4 text-right text-gray-500 text-xs">
+                        ${formatDateLabel(createdAt)}
+                    </td>
+
+                `;
+
+                tbody.appendChild(tr);
+
+            });
+
+        }
+
+
+        function escapeHtml(value) {
+
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
+        }
+
+
+        /* =========================================================
+           LOAD DASHBOARD
+        ========================================================== */
+
+        async function loadDashboard() {
+
+            const dateInput =
+                document.getElementById('dailyDate');
+
+            const monthSelect =
+                document.getElementById('monthlyMonth');
+
+
+            const date =
+                dateInput &&
+                dateInput.value
+                    ? dateInput.value
+                    : '';
+
+
+            let month =
+                monthSelect &&
+                monthSelect.value
+                    ? monthSelect.value
+                    : '';
+
+
+            if (!month && date) {
+
+                month =
+                    date.substring(0, 7);
+
+            }
+
+
+            const params =
+                new URLSearchParams();
+
+
+            if (date) {
+                params.set('date', date);
+            }
+
+
+            if (month) {
+                params.set('month', month);
+            }
+
+
+            try {
+
+                const response =
+                    await fetch(
+                        '/api/dashboard?' +
+                        params.toString(),
+                        {
+                            method: 'GET',
+                            credentials: 'include'
+                        }
+                    );
+
+
+                if (response.status === 401) {
+
+                    window.location.href = '/';
+
+                    return;
+
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        data?.message ||
+                        'Unable to load dashboard.'
+                    );
+
+                }
+
+
+                /* Revenue */
+
+                const revenue =
+                    data.revenue || {};
+
+
+                const totalRevenue =
+                    document.getElementById(
+                        'totalRevenue'
+                    );
+
+                const paidRevenue =
+                    document.getElementById(
+                        'paidRevenue'
+                    );
+
+                const availableRevenue =
+                    document.getElementById(
+                        'availableRevenue'
+                    );
+
+                const approvedRevenue =
+                    document.getElementById(
+                        'approvedRevenue'
+                    );
+
+                const pendingRevenue =
+                    document.getElementById(
+                        'pendingRevenue'
+                    );
+
+
+                if (totalRevenue) {
+                    totalRevenue.textContent =
+                        formatMoney(
+                            revenue.total,
+                            3
+                        );
+                }
+
+
+                if (paidRevenue) {
+                    paidRevenue.textContent =
+                        formatMoney(
+                            revenue.paid,
+                            3
+                        );
+                }
+
+
+                if (availableRevenue) {
+                    availableRevenue.textContent =
+                        formatMoney(
+                            revenue.available,
+                            3
+                        );
+                }
+
+
+                if (approvedRevenue) {
+                    approvedRevenue.textContent =
+                        formatMoney(
+                            revenue.approved,
+                            3
+                        );
+                }
+
+
+                if (pendingRevenue) {
+                    pendingRevenue.textContent =
+                        formatMoney(
+                            revenue.pending,
+                            3
+                        );
+                }
+
+
+                /* Daily */
+
+                const daily =
+                    data.daily || {};
+
+
+                const dailyUploaded =
+                    document.getElementById(
+                        'dailyUploaded'
+                    );
+
+                const dailyViews =
+                    document.getElementById(
+                        'dailyViews'
+                    );
+
+                const dailyEarnings =
+                    document.getElementById(
+                        'dailyEarnings'
+                    );
+
+
+                if (dailyUploaded) {
+
+                    dailyUploaded.textContent =
+                        formatNumber(
+                            daily.uploadedFiles
+                        );
+
+                }
+
+
+                if (dailyViews) {
+
+                    dailyViews.textContent =
+                        formatNumber(
+                            daily.views
+                        );
+
+                }
+
+
+                if (dailyEarnings) {
+
+                    dailyEarnings.textContent =
+                        formatMoney(
+                            daily.earnings,
+                            2
+                        );
+
+                }
+
+
+                /* Monthly */
+
+                const monthly =
+                    data.monthly || {};
+
+
+                const monthlyUploaded =
+                    document.getElementById(
+                        'monthlyUploaded'
+                    );
+
+                const monthlyViews =
+                    document.getElementById(
+                        'monthlyViews'
+                    );
+
+                const monthlyEarnings =
+                    document.getElementById(
+                        'monthlyEarnings'
+                    );
+
+
+                if (monthlyUploaded) {
+
+                    monthlyUploaded.textContent =
+                        formatNumber(
+                            monthly.uploadedFiles
+                        );
+
+                }
+
+
+                if (monthlyViews) {
+
+                    monthlyViews.textContent =
+                        formatNumber(
+                            monthly.views
+                        );
+
+                }
+
+
+                if (monthlyEarnings) {
+
+                    monthlyEarnings.textContent =
+                        formatMoney(
+                            monthly.earnings,
+                            2
+                        );
+
+                }
+
+
+                /* Month options */
+
+                populateMonthOptions(
+                    data.monthOptions,
+                    data.month ||
+                    month
+                );
+
+
+                /* Chart */
+
+                updateChart(
+                    data.chart
+                );
+
+
+                /* Recent files */
+
+                renderRecentFiles(
+                    data.recentFiles
+                );
+
+
+            } catch (error) {
+
+                console.error(
+                    'loadDashboard error:',
+                    error
+                );
+
+                showToast(
+                    error?.message ||
+                    'Unable to load dashboard data.'
+                );
+
+            }
+
+        }
+
+
+        /* =========================================================
+           DASHBOARD FILTER EVENTS
+        ========================================================== */
+
+        document
+            .getElementById('dailyDate')
+            ?.addEventListener(
+                'change',
+                function() {
+
+                    const value =
+                        this.value || '';
+
+                    const monthSelect =
+                        document.getElementById(
+                            'monthlyMonth'
+                        );
+
+                    if (
+                        monthSelect &&
+                        value.length >= 7
+                    ) {
+
+                        const month =
+                            value.substring(0, 7);
+
+                        const exists =
+                            Array.from(
+                                monthSelect.options
+                            ).some(function(option) {
+
+                                return option.value === month;
+
+                            });
+
+                        if (exists) {
+
+                            monthSelect.value =
+                                month;
+
+                        }
+
+                    }
+
+                    loadDashboard();
+
+                }
+            );
+
+
+        document
+            .getElementById('monthlyMonth')
+            ?.addEventListener(
+                'change',
+                function() {
+
+                    loadDashboard();
+
+                }
+            );
 
 
         /* =========================================================
@@ -2025,13 +2619,15 @@
 
         document.addEventListener(
             'DOMContentLoaded',
-            function() {
-
-                loadUser();
+            async function() {
 
                 setCurrentDate();
 
                 initChart();
+
+                await loadUser();
+
+                await loadDashboard();
 
             }
         );

@@ -2090,10 +2090,8 @@
         function formatEarnings(file) {
 
             /*
-             * Current /api/files response does not expose
-             * a guaranteed earnings field.
-             *
-             * Do NOT show fake demo earnings.
+             * /api/files returns the real credited earnings
+             * for each file.
              */
 
             const amount =
