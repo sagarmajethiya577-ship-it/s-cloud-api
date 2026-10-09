@@ -1712,58 +1712,65 @@
         ========================================================== */
 
         function formatMoney(value, decimals = 2) {
+            const number = Number(value || 0);
 
-            const number =
-                Number(value || 0);
+            if (!Number.isFinite(number) || number === 0) {
+                return '$0.00';
+            }
+
+            const absolute = Math.abs(number);
+
+            /*
+             * Do not hide tiny real earnings such as 0.001
+             * behind "$0.00".
+             */
+            if (absolute > 0 && absolute < 0.01) {
+                return '$' + number.toFixed(4);
+            }
 
             return '$' + number.toFixed(decimals);
-
         }
 
 
         function formatNumber(value) {
+            const number = Number(value || 0);
 
-            return Number(value || 0)
-                .toLocaleString('en-US');
+            if (!Number.isFinite(number)) {
+                return '0';
+            }
 
+            return number.toLocaleString('en-US');
         }
 
 
         function formatDateLabel(dateString) {
-
             if (!dateString) {
                 return '-';
             }
 
-            const date =
-                new Date(dateString);
+            const date = new Date(dateString);
 
             if (Number.isNaN(date.getTime())) {
                 return dateString;
             }
 
-            const now =
-                new Date();
+            const now = new Date();
 
-            const today =
-                new Date(
-                    now.getFullYear(),
-                    now.getMonth(),
-                    now.getDate()
-                );
+            const today = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate()
+            );
 
-            const target =
-                new Date(
-                    date.getFullYear(),
-                    date.getMonth(),
-                    date.getDate()
-                );
+            const target = new Date(
+                date.getFullYear(),
+                date.getMonth(),
+                date.getDate()
+            );
 
-            const diff =
-                Math.round(
-                    (today - target) /
-                    86400000
-                );
+            const diff = Math.round(
+                (today - target) / 86400000
+            );
 
             if (diff === 0) {
                 return 'Today';
@@ -1781,7 +1788,6 @@
                     year: 'numeric'
                 }
             );
-
         }
 
 
@@ -1790,29 +1796,37 @@
         ========================================================== */
 
         function setCurrentDate() {
-
             const input =
                 document.getElementById('dailyDate');
 
-            if (!input) return;
+            if (!input) {
+                return;
+            }
 
-            const now =
-                new Date();
+            /*
+             * Dashboard backend uses Asia/Kolkata.
+             * Keep the browser date aligned with India time.
+             */
+            const parts = new Intl.DateTimeFormat(
+                'en-CA',
+                {
+                    timeZone: 'Asia/Kolkata',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                }
+            ).formatToParts(new Date());
 
-            const year =
-                now.getFullYear();
+            const values = {};
 
-            const month =
-                String(now.getMonth() + 1)
-                    .padStart(2, '0');
-
-            const day =
-                String(now.getDate())
-                    .padStart(2, '0');
+            parts.forEach(function(part) {
+                if (part.type !== 'literal') {
+                    values[part.type] = part.value;
+                }
+            });
 
             input.value =
-                `${year}-${month}-${day}`;
-
+                `${values.year}-${values.month}-${values.day}`;
         }
 
 
@@ -1822,13 +1836,13 @@
 
         let analyticsChart = null;
 
-
         function initChart() {
-
             const canvas =
                 document.getElementById('analyticsChart');
 
-            if (!canvas) return;
+            if (!canvas || typeof Chart === 'undefined') {
+                return;
+            }
 
             const ctx =
                 canvas.getContext('2d');
@@ -1853,91 +1867,59 @@
 
             analyticsChart =
                 new Chart(ctx, {
-
                     type: 'line',
 
                     data: {
-
                         labels: [],
 
                         datasets: [
-
                             {
-
                                 label: 'Views',
-
                                 data: [],
-
                                 borderColor: '#22d3ee',
-
                                 backgroundColor: gradient,
-
                                 borderWidth: 2.5,
-
                                 tension: 0.4,
-
                                 fill: true,
-
                                 pointBackgroundColor: '#1f2937',
-
                                 pointBorderColor: '#22d3ee',
-
                                 pointBorderWidth: 2,
-
                                 pointRadius: 3.5,
-
                                 pointHoverRadius: 6
-
                             }
-
                         ]
-
                     },
 
-
                     options: {
-
                         responsive: true,
-
                         maintainAspectRatio: false,
 
+                        animation: false,
 
                         plugins: {
-
                             legend: {
                                 display: false
                             },
 
-
                             tooltip: {
-
                                 backgroundColor:
                                     'rgba(31,41,55,.94)',
 
                                 titleColor: '#fff',
-
                                 bodyColor: '#22d3ee',
 
                                 borderColor:
                                     'rgba(255,255,255,.1)',
 
                                 borderWidth: 1,
-
                                 padding: 10,
-
                                 displayColors: false,
-
                                 cornerRadius: 10
-
                             }
-
                         },
 
-
                         scales: {
-
                             y: {
-
                                 beginAtZero: true,
 
                                 grid: {
@@ -1950,21 +1932,16 @@
                                 },
 
                                 ticks: {
-
                                     color: '#9ca3af',
 
                                     font: {
                                         family: 'Poppins',
                                         size: 11
                                     }
-
                                 }
-
                             },
 
-
                             x: {
-
                                 grid: {
                                     display: false
                                 },
@@ -1974,39 +1951,29 @@
                                 },
 
                                 ticks: {
-
                                     color: '#9ca3af',
 
                                     font: {
                                         family: 'Poppins',
                                         size: 11
                                     }
-
                                 }
-
                             }
-
                         },
 
-
                         interaction: {
-
                             intersect: false,
-
                             mode: 'index'
-
                         }
-
                     }
-
                 });
-
         }
 
 
         function updateChart(chartData) {
-
-            if (!analyticsChart) return;
+            if (!analyticsChart) {
+                return;
+            }
 
             const rows =
                 Array.isArray(chartData)
@@ -2015,9 +1982,10 @@
 
             const labels =
                 rows.map(function(item) {
-
                     const date =
-                        new Date(item.date + 'T00:00:00');
+                        new Date(
+                            item.date + 'T00:00:00'
+                        );
 
                     if (Number.isNaN(date.getTime())) {
                         return item.date || '';
@@ -2029,26 +1997,19 @@
                             weekday: 'short'
                         }
                     );
-
                 });
 
             const values =
                 rows.map(function(item) {
-
-                    return Number(
-                        item.views || 0
-                    );
-
+                    return Number(item.views || 0);
                 });
 
-            analyticsChart.data.labels =
-                labels;
+            analyticsChart.data.labels = labels;
 
             analyticsChart.data.datasets[0].data =
                 values;
 
-            analyticsChart.update();
-
+            analyticsChart.update('none');
         }
 
 
@@ -2056,54 +2017,94 @@
            MONTH SELECT
         ========================================================== */
 
-        function populateMonthOptions(options, selectedMonth) {
-
+        function populateMonthOptions(
+            options,
+            selectedMonth
+        ) {
             const select =
                 document.getElementById('monthlyMonth');
 
-            if (!select) return;
-
-            select.innerHTML = '';
+            if (!select) {
+                return;
+            }
 
             const months =
                 Array.isArray(options)
                     ? options
                     : [];
 
-            months.forEach(function(item) {
+            const currentValue =
+                selectedMonth ||
+                select.value ||
+                '';
 
-                const value =
-                    typeof item === 'string'
-                        ? item
-                        : item.value || item.month;
+            /*
+             * Do not rebuild the select if the API returned
+             * the same month list. This prevents mobile
+             * dropdown jumping/flickering.
+             */
+            const existingValues =
+                Array.from(select.options)
+                    .map(function(option) {
+                        return option.value;
+                    });
 
-                const label =
-                    typeof item === 'string'
-                        ? item
-                        : item.label || item.month;
+            const newValues =
+                months
+                    .map(function(item) {
+                        return typeof item === 'string'
+                            ? item
+                            : item.value || item.month;
+                    })
+                    .filter(Boolean);
 
-                if (!value) return;
+            const sameList =
+                existingValues.length === newValues.length &&
+                existingValues.every(function(value, index) {
+                    return value === newValues[index];
+                });
 
-                const option =
-                    document.createElement('option');
+            if (!sameList) {
+                select.innerHTML = '';
 
-                option.value =
-                    value;
+                months.forEach(function(item) {
+                    const value =
+                        typeof item === 'string'
+                            ? item
+                            : item.value || item.month;
 
-                option.textContent =
-                    label || value;
+                    const label =
+                        typeof item === 'string'
+                            ? item
+                            : item.label || item.month;
 
-                option.className =
-                    'bg-gray-900 text-white';
+                    if (!value) {
+                        return;
+                    }
 
-                if (value === selectedMonth) {
-                    option.selected = true;
-                }
+                    const option =
+                        document.createElement('option');
 
-                select.appendChild(option);
+                    option.value = value;
+                    option.textContent =
+                        label || value;
 
-            });
+                    option.className =
+                        'bg-gray-900 text-white';
 
+                    select.appendChild(option);
+                });
+            }
+
+            const exists =
+                Array.from(select.options)
+                    .some(function(option) {
+                        return option.value === currentValue;
+                    });
+
+            if (exists) {
+                select.value = currentValue;
+            }
         }
 
 
@@ -2112,13 +2113,14 @@
         ========================================================== */
 
         function renderRecentFiles(files) {
-
             const tbody =
-                document.getElementById('recentFilesBody');
+                document.getElementById(
+                    'recentFilesBody'
+                );
 
-            if (!tbody) return;
-
-            tbody.innerHTML = '';
+            if (!tbody) {
+                return;
+            }
 
             const rows =
                 Array.isArray(files)
@@ -2126,7 +2128,6 @@
                     : [];
 
             if (!rows.length) {
-
                 tbody.innerHTML = `
                     <tr>
                         <td
@@ -2141,15 +2142,15 @@
                 return;
             }
 
+            const fragment =
+                document.createDocumentFragment();
 
             rows.forEach(function(file) {
-
                 const tr =
                     document.createElement('tr');
 
                 tr.className =
                     'hover:bg-[rgba(34,211,238,.025)] transition';
-
 
                 const shortId =
                     file.short_id ||
@@ -2157,16 +2158,13 @@
                     file.id ||
                     '';
 
-
                 const fileName =
                     file.file_name ||
                     file.name ||
                     'Unnamed File';
 
-
                 const views =
                     Number(file.views || 0);
-
 
                 const earnings =
                     Number(
@@ -2176,70 +2174,58 @@
                         0
                     );
 
-
                 const createdAt =
                     file.created_at ||
                     file.createdAt ||
                     null;
 
-
                 const href =
                     shortId
-                        ? '/f/' + encodeURIComponent(shortId)
+                        ? '/f/' +
+                          encodeURIComponent(shortId)
                         : '#';
 
-
                 tr.innerHTML = `
-
                     <td class="px-6 py-4">
-
                         <a
                             href="${href}"
                             class="text-cyan-400 font-semibold hover:underline"
                         >
-                            scloud.site/f/${shortId || '-'}
+                            scloud.site/f/${escapeHtml(shortId || '-')}
                         </a>
-
                     </td>
-
 
                     <td class="px-6 py-4 text-gray-300 truncate max-w-[200px]">
                         ${escapeHtml(fileName)}
                     </td>
 
-
                     <td class="px-6 py-4 text-center font-bold">
                         ${formatNumber(views)}
                     </td>
-
 
                     <td class="px-6 py-4 text-center text-emerald-400 font-bold">
                         ${formatMoney(earnings, 2)}
                     </td>
 
-
                     <td class="px-6 py-4 text-right text-gray-500 text-xs">
                         ${formatDateLabel(createdAt)}
                     </td>
-
                 `;
 
-                tbody.appendChild(tr);
-
+                fragment.appendChild(tr);
             });
 
+            tbody.replaceChildren(fragment);
         }
 
 
         function escapeHtml(value) {
-
-            return String(value || '')
+            return String(value ?? '')
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
-
         }
 
 
@@ -2247,7 +2233,12 @@
            LOAD DASHBOARD
         ========================================================== */
 
+        let dashboardController = null;
+        let dashboardRequestId = 0;
+
         async function loadDashboard() {
+            const requestId =
+                ++dashboardRequestId;
 
             const dateInput =
                 document.getElementById('dailyDate');
@@ -2255,84 +2246,77 @@
             const monthSelect =
                 document.getElementById('monthlyMonth');
 
-
             const date =
-                dateInput &&
-                dateInput.value
-                    ? dateInput.value
-                    : '';
-
+                dateInput?.value || '';
 
             let month =
-                monthSelect &&
-                monthSelect.value
-                    ? monthSelect.value
-                    : '';
-
+                monthSelect?.value || '';
 
             if (!month && date) {
-
-                month =
-                    date.substring(0, 7);
-
+                month = date.substring(0, 7);
             }
-
 
             const params =
                 new URLSearchParams();
-
 
             if (date) {
                 params.set('date', date);
             }
 
-
             if (month) {
                 params.set('month', month);
             }
 
+            /*
+             * Cancel previous request when user changes
+             * date/month quickly.
+             */
+            if (dashboardController) {
+                dashboardController.abort();
+            }
+
+            dashboardController =
+                new AbortController();
 
             try {
-
                 const response =
                     await fetch(
                         '/api/dashboard?' +
                         params.toString(),
                         {
                             method: 'GET',
-                            credentials: 'include'
+                            credentials: 'include',
+                            cache: 'no-store',
+                            signal:
+                                dashboardController.signal
                         }
                     );
 
-
-                if (response.status === 401) {
-
-                    window.location.href = '/';
-
+                if (requestId !== dashboardRequestId) {
                     return;
-
                 }
 
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return;
+                }
 
                 const data =
                     await response.json();
 
-
                 if (!response.ok) {
-
                     throw new Error(
                         data?.message ||
                         'Unable to load dashboard.'
                     );
-
                 }
 
-
-                /* Revenue */
+                /* =================================================
+                   REVENUE
+                ================================================= */
 
                 const revenue =
                     data.revenue || {};
-
 
                 const totalRevenue =
                     document.getElementById(
@@ -2359,7 +2343,6 @@
                         'pendingRevenue'
                     );
 
-
                 if (totalRevenue) {
                     totalRevenue.textContent =
                         formatMoney(
@@ -2367,7 +2350,6 @@
                             3
                         );
                 }
-
 
                 if (paidRevenue) {
                     paidRevenue.textContent =
@@ -2377,7 +2359,6 @@
                         );
                 }
 
-
                 if (availableRevenue) {
                     availableRevenue.textContent =
                         formatMoney(
@@ -2386,7 +2367,6 @@
                         );
                 }
 
-
                 if (approvedRevenue) {
                     approvedRevenue.textContent =
                         formatMoney(
@@ -2394,7 +2374,6 @@
                             3
                         );
                 }
-
 
                 if (pendingRevenue) {
                     pendingRevenue.textContent =
@@ -2405,11 +2384,12 @@
                 }
 
 
-                /* Daily */
+                /* =================================================
+                   DAILY
+                ================================================= */
 
                 const daily =
                     data.daily || {};
-
 
                 const dailyUploaded =
                     document.getElementById(
@@ -2426,43 +2406,35 @@
                         'dailyEarnings'
                     );
 
-
                 if (dailyUploaded) {
-
                     dailyUploaded.textContent =
                         formatNumber(
                             daily.uploadedFiles
                         );
-
                 }
 
-
                 if (dailyViews) {
-
                     dailyViews.textContent =
                         formatNumber(
                             daily.views
                         );
-
                 }
 
-
                 if (dailyEarnings) {
-
                     dailyEarnings.textContent =
                         formatMoney(
                             daily.earnings,
                             2
                         );
-
                 }
 
 
-                /* Monthly */
+                /* =================================================
+                   MONTHLY
+                ================================================= */
 
                 const monthly =
                     data.monthly || {};
-
 
                 const monthlyUploaded =
                     document.getElementById(
@@ -2479,62 +2451,58 @@
                         'monthlyEarnings'
                     );
 
-
                 if (monthlyUploaded) {
-
                     monthlyUploaded.textContent =
                         formatNumber(
                             monthly.uploadedFiles
                         );
-
                 }
 
-
                 if (monthlyViews) {
-
                     monthlyViews.textContent =
                         formatNumber(
                             monthly.views
                         );
-
                 }
 
-
                 if (monthlyEarnings) {
-
                     monthlyEarnings.textContent =
                         formatMoney(
                             monthly.earnings,
                             2
                         );
-
                 }
 
 
-                /* Month options */
+                /* =================================================
+                   MONTH OPTIONS
+                ================================================= */
 
                 populateMonthOptions(
                     data.monthOptions,
-                    data.month ||
-                    month
+                    data.month || month
                 );
 
 
-                /* Chart */
+                /* =================================================
+                   CHART
+                ================================================= */
 
-                updateChart(
-                    data.chart
-                );
+                updateChart(data.chart);
 
 
-                /* Recent files */
+                /* =================================================
+                   RECENT FILES
+                ================================================= */
 
                 renderRecentFiles(
                     data.recentFiles
                 );
 
-
             } catch (error) {
+                if (error?.name === 'AbortError') {
+                    return;
+                }
 
                 console.error(
                     'loadDashboard error:',
@@ -2545,9 +2513,7 @@
                     error?.message ||
                     'Unable to load dashboard data.'
                 );
-
             }
-
         }
 
 
@@ -2555,12 +2521,13 @@
            DASHBOARD FILTER EVENTS
         ========================================================== */
 
-        document
-            .getElementById('dailyDate')
-            ?.addEventListener(
+        const dailyDateInput =
+            document.getElementById('dailyDate');
+
+        if (dailyDateInput) {
+            dailyDateInput.addEventListener(
                 'change',
                 function() {
-
                     const value =
                         this.value || '';
 
@@ -2573,7 +2540,6 @@
                         monthSelect &&
                         value.length >= 7
                     ) {
-
                         const month =
                             value.substring(0, 7);
 
@@ -2581,36 +2547,31 @@
                             Array.from(
                                 monthSelect.options
                             ).some(function(option) {
-
                                 return option.value === month;
-
                             });
 
                         if (exists) {
-
-                            monthSelect.value =
-                                month;
-
+                            monthSelect.value = month;
                         }
-
                     }
 
                     loadDashboard();
-
                 }
             );
+        }
 
 
-        document
-            .getElementById('monthlyMonth')
-            ?.addEventListener(
+        const monthlyMonthInput =
+            document.getElementById('monthlyMonth');
+
+        if (monthlyMonthInput) {
+            monthlyMonthInput.addEventListener(
                 'change',
                 function() {
-
                     loadDashboard();
-
                 }
             );
+        }
 
 
         /* =========================================================
@@ -2619,20 +2580,23 @@
 
         document.addEventListener(
             'DOMContentLoaded',
-            async function() {
-
+            function() {
                 setCurrentDate();
 
                 initChart();
 
-                await loadUser();
-
-                await loadDashboard();
-
+                /*
+                 * Load user and dashboard simultaneously.
+                 * Previously these waited one after another.
+                 */
+                Promise.allSettled([
+                    loadUser(),
+                    loadDashboard()
+                ]);
             }
         );
 
-    </script>
+</script>
 
 </body>
 </html>
