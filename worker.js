@@ -4886,46 +4886,25 @@ export default {
 
                 const monthOptions = [];
 
-                for (
-                    let i = 0;
-                    i < 12;
-                    i++
-                ) {
-                    const d =
-                        new Date(
-                            `${requestedMonth}-01T00:00:00+05:30`
-                        );
+                const monthMatch = /^(\d{4})-(\d{2})$/.exec(requestedMonth);
 
-                    d.setUTCMonth(
-                        d.getUTCMonth() -
-                        i
-                    );
+                if (!monthMatch) {
+                    throw new Error("Invalid requested month");
+                }
 
-                    const value =
-                        d
-                            .toISOString()
-                            .slice(
-                                0,
-                                7
-                            );
+                const baseYear = Number(monthMatch[1]);
+                const baseMonth = Number(monthMatch[2]) - 1;
 
-                    const label =
-                        new Intl.DateTimeFormat(
-                            "en-US",
-                            {
-                                month:
-                                    "short",
-                                year:
-                                    "numeric",
-                                timeZone:
-                                    "Asia/Kolkata"
-                            }
-                        ).format(d);
+                for (let i = 0; i < 12; i++) {
+                    const d = new Date(Date.UTC(baseYear, baseMonth - i, 1));
+                    const value = d.toISOString().slice(0, 7);
+                    const label = new Intl.DateTimeFormat("en-US", {
+                        month: "short",
+                        year: "numeric",
+                        timeZone: "UTC"
+                    }).format(d);
 
-                    monthOptions.push({
-                        value,
-                        label
-                    });
+                    monthOptions.push({ value, label });
                 }
 
 
