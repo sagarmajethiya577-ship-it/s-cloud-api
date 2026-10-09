@@ -7470,19 +7470,23 @@ export default {
 
 
         // ==================================================
-        // S-CLOUD SPA SERVER-SIDE PROTECTION
+        // ==================================================
+        // S-CLOUD MULTI-PAGE ROUTING + AUTH PROTECTION
         // ==================================================
 
-        const spaProtectedRoutes = [
-            "/dashboard",
-            "/upload",
-            "/files",
-            "/api",
-            "/settings",
-            "/withdraw"
-        ];
+        // Clean URLs serve their own HTML documents. Each navigation
+        // is a normal browser navigation/full page reload; API routes
+        // under /api/ remain untouched because only exact paths match.
+        const pageRoutes = {
+            "/dashboard": "/dashboard.html",
+            "/upload": "/upload.html",
+            "/files": "/files.html",
+            "/api": "/api.html",
+            "/settings": "/settings.html",
+            "/withdraw": "/withdraw.html"
+        };
 
-        const spaSourcePages = [
+        const protectedHtmlPages = [
             "/dashboard.html",
             "/upload.html",
             "/files.html",
@@ -7491,148 +7495,37 @@ export default {
             "/withdraw.html"
         ];
 
-        /*
-         * Clean SPA routes:
-         *
-         * /dashboard
-         * /upload
-         * /files
-         * /api
-         * /settings
-         * /withdraw
-         *
-         * Authentication is checked BEFORE
-         * app.html is ever returned.
-         *
-         * Therefore a logged-out visitor never
-         * receives the protected SPA shell.
-         */
-        if (
-            spaProtectedRoutes.includes(
+        const isProtectedPage =
+            Object.prototype.hasOwnProperty.call(
+                pageRoutes,
                 url.pathname
-            )
-        ) {
+            ) || protectedHtmlPages.includes(url.pathname);
 
-            const spaUser =
-                await getCurrentUser(
-                    request,
-                    env
-                );
+        if (isProtectedPage) {
+            const pageUser = await getCurrentUser(request, env);
 
-            if (!spaUser) {
-
-                const loginUrl =
-                    new URL(
-                        "/",
-                        request.url
-                    );
-
+            if (!pageUser) {
+                const loginUrl = new URL("/", request.url);
                 loginUrl.searchParams.set(
                     "redirect",
-                    url.pathname +
-                    url.search
+                    url.pathname + url.search
                 );
-
-                return Response.redirect(
-                    loginUrl.toString(),
-                    302
-                );
+                return Response.redirect(loginUrl.toString(), 302);
             }
 
-            if (
-                env.ASSETS &&
-                typeof env.ASSETS.fetch ===
-                    "function"
-            ) {
-
-                const appRequest =
-                    new Request(
-                        new URL(
-                            "/app.html",
-                            request.url
-                        ),
-                        request
-                    );
-
-                return env.ASSETS.fetch(
-                    appRequest
+            if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+                const targetPath = pageRoutes[url.pathname] || url.pathname;
+                const pageRequest = new Request(
+                    new URL(targetPath, request.url),
+                    request
                 );
+                return env.ASSETS.fetch(pageRequest);
             }
         }
 
-        /*
-         * The old HTML files are still used as
-         * SPA source templates by app.js.
-         *
-         * Protect them too, so a logged-out user
-         * cannot directly open:
-         *
-         * /dashboard.html
-         * /upload.html
-         * /files.html
-         * /api.html
-         * /settings.html
-         * /withdraw.html
-         *
-         * Logged-in requests continue through
-         * to the normal Assets handler below.
-         */
-        if (
-            spaSourcePages.includes(
-                url.pathname
-            )
-        ) {
-
-            const sourceUser =
-                await getCurrentUser(
-                    request,
-                    env
-                );
-
-            if (!sourceUser) {
-
-                const loginUrl =
-                    new URL(
-                        "/",
-                        request.url
-                    );
-
-                loginUrl.searchParams.set(
-                    "redirect",
-                    url.pathname
-                );
-
-                return Response.redirect(
-                    loginUrl.toString(),
-                    302
-                );
-            }
-        }
-
-        /*
-         * Direct access to app.html itself should
-         * not expose the SPA shell.
-         */
-        if (
-            url.pathname === "/app.html"
-        ) {
-
-            const appUser =
-                await getCurrentUser(
-                    request,
-                    env
-                );
-
-            if (!appUser) {
-
-                return Response.redirect(
-                    new URL(
-                        "/",
-                        request.url
-                    ).toString(),
-                    302
-                );
-            }
+        // The old SPA shell is no longer used. Never serve it as a page.
+        if (url.pathname === "/app.html") {
+            return Response.redirect(new URL("/", request.url).toString(), 302);
         }
 
         // ==================================================
