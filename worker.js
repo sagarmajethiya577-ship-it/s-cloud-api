@@ -4886,14 +4886,15 @@ export default {
 
                 const monthOptions = [];
 
-                const monthMatch = /^(\d{4})-(\d{2})$/.exec(requestedMonth);
+                const monthOptionsNow = new Date();
+                const dateParts = new Intl.DateTimeFormat("en-US", {
+                    year: "numeric",
+                    month: "2-digit",
+                    timeZone: "Asia/Kolkata"
+                }).formatToParts(monthOptionsNow);
 
-                if (!monthMatch) {
-                    throw new Error("Invalid requested month");
-                }
-
-                const baseYear = Number(monthMatch[1]);
-                const baseMonth = Number(monthMatch[2]) - 1;
+                const baseYear = Number(dateParts.find(p => p.type === "year").value);
+                const baseMonth = Number(dateParts.find(p => p.type === "month").value) - 1;
 
                 for (let i = 0; i < 12; i++) {
                     const d = new Date(Date.UTC(baseYear, baseMonth - i, 1));
