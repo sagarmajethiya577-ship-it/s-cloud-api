@@ -4809,7 +4809,7 @@ export default {
                 ) {
                     const date =
                         new Date(
-                            `${requestedDate}T00:00:00+05:30`
+                            `${requestedDate}T00:00:00Z`
                         );
 
                     date.setUTCDate(
