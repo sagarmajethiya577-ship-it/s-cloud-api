@@ -462,7 +462,13 @@
                  REAL PROCESSING AREA
             ================================================== -->
             <div
-                id="processing-area"
+                id="processing-area-links"
+                data-processing-area="links"
+                class="mt-8 space-y-3 hidden"
+            ></div>
+            <div
+                id="processing-area-folder"
+                data-processing-area="folder"
                 class="mt-8 space-y-3 hidden"
             ></div>
 
@@ -595,17 +601,23 @@
             const folderTabBtn = document.getElementById("tab-folder");
             const linksView = document.getElementById("view-links");
             const folderView = document.getElementById("view-folder");
+            const linksResults = document.getElementById("processing-area-links");
+            const folderResults = document.getElementById("processing-area-folder");
 
             if (tab === "links") {
                 linksTabBtn.className = "text-cyan-400 font-semibold border-b-2 border-cyan-400 px-1 pb-2 transition";
                 folderTabBtn.className = "text-gray-400 hover:text-gray-300 font-medium px-1 pb-2 transition";
                 linksView.classList.remove("hidden");
                 folderView.classList.add("hidden");
+                linksResults.classList.toggle("hidden", linksResults.childElementCount === 0);
+                folderResults.classList.add("hidden");
             } else {
                 folderTabBtn.className = "text-cyan-400 font-semibold border-b-2 border-cyan-400 px-1 pb-2 transition";
                 linksTabBtn.className = "text-gray-400 hover:text-gray-300 font-medium px-1 pb-2 transition";
                 folderView.classList.remove("hidden");
                 linksView.classList.add("hidden");
+                folderResults.classList.toggle("hidden", folderResults.childElementCount === 0);
+                linksResults.classList.add("hidden");
             }
         }
 
@@ -793,7 +805,9 @@
             }
 
             const button = document.getElementById("uploadBtn");
-            const processingArea = document.getElementById("processing-area");
+            const processingArea = document.getElementById(
+                isLinksTab ? "processing-area-links" : "processing-area-folder"
+            );
 
             button.disabled = true;
             button.innerHTML = `
