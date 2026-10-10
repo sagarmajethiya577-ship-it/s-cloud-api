@@ -227,37 +227,6 @@
 
         @media (max-width: 640px) {
 
-            /* Keep Recent Files table design; reduce mobile spacing */
-            section.glass-card > .overflow-x-auto th,
-            section.glass-card > .overflow-x-auto td {
-                padding-left: 6px;
-                padding-right: 6px;
-            }
-
-            section.glass-card > .overflow-x-auto td:first-child > div {
-                max-width: 100%;
-                gap: 4px;
-            }
-
-            section.glass-card > .overflow-x-auto td:first-child input {
-                min-width: 0;
-                width: 100%;
-                padding-left: 5px;
-                padding-right: 5px;
-                font-size: 9px;
-            }
-
-            section.glass-card > .overflow-x-auto td:first-child button {
-                padding: 5px;
-            }
-
-            section.glass-card > .overflow-x-auto th {
-                padding-left: 5px;
-                padding-right: 5px;
-                font-size: 8px;
-                letter-spacing: 0;
-            }
-
             .glass-card {
                 border-radius: 1.15rem;
             }
@@ -2242,7 +2211,7 @@
                                 type="text"
                                 readonly
                                 aria-label="Download link"
-                                value="${escapeHtml(fullLink)}"
+                                value="${escapeHtml(shortId)}"
                                 class="bg-[#0a0e17] border border-gray-700/50 rounded-lg px-2 py-2 text-cyan-400 text-[10px] sm:text-xs font-mono outline-none min-w-0 flex-1 w-full"
                                 onclick="this.select()"
                             >
