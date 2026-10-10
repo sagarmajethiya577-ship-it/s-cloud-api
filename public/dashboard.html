@@ -227,6 +227,81 @@
 
         @media (max-width: 640px) {
 
+            .recent-files-table {
+                overflow: visible;
+            }
+
+            .recent-files-table table,
+            .recent-files-table tbody {
+                display: block;
+                width: 100%;
+            }
+
+            .recent-files-table thead {
+                display: none;
+            }
+
+            .recent-files-table tbody tr {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 8px 12px;
+                padding: 14px 16px;
+                border-bottom: 1px solid rgba(148,163,184,.085);
+            }
+
+            .recent-files-table tbody td {
+                display: block;
+                min-width: 0;
+                max-width: 100%;
+                padding: 0;
+                text-align: left;
+                overflow-wrap: anywhere;
+            }
+
+            .recent-files-table tbody td:first-child {
+                grid-column: 1 / -1;
+            }
+
+            .recent-files-table tbody td:first-child > div {
+                max-width: 100%;
+                width: 100%;
+            }
+
+            .recent-files-table tbody td:nth-child(2) {
+                grid-column: 1 / -1;
+                font-size: 13px;
+                line-height: 1.4;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .recent-files-table tbody td:nth-child(3),
+            .recent-files-table tbody td:nth-child(4),
+            .recent-files-table tbody td:nth-child(5) {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 11px;
+                color: #9ca3af;
+            }
+
+            .recent-files-table tbody td:nth-child(3)::before {
+                content: "Views:";
+            }
+
+            .recent-files-table tbody td:nth-child(4)::before {
+                content: "Earned:";
+            }
+
+            .recent-files-table tbody td:nth-child(5) {
+                justify-self: end;
+            }
+
+            .recent-files-table tbody td:nth-child(5)::before {
+                content: "Date:";
+            }
+
             .glass-card {
                 border-radius: 1.15rem;
             }
@@ -1438,7 +1513,7 @@
             </div>
 
 
-            <div class="overflow-x-auto">
+            <div class="recent-files-table overflow-x-auto">
 
                 <table class="w-full text-left text-sm">
 
