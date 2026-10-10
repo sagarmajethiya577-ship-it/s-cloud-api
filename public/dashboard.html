@@ -251,9 +251,9 @@
             }
 
             section.glass-card > .overflow-x-auto td:first-child input {
-                width: 1px;
-                min-width: 0;
-                flex: 1 1 0%;
+                width: 72px;
+                min-width: 72px;
+                flex: 0 0 72px;
                 font-size: 10px;
                 padding-left: 5px;
                 padding-right: 5px;
@@ -2251,20 +2251,6 @@
                                 class="bg-[#0a0e17] border border-gray-700/50 rounded-lg px-2 py-2 text-cyan-400 text-[10px] sm:text-xs font-mono outline-none min-w-0 flex-1 w-full"
                                 onclick="this.select()"
                             >
-                            <button
-                                type="button"
-                                data-link="${escapeHtml(fullLink)}"
-                                onclick="copyRecentFileLink(this)"
-                                class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition shrink-0"
-                                title="Copy Link"
-                                aria-label="Copy download link"
-                                ${shortId ? '' : 'disabled'}
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="8" y="8" width="13" height="13" rx="2"></rect>
-                                    <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path>
-                                </svg>
-                            </button>
                         </div>
                     </td>
 
