@@ -226,67 +226,42 @@
         ========================================================= */
 
         @media (max-width: 640px) {
-            /* Recent Files: fit table columns on mobile */
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto table {
-                width: 100%;
-                table-layout: fixed;
+
+            /* Keep Recent Files readable on mobile */
+            section.glass-card > .overflow-x-auto {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
             }
 
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto th:nth-child(1),
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto td:nth-child(1) {
-                width: 24%;
+            section.glass-card > .overflow-x-auto table {
+                min-width: 620px;
+                table-layout: auto;
             }
 
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto th:nth-child(2),
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto td:nth-child(2) {
-                width: 32%;
+            section.glass-card > .overflow-x-auto th,
+            section.glass-card > .overflow-x-auto td {
+                white-space: nowrap;
+                padding-left: 10px;
+                padding-right: 10px;
             }
 
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto th:nth-child(3),
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto td:nth-child(3) {
-                width: 12%;
+            section.glass-card > .overflow-x-auto td:first-child > div {
+                max-width: 190px;
+                gap: 6px;
             }
 
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto th:nth-child(4),
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto td:nth-child(4) {
-                width: 14%;
-            }
-
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto th:nth-child(5),
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto td:nth-child(5) {
-                width: 18%;
-            }
-
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto th,
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto td {
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }
-
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto th,
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto td {
-                padding-left: 8px;
-                padding-right: 8px;
-            }
-
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto td:first-child > div {
-                max-width: 110px;
-                gap: 5px;
-            }
-
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto td:first-child input {
+            section.glass-card > .overflow-x-auto td:first-child input {
                 width: 1px;
                 min-width: 0;
                 flex: 1 1 0%;
                 font-size: 10px;
-                padding: 6px 4px;
+                padding-left: 5px;
+                padding-right: 5px;
             }
 
-            section.glass-card:has(#recentFilesBody) .overflow-x-auto td:first-child button {
+            section.glass-card > .overflow-x-auto td:first-child button {
                 padding: 6px;
             }
-
-
 
             .glass-card {
                 border-radius: 1.15rem;
