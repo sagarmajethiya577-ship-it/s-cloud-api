@@ -5935,7 +5935,7 @@ export default {
 
 
                 const short_link =
-                    `https://${url.hostname}/file/${shortId}`;
+                    `https://${url.hostname}/d/${shortId}`;
 
 
                 // --------------------------------------

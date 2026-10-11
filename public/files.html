@@ -1106,29 +1106,6 @@
                 Delete
             </button>
 
-            <div class="border-t border-gray-700/50"></div>
-
-            <button
-                id="actionCopy"
-                type="button"
-                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition text-left"
-            >
-                <svg
-                    class="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                    ></path>
-                </svg>
-                Copy Link
-            </button>
-
         </div>
     </div>
 
@@ -2071,7 +2048,7 @@
 
             return (
                 window.location.origin +
-                "/file/" +
+                "/d/" +
                 encodeURIComponent(shortId)
             );
         }
@@ -2830,7 +2807,7 @@
                 button.getBoundingClientRect();
 
             const menuWidth = 150;
-            const menuHeight = 145;
+            const menuHeight = 100;
 
             let left =
                 rect.right -
@@ -3202,6 +3179,8 @@
                                     fileId,
                                 id:
                                     fileId,
+                                new_name:
+                                    newName,
                                 file_name:
                                     newName,
                                 name:
@@ -3903,11 +3882,7 @@
 
                 const deleteButton =
                     $("actionDelete");
-
-                const copy =
-                    $("actionCopy");
-
-                if (rename) {
+if (rename) {
                     rename.addEventListener(
                         "click",
                         function(event) {
@@ -3936,32 +3911,7 @@
                         }
                     );
                 }
-
-                if (copy) {
-                    copy.addEventListener(
-                        "click",
-                        async function(event) {
-
-                            event.preventDefault();
-                            event.stopPropagation();
-
-                            if (!activeActionFile) {
-                                return;
-                            }
-
-                            const file =
-                                activeActionFile;
-
-                            closeActionMenu();
-
-                            await copyFileLinkById(
-                                file.short_id ||
-                                file.id
-                            );
-                        }
-                    );
-                }
-            }
+}
         );
 
 
