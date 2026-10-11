@@ -2602,6 +2602,20 @@ export default {
             request.method ===
                 "POST"
         ) {
+            return new Response(
+                JSON.stringify({
+                    status: "error",
+                    message: "New account registration is temporarily closed."
+                }),
+                {
+                    status: 403,
+                    headers: {
+                        ...corsHeaders,
+                        ...jsonHeaders()
+                    }
+                }
+            );
+
             try {
 
                 const body =
