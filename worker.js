@@ -1799,7 +1799,7 @@ async function prepareFastLinks(shortId, env) {
                 `[FAST] DB lookup END ${shortId} | elapsed=${elapsed()}`
             );
 
-            if (!record || record.status === "deleted") {
+            if (!record || record.status === "deleted" || Number(record.sharing_enabled ?? 1) === 0) {
                 console.log(
                     `[FAST] Record missing/deleted ${shortId} | elapsed=${elapsed()}`
                 );
@@ -2063,7 +2063,8 @@ async function prepareFastLinks(shortId, env) {
 
             if (
                 !record ||
-                record.status === "deleted"
+                record.status === "deleted" ||
+                Number(record.sharing_enabled ?? 1) === 0
             ) {
                 console.log(
                     `[FAST] Record missing/deleted after reload ${shortId} | elapsed=${elapsed()}`
@@ -4368,6 +4369,8 @@ export default {
             url.pathname ===
                 "/api/delete" ||
             url.pathname ===
+                "/api/sharing" ||
+            url.pathname ===
                 "/api/upload" ||
             url.pathname ===
                 "/api/folder-files" ||
@@ -5302,7 +5305,88 @@ export default {
 
 
         // ==================================================
-        // 7. DELETE FILE
+        // 7. TOGGLE PUBLIC SHARING
+        // ==================================================
+
+        if (
+            url.pathname === "/api/sharing" &&
+            request.method === "POST"
+        ) {
+            try {
+                const body = await request.json();
+                const fileId = body.file_id || body.id || body.short_id;
+                const enabled = body.enabled;
+
+                if (!fileId || typeof enabled !== "boolean") {
+                    return new Response(JSON.stringify({
+                        status: "error",
+                        message: "File ID and sharing state are required."
+                    }), {
+                        status: 400,
+                        headers: { ...corsHeaders, ...jsonHeaders() }
+                    });
+                }
+
+                // Add the field lazily so existing D1 databases migrate safely.
+                // Existing files default to sharing ON; no earning/view history is changed.
+                try {
+                    await env.DB.prepare(
+                        "ALTER TABLE files ADD COLUMN sharing_enabled INTEGER NOT NULL DEFAULT 1"
+                    ).run();
+                } catch (schemaError) {
+                    const schemaMessage = String(schemaError?.message || schemaError);
+                    if (!/duplicate column name|already exists/i.test(schemaMessage)) {
+                        throw schemaError;
+                    }
+                }
+
+                const result = await env.DB.prepare(
+                    `UPDATE files
+                     SET sharing_enabled = ?,
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE (id = ? OR short_id = ?)
+                       AND user_id = ?
+                       AND COALESCE(status, '') != 'deleted'`
+                ).bind(
+                    enabled ? 1 : 0,
+                    fileId,
+                    fileId,
+                    currentUser.id
+                ).run();
+
+                if ((result.meta?.changes ?? 0) === 0) {
+                    return new Response(JSON.stringify({
+                        status: "error",
+                        message: "File not found."
+                    }), {
+                        status: 404,
+                        headers: { ...corsHeaders, ...jsonHeaders() }
+                    });
+                }
+
+                return new Response(JSON.stringify({
+                    status: "success",
+                    enabled,
+                    message: enabled ? "Sharing enabled." : "Sharing disabled."
+                }), {
+                    status: 200,
+                    headers: { ...corsHeaders, ...jsonHeaders() }
+                });
+            } catch (error) {
+                console.error("Sharing toggle error:", error);
+                return new Response(JSON.stringify({
+                    status: "error",
+                    message: error.message || "Unable to update sharing."
+                }), {
+                    status: 500,
+                    headers: { ...corsHeaders, ...jsonHeaders() }
+                });
+            }
+        }
+
+
+        // ==================================================
+        // 8. DELETE FILE (legacy endpoint; not shown in publisher menu)
         // ==================================================
 
         if (
@@ -6337,6 +6421,13 @@ export default {
                     );
                 }
 
+                if (Number(record.sharing_enabled ?? 1) === 0) {
+                    return new Response("Sharing is turned off for this file.", {
+                        status: 403,
+                        headers: corsHeaders
+                    });
+                }
+
                 await env.DB
                     .prepare(
                         `UPDATE files
@@ -6764,6 +6855,32 @@ export default {
                 );
             }
 
+            try {
+                const fileRecord = await env.DB.prepare(
+                    `SELECT * FROM files WHERE short_id = ? OR id = ? LIMIT 1`
+                ).bind(shortId, shortId).first();
+
+                if (!fileRecord || fileRecord.status === "deleted") {
+                    return new Response("File not found.", {
+                        status: 404,
+                        headers: corsHeaders
+                    });
+                }
+
+                if (Number(fileRecord.sharing_enabled ?? 1) === 0) {
+                    return new Response("Sharing is turned off for this file.", {
+                        status: 403,
+                        headers: corsHeaders
+                    });
+                }
+            } catch (error) {
+                console.error("Public link check error:", error);
+                return new Response("Unable to verify this file link.", {
+                    status: 503,
+                    headers: corsHeaders
+                });
+            }
+
             if (
                 env.ASSETS &&
                 typeof env.ASSETS.fetch === "function"
@@ -6827,17 +6944,7 @@ export default {
                 const record =
                     await env.DB
                         .prepare(
-                            `SELECT
-                                id,
-                                short_id,
-                                status,
-                                hubcloud_url,
-                                gdflix_url,
-                                pdlink_share_id,
-                                toxcloud_url,
-                                fast_links,
-                                fast_links_expires_at,
-                                last_updated
+                            `SELECT *
                              FROM files
                              WHERE short_id = ?
                                 OR id = ?
@@ -6883,6 +6990,16 @@ export default {
                             }
                         }
                     );
+                }
+
+                if (Number(record.sharing_enabled ?? 1) === 0) {
+                    return new Response(JSON.stringify({
+                        status: "error",
+                        message: "Sharing is turned off for this file."
+                    }), {
+                        status: 403,
+                        headers: { ...corsHeaders, ...jsonHeaders() }
+                    });
                 }
 
                 const currentTime =
@@ -7045,6 +7162,12 @@ export default {
                     );
                 }
 
+                if (Number(record.sharing_enabled ?? 1) === 0) {
+                    return new Response("Sharing is turned off for this file.", {
+                        status: 403,
+                        headers: corsHeaders
+                    });
+                }
 
                 // ------------------------------------------
                 // PDLINK: GOFILE + PIXELDRAIN

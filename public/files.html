@@ -1091,9 +1091,9 @@
             <div class="border-t border-gray-700/50"></div>
 
             <button
-                id="actionDelete"
+                id="actionSharing"
                 type="button"
-                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-gray-800 hover:text-red-300 transition text-left"
+                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-cyan-300 hover:bg-gray-800 hover:text-cyan-200 transition text-left"
             >
                 <svg
                     class="w-4 h-4"
@@ -1105,10 +1105,10 @@
                         stroke-linecap="round"
                         stroke-linejoin="round"
                         stroke-width="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 01-1 1h-4a1 1 0 01-1-1V4M4 7h16"
+                        d="M12 16v-4m0 0V8m0 4h4m-4 0H8m12-1a8 8 0 11-16 0 8 8 0 0116 0z"
                     ></path>
                 </svg>
-                Delete
+                <span id="actionSharingLabel">Turn Sharing Off</span>
             </button>
 
         </div>
@@ -2040,6 +2040,12 @@
         }
 
 
+        function isSharingEnabled(file) {
+            // Before the lazy DB migration, the field is absent and sharing stays ON.
+            return Number(file?.sharing_enabled ?? 1) !== 0;
+        }
+
+
         function getFileLink(file) {
 
             const shortId =
@@ -2362,6 +2368,9 @@
             const deleted =
                 isDeleted(file);
 
+            const sharingEnabled =
+                isSharingEnabled(file);
+
             const size =
                 formatSize(file);
 
@@ -2400,6 +2409,10 @@
                         Removed
                     </span>
                 `;
+            } else if (!sharingEnabled) {
+                statusHtml = `
+                    <span class="status-other">Sharing Off</span>
+                `;
             } else if (getStatus(file) === "active") {
                 statusHtml = `
                     <span class="status-active">
@@ -2417,7 +2430,7 @@
 
             let linkHtml = "";
 
-            if (deleted || !link) {
+            if (deleted || !sharingEnabled || !link) {
                 linkHtml = `
                     <div class="text-gray-500 text-xs italic">
                         Link disabled
@@ -2611,6 +2624,9 @@
             const deleted =
                 isDeleted(file);
 
+            const sharingEnabled =
+                isSharingEnabled(file);
+
             const size =
                 formatSize(file);
 
@@ -2636,6 +2652,10 @@
                         Removed
                     </span>
                 `;
+            } else if (!sharingEnabled) {
+                statusHtml = `
+                    <span class="status-other">Sharing Off</span>
+                `;
             } else if (getStatus(file) === "active") {
                 statusHtml = `
                     <span class="status-active">
@@ -2652,7 +2672,7 @@
             }
 
             const linkHtml =
-                deleted || !link
+                deleted || !sharingEnabled || !link
                     ? `
                         <div class="text-gray-500 text-xs italic">
                             Link disabled
@@ -2822,6 +2842,13 @@
             closeActionMenu();
             activeActionFile = file;
 
+            const sharingLabel = $("actionSharingLabel");
+            if (sharingLabel) {
+                sharingLabel.textContent = isSharingEnabled(file)
+                    ? "Turn Sharing Off"
+                    : "Turn Sharing On";
+            }
+
             const rect =
                 button.getBoundingClientRect();
 
@@ -2926,6 +2953,11 @@
                 findFileById(fileId);
 
             if (!file) {
+                return;
+            }
+
+            if (!isSharingEnabled(file)) {
+                showToast("error", "Sharing Is Off", "Turn sharing on before copying this link.");
                 return;
             }
 
@@ -3276,6 +3308,71 @@
                     button.textContent =
                         originalText;
                 }
+            }
+        }
+
+
+        /* ============================================================
+           PUBLIC SHARING ON / OFF
+           ============================================================ */
+
+        async function toggleFileSharing(file = activeActionFile) {
+            closeActionMenu();
+
+            if (!file) return;
+
+            const fileId = file.short_id || file.id || "";
+            if (!fileId) {
+                showToast("error", "Sharing Update Failed", "File ID is missing.");
+                return;
+            }
+
+            const enabled = !isSharingEnabled(file);
+            const button = $("actionSharing");
+            const label = $("actionSharingLabel");
+            if (button) button.disabled = true;
+            if (label) label.textContent = enabled ? "Turning On..." : "Turning Off...";
+
+            try {
+                const response = await fetch("/api/sharing", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({ file_id: fileId, enabled })
+                });
+
+                let data = {};
+                try { data = await response.json(); } catch { data = {}; }
+
+                if (response.status === 401) {
+                    window.location.href = "/";
+                    return;
+                }
+
+                if (!response.ok || data.status === "error") {
+                    throw new Error(data.message || "Unable to update sharing.");
+                }
+
+                const target = findFileById(fileId);
+                if (target) target.sharing_enabled = enabled ? 1 : 0;
+
+                applyFilters();
+                showToast(
+                    "success",
+                    enabled ? "Sharing Enabled" : "Sharing Disabled",
+                    enabled
+                        ? "The existing public link is active again."
+                        : "The public link is now blocked. Earnings history is unchanged."
+                );
+            } catch (error) {
+                console.error("toggleFileSharing:", error);
+                showToast("error", "Sharing Update Failed", error.message || "Unable to update sharing.");
+            } finally {
+                if (button) button.disabled = false;
+                if (label) label.textContent = enabled ? "Turn Sharing Off" : "Turn Sharing On";
             }
         }
 
@@ -3900,8 +3997,8 @@
                 const rename =
                     $("actionRename");
 
-                const deleteButton =
-                    $("actionDelete");
+                const sharingButton =
+                    $("actionSharing");
 
                 if (rename) {
                     rename.addEventListener(
@@ -3918,17 +4015,13 @@
                     );
                 }
 
-                if (deleteButton) {
-                    deleteButton.addEventListener(
+                if (sharingButton) {
+                    sharingButton.addEventListener(
                         "click",
                         function(event) {
-
                             event.preventDefault();
                             event.stopPropagation();
-
-                            openDeleteModal(
-                                activeActionFile
-                            );
+                            toggleFileSharing(activeActionFile);
                         }
                     );
                 }
