@@ -5076,6 +5076,7 @@ export default {
                              LEFT JOIN earnings e
                                 ON e.file_id = f.id
                              WHERE f.user_id = ?
+                               AND COALESCE(f.status, '') != 'deleted'
                              GROUP BY f.id
                              ORDER BY f.created_at DESC`
                         )

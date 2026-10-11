@@ -433,12 +433,17 @@
 
         @media (max-width: 639px) {
             .page-controls {
-                flex-direction: column;
-                align-items: stretch;
+                flex-direction: row;
+                align-items: center;
             }
 
             .page-controls > * {
-                width: 100%;
+                width: auto;
+            }
+
+            .page-controls > .relative {
+                flex: 1 1 auto;
+                min-width: 0;
             }
 
             .pagination-wrap {
@@ -771,7 +776,7 @@
             <div class="flex items-center gap-3 w-full md:w-auto page-controls">
 
                 <!-- Search -->
-                <div class="relative w-full md:w-72">
+                <div class="relative flex-1 min-w-0 md:flex-none md:w-72">
 
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg
@@ -2088,6 +2093,17 @@
                 return "—";
             }
 
+            // Keep tiny but real credited earnings visible instead of
+            // rounding every sub-cent amount down to $0.00.
+            if (numeric > 0 && numeric < 0.01) {
+                const precise = numeric
+                    .toFixed(8)
+                    .replace(/0+$/, "")
+                    .replace(/\\.$/, "");
+
+                return "$" + precise;
+            }
+
             return "$" + numeric.toFixed(2);
         }
 
@@ -2792,8 +2808,6 @@
                 return;
             }
 
-            activeActionFile = file;
-
             const menu =
                 $("globalActionMenu");
 
@@ -2802,6 +2816,7 @@
             }
 
             closeActionMenu();
+            activeActionFile = file;
 
             const rect =
                 button.getBoundingClientRect();
@@ -3406,13 +3421,14 @@
                     );
                 }
 
-                const target =
-                    findFileById(fileId);
-
-                if (target) {
-                    target.status =
-                        "deleted";
-                }
+                // Remove it from the current list immediately.
+                // The /api/files endpoint also excludes soft-deleted files,
+                // so the row stays gone after refresh.
+                allFiles = allFiles.filter(file => {
+                    const shortId = String(file?.short_id || "");
+                    const id = String(file?.id || "");
+                    return shortId !== String(fileId) && id !== String(fileId);
+                });
 
                 closeDeleteModal();
 
@@ -3882,7 +3898,8 @@
 
                 const deleteButton =
                     $("actionDelete");
-if (rename) {
+
+                if (rename) {
                     rename.addEventListener(
                         "click",
                         function(event) {
@@ -3911,7 +3928,7 @@ if (rename) {
                         }
                     );
                 }
-}
+            }
         );
 
 
