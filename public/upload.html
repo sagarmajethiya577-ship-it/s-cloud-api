@@ -433,7 +433,7 @@
                 <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
                     Google Drive Folder Link
                 </label>
-                <div class="relative mb-6">
+                <div class="relative mb-4">
                     <input
                         type="text"
                         id="folderLink"
@@ -441,8 +441,11 @@
                         class="w-full bg-[#0a0e17] border border-gray-700 focus:border-cyan-500 rounded-xl py-3 px-4 text-gray-300 outline-none transition-all shadow-inner placeholder-gray-600 text-sm"
                     >
                 </div>
+                <div class="mb-6 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-3 text-sm text-gray-300">
+                    <span class="font-semibold text-cyan-400">Folder Upload Limit:</span>
+                    Maximum 20 files per folder. If the folder contains more than 20 files, only the first 20 files will be processed.
+                </div>
             </div>
-
 
             <!-- Upload Button -->
             <button
@@ -662,11 +665,17 @@
                     <button type="button" data-copy class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded text-xs font-semibold transition shrink-0">
                         Copy
                     </button>
+                    <button type="button" data-remove class="bg-red-900/70 hover:bg-red-800 text-white px-3 py-1.5 rounded text-xs font-semibold transition shrink-0">
+                        Remove
+                    </button>
                 </div>
             `;
 
             row.querySelector("[data-copy]").addEventListener("click", function() {
                 copyLink(row.querySelector("[data-link]"), this);
+            });
+            row.querySelector("[data-remove]").addEventListener("click", function() {
+                row.remove();
             });
 
             return row;
@@ -787,12 +796,15 @@
             const folderLink = document.getElementById("folderLink").value.trim();
             const linksView = document.getElementById("view-links");
             const isLinksTab = !linksView.classList.contains("hidden");
-
             let uploadLinks = [];
+            const button = document.getElementById("uploadBtn");
+            const processingArea = document.getElementById(
+                isLinksTab ? "processing-area-links" : "processing-area-folder"
+            );
 
             if (isLinksTab) {
                 uploadLinks = driveLinks.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
-                if (uploadLinks.length === 0) {
+                if (!uploadLinks.length) {
                     showToast("error", "Invalid Input", "Please enter a valid Google Drive link.");
                     return;
                 }
@@ -801,69 +813,71 @@
                     showToast("error", "Invalid Input", "Please enter a valid Google Drive folder link.");
                     return;
                 }
-                uploadLinks = [folderLink];
+                button.disabled = true;
+                button.innerHTML = `<div class="spinner border-t-white"></div><span>Reading folder...</span>`;
+                button.classList.add("opacity-80", "cursor-wait");
+                try {
+                    const response = await fetch("/api/upload", {
+                        method: "POST",
+                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ drive_url: folderLink })
+                    });
+                    const data = await response.json().catch(() => null);
+                    if (response.status === 401 || response.status === 403) {
+                        window.location.href = "/";
+                        return;
+                    }
+                    if (!response.ok || !data || data.status !== "success" || !Array.isArray(data.data?.files)) {
+                        throw new Error(data?.message || "Could not read folder files.");
+                    }
+                    uploadLinks = data.data.files.slice(0, 20).map(file => ({
+                        url: file.drive_url,
+                        name: file.file_name || "Google Drive File"
+                    })).filter(file => file.url);
+                    if (!uploadLinks.length) throw new Error("No direct files found in this folder.");
+                } catch (error) {
+                    showToast("error", "Folder Error", error.message || "Could not read folder files.");
+                    button.disabled = false;
+                    button.classList.remove("opacity-80", "cursor-wait");
+                    button.innerHTML = `<span>Try Again</span>`;
+                    return;
+                }
             }
 
-            const button = document.getElementById("uploadBtn");
-            const processingArea = document.getElementById(
-                isLinksTab ? "processing-area-links" : "processing-area-folder"
-            );
-
             button.disabled = true;
-            button.innerHTML = `
-                <div class="spinner border-t-white"></div>
-                <span>Uploading...</span>
-            `;
+            button.innerHTML = `<div class="spinner border-t-white"></div><span>Uploading...</span>`;
             button.classList.add("opacity-80", "cursor-wait");
-
             processingArea.innerHTML = "";
             processingArea.classList.remove("hidden");
 
             let successCount = 0;
+            const items = uploadLinks.map(item =>
+                typeof item === "string" ? { url: item, name: extractDriveFileName(item) } : item
+            );
             const rows = [];
-
-            uploadLinks.forEach(function(url) {
-                const row = createFileRow(extractDriveFileName(url));
+            items.forEach(item => {
+                const row = createFileRow(item.name);
                 processingArea.appendChild(row);
                 rows.push(row);
             });
 
-            for (let i = 0; i < uploadLinks.length; i++) {
-                const success = await uploadOne(uploadLinks[i], rows[i]);
-                if (success) {
-                    successCount++;
-                }
+            for (let i = 0; i < items.length; i++) {
+                if (await uploadOne(items[i].url, rows[i])) successCount++;
             }
 
             button.disabled = false;
             button.classList.remove("opacity-80", "cursor-wait");
-
-            if (successCount === uploadLinks.length) {
-                button.innerHTML = `
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    <span>Upload Complete</span>
-                `;
+            if (successCount === items.length) {
+                button.innerHTML = `<span>Upload Complete</span>`;
                 button.classList.remove("from-blue-600", "to-cyan-500");
                 button.classList.add("from-emerald-600", "to-teal-500");
             } else if (successCount > 0) {
-                button.innerHTML = `
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    <span>Upload Finished</span>
-                `;
+                button.innerHTML = `<span>Upload Finished (${successCount}/${items.length})</span>`;
             } else {
-                button.innerHTML = `
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                    </svg>
-                    <span>Try Again</span>
-                `;
+                button.innerHTML = `<span>Try Again</span>`;
             }
         }
-
 
         /* =====================================================
            COPY LINK
