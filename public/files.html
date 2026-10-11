@@ -2093,9 +2093,13 @@
                 return "—";
             }
 
-            // Keep tiny but real credited earnings visible instead of
-            // rounding every sub-cent amount down to $0.00.
-            if (numeric > 0 && numeric < 0.01) {
+            // Always show earnings with at least three decimal places.
+            // This keeps zero as $0.000 and small credited amounts visible.
+            if (numeric === 0) {
+                return "$0.000";
+            }
+
+            if (Math.abs(numeric) < 0.01) {
                 const precise = numeric
                     .toFixed(8)
                     .replace(/0+$/, "")
@@ -2104,7 +2108,7 @@
                 return "$" + precise;
             }
 
-            return "$" + numeric.toFixed(2);
+            return "$" + numeric.toFixed(3);
         }
 
 
