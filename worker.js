@@ -4370,6 +4370,8 @@ export default {
             url.pathname ===
                 "/api/upload" ||
             url.pathname ===
+                "/api/folder-files" ||
+            url.pathname ===
                 "/api/profile/update" ||
             url.pathname ===
                 "/api/password/change" ||
@@ -5420,6 +5422,70 @@ export default {
 
 
         // ==================================================
+        // GOOGLE DRIVE FOLDER FILE LIST (max 20)
+        // ==================================================
+
+        if (
+            url.pathname === "/api/folder-files" &&
+            request.method === "POST"
+        ) {
+            try {
+                const body = await request.json();
+                const folderUrl = String(body?.folder_url || "").trim();
+                const folderId = extractFolderId(folderUrl);
+
+                if (!folderId || !folderUrl.includes("drive.google.com")) {
+                    return new Response(JSON.stringify({
+                        status: "error",
+                        message: "Please enter a valid Google Drive folder link."
+                    }), { status: 400, headers: { ...corsHeaders, ...jsonHeaders() } });
+                }
+
+                const token = await getAccessToken(
+                    env.OAUTH_CLIENT_ID,
+                    env.OAUTH_CLIENT_SECRET,
+                    env.OAUTH_REFRESH_TOKEN
+                );
+
+                const listRes = await fetch(
+                    `https://www.googleapis.com/drive/v3/files?q='${encodeURIComponent(folderId)}'+in+parents&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=100&fields=nextPageToken,files(id,name,size,mimeType)`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                const listData = await listRes.json();
+
+                if (!listRes.ok) {
+                    throw new Error(listData.error?.message || "Google Drive folder API error");
+                }
+
+                const files = (listData.files || [])
+                    .filter(file => file.id && file.mimeType !== "application/vnd.google-apps.folder")
+                    .slice(0, 20)
+                    .map(file => ({ id: file.id, name: file.name || "Unnamed file" }));
+
+                if (!files.length) {
+                    return new Response(JSON.stringify({
+                        status: "error",
+                        message: "No files found inside this folder."
+                    }), { status: 400, headers: { ...corsHeaders, ...jsonHeaders() } });
+                }
+
+                return new Response(JSON.stringify({
+                    status: "success",
+                    files,
+                    total: files.length,
+                    limit: 20,
+                    truncated: files.length === 20
+                }), { status: 200, headers: { ...corsHeaders, ...jsonHeaders() } });
+            } catch (err) {
+                console.error("Folder list error:", err);
+                return new Response(JSON.stringify({
+                    status: "error",
+                    message: "Failed to read folder contents. Check that the folder is accessible and try again."
+                }), { status: 400, headers: { ...corsHeaders, ...jsonHeaders() } });
+            }
+        }
+
+        // ==================================================
         // 8. UPLOAD
         // ==================================================
 
@@ -5529,59 +5595,126 @@ export default {
 
 
                     try {
-                        const token = await getAccessToken(
-                            env.OAUTH_CLIENT_ID,
-                            env.OAUTH_CLIENT_SECRET,
-                            env.OAUTH_REFRESH_TOKEN
-                        );
-                        const files = [];
-                        let pageToken = "";
-                        while (files.length < 20) {
-                            const params = new URLSearchParams({
-                                q: `'${folderId}' in parents and trashed = false`,
-                                pageSize: "100",
-                                orderBy: "name",
-                                supportsAllDrives: "true",
-                                includeItemsFromAllDrives: "true",
-                                fields: "nextPageToken,files(id,name,size,mimeType)"
-                            });
-                            if (pageToken) params.set("pageToken", pageToken);
-                            const listRes = await fetch(
-                                `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
-                                { headers: { "Authorization": `Bearer ${token}` } }
-                            );
-                            const listData = await listRes.json();
-                            if (!listRes.ok) throw new Error(listData.error?.message || "Google Drive folder API error");
 
-                            for (const file of (listData.files || [])) {
-                                if (file.mimeType === "application/vnd.google-apps.folder") continue;
-                                files.push({
-                                    file_name: file.name || "Google Drive File",
-                                    drive_url: `https://drive.google.com/file/d/${file.id}/view`
-                                });
-                                if (files.length >= 20) break;
-                            }
-                            if (files.length >= 20 || !listData.nextPageToken) break;
-                            pageToken = listData.nextPageToken;
+                        const token =
+                            await getAccessToken(
+                                env.OAUTH_CLIENT_ID,
+                                env.OAUTH_CLIENT_SECRET,
+                                env.OAUTH_REFRESH_TOKEN
+                            );
+
+
+                        const listRes =
+                            await fetch(
+                                `https://www.googleapis.com/drive/v3/files?q='${encodeURIComponent(folderId)}'+in+parents&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,size,mimeType)`,
+                                {
+                                    headers: {
+                                        "Authorization":
+                                            `Bearer ${token}`
+                                    }
+                                }
+                            );
+
+
+                        const listData =
+                            await listRes.json();
+
+
+                        if (
+                            !listRes.ok
+                        ) {
+                            throw new Error(
+                                listData.error?.message ||
+                                "Google Drive folder API error"
+                            );
                         }
 
-                        if (files.length === 0) {
+
+                        if (
+                            !listData.files ||
+                            listData.files.length ===
+                                0
+                        ) {
                             return new Response(
-                                JSON.stringify({ status: "error", message: "No files found inside this folder." }),
-                                { status: 400, headers: { ...corsHeaders, ...jsonHeaders() } }
+                                JSON.stringify({
+                                    status:
+                                        "error",
+                                    message:
+                                        "No files found inside this folder."
+                                }),
+                                {
+                                    status: 400,
+                                    headers: {
+                                        ...corsHeaders,
+                                        ...jsonHeaders()
+                                    }
+                                }
                             );
                         }
-                        return new Response(
-                            JSON.stringify({ status: "success", message: "Folder files listed.", data: { files, total: files.length, limit: 20 } }),
-                            { status: 200, headers: { ...corsHeaders, ...jsonHeaders() } }
+
+
+                        cleanUrl =
+                            `https://drive.google.com/file/d/${listData.files[0].id}/view`;
+
+                    } catch (
+                        err
+                    ) {
+
+                        console.error(
+                            "Folder Error:",
+                            err
                         );
-                    } catch (err) {
-                        console.error("Folder Error:", err);
+
                         return new Response(
-                            JSON.stringify({ status: "error", message: "Failed to read folder contents via Google API." }),
-                            { status: 400, headers: { ...corsHeaders, ...jsonHeaders() } }
+                            JSON.stringify({
+                                status:
+                                    "error",
+                                message:
+                                    "Failed to read folder contents via Google API."
+                            }),
+                            {
+                                status: 400,
+                                headers: {
+                                    ...corsHeaders,
+                                    ...jsonHeaders()
+                                }
+                            }
                         );
                     }
+                }
+
+
+                // --------------------------------------
+                // VALIDATE GOOGLE DRIVE LINK
+                // --------------------------------------
+
+                const match =
+                    cleanUrl.match(
+                        /[-\w]{25,}/
+                    );
+
+
+                if (
+                    !cleanUrl.includes(
+                        "drive.google.com"
+                    ) ||
+                    !match
+                ) {
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Invalid Google Drive Link format!"
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
                 }
 
 

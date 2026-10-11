@@ -25,3 +25,15 @@ node_modules/
 # OS/editor files
 .DS_Store
 Thumbs.db
+
+# Local backup files - never push
+*.backup
+*.backup-*
+*.backup.*
+*.before-*
+*.dashboard-backup
+worker-before-*.js
+wrangler.toml.backup*
+scloud-before-*
+scloud-spa-ready-*
+scloud-code-part*.txt

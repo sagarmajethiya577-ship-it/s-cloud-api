@@ -441,10 +441,13 @@
                         class="w-full bg-[#0a0e17] border border-gray-700 focus:border-cyan-500 rounded-xl py-3 px-4 text-gray-300 outline-none transition-all shadow-inner placeholder-gray-600 text-sm"
                     >
                 </div>
-                <div class="mb-6 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-3 text-sm text-gray-300">
-                    <span class="font-semibold text-cyan-400">Folder Upload Limit:</span>
-                    Maximum 20 files per folder. If the folder contains more than 20 files, only the first 20 files will be processed.
-                </div>
+                <p class="mt-1 mb-4 flex items-center gap-2 text-xs text-gray-400">
+                    <svg class="h-4 w-4 shrink-0 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" stroke-width="1.8"></circle>
+                        <path d="M12 11v5m0-8h.01" stroke-width="1.8" stroke-linecap="round"></path>
+                    </svg>
+                    Up to <span class="font-semibold text-cyan-300">20 files</span> per folder.
+                </p>
             </div>
 
             <!-- Upload Button -->
@@ -665,17 +668,11 @@
                     <button type="button" data-copy class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded text-xs font-semibold transition shrink-0">
                         Copy
                     </button>
-                    <button type="button" data-remove class="bg-red-900/70 hover:bg-red-800 text-white px-3 py-1.5 rounded text-xs font-semibold transition shrink-0">
-                        Remove
-                    </button>
                 </div>
             `;
 
             row.querySelector("[data-copy]").addEventListener("click", function() {
                 copyLink(row.querySelector("[data-link]"), this);
-            });
-            row.querySelector("[data-remove]").addEventListener("click", function() {
-                row.remove();
             });
 
             return row;
@@ -796,15 +793,13 @@
             const folderLink = document.getElementById("folderLink").value.trim();
             const linksView = document.getElementById("view-links");
             const isLinksTab = !linksView.classList.contains("hidden");
+
             let uploadLinks = [];
-            const button = document.getElementById("uploadBtn");
-            const processingArea = document.getElementById(
-                isLinksTab ? "processing-area-links" : "processing-area-folder"
-            );
+            let folderFiles = [];
 
             if (isLinksTab) {
                 uploadLinks = driveLinks.split(/\r?\n/).map(link => link.trim()).filter(Boolean);
-                if (!uploadLinks.length) {
+                if (uploadLinks.length === 0) {
                     showToast("error", "Invalid Input", "Please enter a valid Google Drive link.");
                     return;
                 }
@@ -813,71 +808,96 @@
                     showToast("error", "Invalid Input", "Please enter a valid Google Drive folder link.");
                     return;
                 }
-                button.disabled = true;
-                button.innerHTML = `<div class="spinner border-t-white"></div><span>Reading folder...</span>`;
-                button.classList.add("opacity-80", "cursor-wait");
-                try {
-                    const response = await fetch("/api/upload", {
-                        method: "POST",
-                        credentials: "include",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ drive_url: folderLink })
-                    });
-                    const data = await response.json().catch(() => null);
-                    if (response.status === 401 || response.status === 403) {
-                        window.location.href = "/";
-                        return;
-                    }
-                    if (!response.ok || !data || data.status !== "success" || !Array.isArray(data.data?.files)) {
-                        throw new Error(data?.message || "Could not read folder files.");
-                    }
-                    uploadLinks = data.data.files.slice(0, 20).map(file => ({
-                        url: file.drive_url,
-                        name: file.file_name || "Google Drive File"
-                    })).filter(file => file.url);
-                    if (!uploadLinks.length) throw new Error("No direct files found in this folder.");
-                } catch (error) {
-                    showToast("error", "Folder Error", error.message || "Could not read folder files.");
-                    button.disabled = false;
-                    button.classList.remove("opacity-80", "cursor-wait");
-                    button.innerHTML = `<span>Try Again</span>`;
+                const folderResponse = await fetch("/api/folder-files", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ folder_url: folderLink })
+                });
+                let folderData = null;
+                try { folderData = await folderResponse.json(); } catch {}
+
+                if (folderResponse.status === 401 || folderResponse.status === 403) {
+                    window.location.href = "/";
                     return;
                 }
+                if (!folderResponse.ok || folderData?.status !== "success" || !Array.isArray(folderData.files)) {
+                    showToast("error", "Folder Upload Failed", folderData?.message || "Could not read files from this folder.");
+                    return;
+                }
+
+                folderFiles = folderData.files.slice(0, 20);
+                uploadLinks = folderFiles.map(file => `https://drive.google.com/file/d/${encodeURIComponent(file.id)}/view`);
             }
 
+            const button = document.getElementById("uploadBtn");
+            const processingArea = document.getElementById(
+                isLinksTab ? "processing-area-links" : "processing-area-folder"
+            );
+
             button.disabled = true;
-            button.innerHTML = `<div class="spinner border-t-white"></div><span>Uploading...</span>`;
+            button.innerHTML = `
+                <div class="spinner border-t-white"></div>
+                <span>Uploading...</span>
+            `;
             button.classList.add("opacity-80", "cursor-wait");
+
             processingArea.innerHTML = "";
             processingArea.classList.remove("hidden");
 
             let successCount = 0;
-            const items = uploadLinks.map(item =>
-                typeof item === "string" ? { url: item, name: extractDriveFileName(item) } : item
-            );
             const rows = [];
-            items.forEach(item => {
-                const row = createFileRow(item.name);
+
+            uploadLinks.forEach(function(url, index) {
+                const fileName = !isLinksTab && folderFiles[index]
+                    ? folderFiles[index].name
+                    : extractDriveFileName(url);
+                const row = createFileRow(fileName);
                 processingArea.appendChild(row);
                 rows.push(row);
             });
 
-            for (let i = 0; i < items.length; i++) {
-                if (await uploadOne(items[i].url, rows[i])) successCount++;
-            }
+            // Upload a few files at a time to avoid overwhelming the Worker.
+            let nextIndex = 0;
+            const workerCount = Math.min(3, uploadLinks.length);
+            const uploadWorker = async () => {
+                while (nextIndex < uploadLinks.length) {
+                    const index = nextIndex++;
+                    const success = await uploadOne(uploadLinks[index], rows[index]);
+                    if (success) successCount++;
+                }
+            };
+            await Promise.all(Array.from({ length: workerCount }, () => uploadWorker()));
 
             button.disabled = false;
             button.classList.remove("opacity-80", "cursor-wait");
-            if (successCount === items.length) {
-                button.innerHTML = `<span>Upload Complete</span>`;
+
+            if (successCount === uploadLinks.length) {
+                button.innerHTML = `
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <span>Upload Complete</span>
+                `;
                 button.classList.remove("from-blue-600", "to-cyan-500");
                 button.classList.add("from-emerald-600", "to-teal-500");
             } else if (successCount > 0) {
-                button.innerHTML = `<span>Upload Finished (${successCount}/${items.length})</span>`;
+                button.innerHTML = `
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <span>Upload Finished</span>
+                `;
             } else {
-                button.innerHTML = `<span>Try Again</span>`;
+                button.innerHTML = `
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                    <span>Try Again</span>
+                `;
             }
         }
+
 
         /* =====================================================
            COPY LINK
