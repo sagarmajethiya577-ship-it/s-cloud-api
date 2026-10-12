@@ -2261,6 +2261,7 @@ export default {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawal_settings (id INTEGER PRIMARY KEY, minimum_amount REAL NOT NULL DEFAULT 10.00, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
                 await env.DB.prepare(`INSERT OR IGNORE INTO withdrawal_settings (id, minimum_amount) VALUES (1, 10.00)`).run();
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, method TEXT NOT NULL, payment_details TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, processed_at TIMESTAMP, processed_by INTEGER, rejection_reason TEXT)`).run();
+                try { await env.DB.prepare(`ALTER TABLE withdrawals ADD COLUMN payout_reference TEXT`).run(); } catch (_) {}
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_daily_upload_usage (user_id INTEGER NOT NULL, usage_date TEXT NOT NULL, uploads_count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, usage_date))`).run();
 
@@ -2320,7 +2321,7 @@ export default {
                 }
 
                 if (path === "/api/admin/payouts" && request.method === "GET") {
-                    const result = await env.DB.prepare(`SELECT w.id, w.user_id, w.amount, w.method, w.payment_details, w.status, w.created_at, u.name, u.email FROM withdrawals w LEFT JOIN users u ON u.id = w.user_id ORDER BY CASE WHEN w.status = 'pending' THEN 0 ELSE 1 END, w.id DESC LIMIT 500`).all();
+                    const result = await env.DB.prepare(`SELECT w.id, w.user_id, w.amount, w.method, w.payment_details, w.status, w.created_at, w.processed_at, w.rejection_reason, w.payout_reference, u.name, u.email FROM withdrawals w LEFT JOIN users u ON u.id = w.user_id ORDER BY CASE WHEN w.status = 'pending' THEN 0 ELSE 1 END, w.id DESC LIMIT 500`).all();
                     return sendAdminJson({ status: "success", data: result.results || [] });
                 }
 
@@ -2345,7 +2346,33 @@ export default {
                 }
 
                 if (path === "/api/admin/payout" && request.method === "POST") {
-                    return sendAdminJson({ status: "error", message: "Payout processing is intentionally disabled until the manual UPI/bank workflow is implemented" }, 409);
+                    const body = await request.json();
+                    const withdrawalId = Number(body.withdrawal_id);
+                    const action = String(body.action || '').toLowerCase();
+                    const reference = String(body.reference || '').trim().slice(0, 120);
+                    const reason = String(body.reason || '').trim().slice(0, 500);
+                    if (!Number.isInteger(withdrawalId) || withdrawalId < 1 || !['approve', 'reject', 'paid'].includes(action)) return sendAdminJson({ status: 'error', message: 'Invalid payout action' }, 400);
+                    const row = await env.DB.prepare(`SELECT id, user_id, amount, status FROM withdrawals WHERE id = ?`).bind(withdrawalId).first();
+                    if (!row) return sendAdminJson({ status: 'error', message: 'Withdrawal not found' }, 404);
+                    if (action === 'approve') {
+                        if (row.status !== 'pending') return sendAdminJson({ status: 'error', message: 'Only pending requests can be approved' }, 409);
+                        const upd = await env.DB.prepare(`UPDATE withdrawals SET status='approved', processed_at=CURRENT_TIMESTAMP, processed_by=?, rejection_reason=NULL WHERE id=? AND status='pending'`).bind(adminUser.id, withdrawalId).run();
+                        if (!upd.meta?.changes) return sendAdminJson({ status: 'error', message: 'Request was already processed; refresh and try again' }, 409);
+                        return sendAdminJson({ status: 'success', message: 'Withdrawal approved. Pay manually, then mark Paid with UTR/reference.' });
+                    }
+                    if (action === 'reject') {
+                        if (!['pending', 'approved'].includes(row.status)) return sendAdminJson({ status: 'error', message: 'Only pending or approved requests can be rejected' }, 409);
+                        if (!reason) return sendAdminJson({ status: 'error', message: 'Rejection reason is required' }, 400);
+                        const upd = await env.DB.prepare(`UPDATE withdrawals SET status='rejected', processed_at=CURRENT_TIMESTAMP, processed_by=?, rejection_reason=? WHERE id=? AND status=?`).bind(adminUser.id, reason, withdrawalId, row.status).run();
+                        if (!upd.meta?.changes) return sendAdminJson({ status: 'error', message: 'Request was already processed; refresh and try again' }, 409);
+                        await env.DB.prepare(`UPDATE users SET balance = balance + ? WHERE id = ?`).bind(Number(row.amount), Number(row.user_id)).run();
+                        return sendAdminJson({ status: 'success', message: 'Withdrawal rejected and amount returned to user balance' });
+                    }
+                    if (row.status !== 'approved') return sendAdminJson({ status: 'error', message: 'Approve the request first; only approved requests can be marked Paid' }, 409);
+                    if (!reference) return sendAdminJson({ status: 'error', message: 'Enter the UTR/payment reference after making the manual payment' }, 400);
+                    const upd = await env.DB.prepare(`UPDATE withdrawals SET status='completed', payout_reference=?, processed_at=CURRENT_TIMESTAMP, processed_by=? WHERE id=? AND status='approved'`).bind(reference, adminUser.id, withdrawalId).run();
+                    if (!upd.meta?.changes) return sendAdminJson({ status: 'error', message: 'Request was already processed; refresh and try again' }, 409);
+                    return sendAdminJson({ status: 'success', message: 'Payout marked Paid and reference saved' });
                 }
 
                 return sendAdminJson({ status: "error", message: "Admin endpoint not found" }, 404);
@@ -4298,6 +4325,8 @@ export default {
                 )
             `).run();
 
+            try { await env.DB.prepare(`ALTER TABLE withdrawals ADD COLUMN payout_reference TEXT`).run(); } catch (_) {}
+
             await env.DB.prepare(`
                 CREATE INDEX IF NOT EXISTS idx_withdrawals_user
                 ON withdrawals(user_id)
@@ -4309,6 +4338,17 @@ export default {
             `).run();
         }
 
+
+        // Public exchange rate displayed on the withdrawal page.
+        if (url.pathname === "/api/payout-info" && request.method === "GET") {
+            try {
+                const rate = await env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first();
+                const settings = await env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first();
+                return jsonResponse({ status: 'success', exchange_rate: 83.5, minimum_withdrawal: Number(settings?.minimum_amount || 10) });
+            } catch (error) {
+                return jsonResponse({ status: 'success', exchange_rate: 83.5, minimum_withdrawal: 10 });
+            }
+        }
 
         // ==================================================
         // WITHDRAWAL API

@@ -1529,6 +1529,13 @@
     // PAYOUTS
     // =================================================
 
+    function formatPaymentDetails(raw) {
+        try {
+            const d = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
+            return Object.entries(d).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'No details';
+        } catch { return String(raw || 'No details'); }
+    }
+
     async function loadPayouts() {
 
         const tbody =
@@ -1596,8 +1603,10 @@
                         </td>
 
 
-                        <td class="p-4 uppercase text-xs">
-                            ${escapeHtml(item.method || '')}
+                        <td class="p-4 text-xs">
+                            <div class="uppercase">${escapeHtml(item.method || '')}</div>
+                            <div class="text-gray-400 mt-1 break-all">${escapeHtml(formatPaymentDetails(item.payment_details))}</div>
+                            ${item.payout_reference ? `<div class="text-emerald-400 mt-1">Ref: ${escapeHtml(item.payout_reference)}</div>` : ''}
                         </td>
 
 
@@ -1630,11 +1639,7 @@
 
                         <td class="p-4">
 
-                            ${
-                                pending
-                                ? '<span class="text-xs text-gray-500">Manual payout actions not enabled yet</span>'
-                                : '—'
-                            }
+                            ${pending ? `<div class="flex flex-col gap-2 min-w-28"><button onclick="processPayout(${Number(item.id)}, 'approve')" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs">Approve</button><button onclick="processPayout(${Number(item.id)}, 'reject')" class="px-3 py-2 rounded-lg bg-red-600 text-white text-xs">Reject</button></div>` : item.status === 'approved' ? `<div class="flex flex-col gap-2 min-w-28"><span class="text-xs text-yellow-300">Pay manually first</span><button onclick="processPayout(${Number(item.id)}, 'paid')" class="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs">Mark Paid</button><button onclick="processPayout(${Number(item.id)}, 'reject')" class="px-3 py-2 rounded-lg bg-red-600 text-white text-xs">Reject</button></div>` : (item.status === 'rejected' && item.rejection_reason ? `<span class="text-xs text-red-300">${escapeHtml(item.rejection_reason)}</span>` : '—')}
 
                         </td>
 
@@ -1660,50 +1665,30 @@
     }
 
 
-    async function processPayout(
-        id,
-        action
-    ) {
-
-        const text =
-            action === 'approve'
-            ? 'Approve this withdrawal?'
-            : 'Reject this withdrawal?';
-
-        if (!confirm(text)) {
-            return;
+    async function processPayout(id, action) {
+        let reference = '';
+        let reason = '';
+        if (action === 'approve' && !confirm('Approve this withdrawal request? You must pay manually before marking it Paid.')) return;
+        if (action === 'reject') {
+            reason = prompt('Rejection reason (required):', 'Unable to process this payout');
+            if (reason === null) return;
+            reason = reason.trim();
+            if (!reason) { toast('Rejection reason is required'); return; }
+            if (!confirm('Reject request and return its amount to the user balance?')) return;
         }
-
+        if (action === 'paid') {
+            reference = prompt('Enter UTR / payment reference after completing the manual transfer:');
+            if (reference === null) return;
+            reference = reference.trim();
+            if (!reference) { toast('UTR/payment reference is required'); return; }
+            if (!confirm('Confirm payment was actually sent? This will mark the withdrawal Paid.')) return;
+        }
         try {
-
-            await api(
-                '/api/admin/payout',
-                {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        withdrawal_id: id,
-                        action
-                    })
-                }
-            );
-
-            toast(
-                action === 'approve'
-                ? 'Payout approved'
-                : 'Payout rejected'
-            );
-
-            await loadPayouts();
-            await loadOverview();
-
-        } catch (error) {
-
-            toast(error.message);
-
-        }
-
+            await api('/api/admin/payout', { method: 'POST', body: JSON.stringify({ withdrawal_id: id, action, reference, reason }) });
+            toast(action === 'approve' ? 'Approved. Pay manually before marking Paid.' : action === 'reject' ? 'Rejected; balance returned.' : 'Marked Paid; reference saved.');
+            await loadPayouts(); await loadOverview();
+        } catch (error) { toast(error.message); }
     }
-
 
     // =================================================
     // SETTINGS
@@ -2043,6 +2028,13 @@
 
     init();
 
+</script>
+
+
+<script>
+(async function loadPayoutExchangeRate(){
+  try { const r = await fetch('/api/payout-info'); const d = await r.json(); if (d && d.status === 'success') { const el = document.getElementById('payoutExchangeRate'); if (el) el.textContent = Number(d.exchange_rate || 83.5).toFixed(3); } } catch (_) {}
+})();
 </script>
 
 </body>
