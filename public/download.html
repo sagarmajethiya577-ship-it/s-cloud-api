@@ -786,7 +786,7 @@
                     </div>
                 </div>
 
-                <div class="detail">
+                <div class="detail" id="fileSharedByRow" style="display: none;">
                     <div class="detail-icon">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
@@ -800,7 +800,7 @@
 
                     <div class="detail-text">
                         <div class="detail-label">Shared by</div>
-                        <div id="fileSharedBy" class="detail-value">—</div>
+                        <a id="fileSharedBy" class="detail-value" style="display: block; text-decoration: none; cursor: default;" aria-label="Shared by"></a>
                     </div>
                 </div>
 
@@ -1464,21 +1464,48 @@ function renderFile(data) {
         );
 
     const sharedBy =
-        typeof file.sharedBy ===
-        "string"
+        typeof file.sharedBy === "string"
             ? file.sharedBy.trim()
             : "";
 
-    if (fileSharedBy) {
-        fileSharedBy.textContent =
-            sharedBy;
-    }
+    const sharedByUrl =
+        typeof file.sharedByUrl === "string"
+            ? file.sharedByUrl.trim()
+            : "";
 
+    // Backend only returns sharedBy when the user's setting is enabled.
+    // Keep the entire row hidden when Shared By is disabled or empty.
     if (fileSharedByRow) {
         fileSharedByRow.style.display =
-            sharedBy
-                ? ""
-                : "none";
+            sharedBy ? "" : "none";
+    }
+
+    if (fileSharedBy) {
+        fileSharedBy.textContent = sharedBy;
+        fileSharedBy.removeAttribute("href");
+        fileSharedBy.removeAttribute("target");
+        fileSharedBy.removeAttribute("rel");
+        fileSharedBy.style.cursor = "default";
+        fileSharedBy.style.textDecoration = "none";
+        fileSharedBy.removeAttribute("title");
+
+        // Only allow valid HTTP(S) URLs from the configured profile URL.
+        if (sharedBy && sharedByUrl) {
+            try {
+                const parsedSharedByUrl = new URL(sharedByUrl);
+
+                if (["http:", "https:"].includes(parsedSharedByUrl.protocol)) {
+                    fileSharedBy.href = parsedSharedByUrl.href;
+                    fileSharedBy.target = "_blank";
+                    fileSharedBy.rel = "noopener noreferrer";
+                    fileSharedBy.style.cursor = "pointer";
+                    fileSharedBy.style.textDecoration = "underline";
+                    fileSharedBy.title = "Open Shared By website";
+                }
+            } catch (error) {
+                // Invalid configured URLs leave the name as plain text.
+            }
+        }
     }
 
 

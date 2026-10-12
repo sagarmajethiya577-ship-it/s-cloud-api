@@ -37,3 +37,26 @@ wrangler.toml.backup*
 scloud-before-*
 scloud-spa-ready-*
 scloud-code-part*.txt
+# Local backup files
+*.backup
+*.backup-*
+*.before-*
+*.dashboard-backup
+*.txt
+
+# Local backup directories
+scloud-before-spa-*/
+scloud-spa-ready-*/
+# Backup files
+*.backup
+*.backup-*
+*.before-*
+*.dashboard-backup
+
+# Old project snapshots
+scloud-before-spa-*/
+scloud-spa-ready-*/
+
+# Local test files
+test-gdflix-html.js
+test-gdflix-scraper.js
