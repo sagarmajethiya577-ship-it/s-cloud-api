@@ -134,6 +134,54 @@
             display: none;
         }
 
+        /* Settings form: prevent input rows from overflowing narrow screens. */
+        #tab-settings,
+        #tab-settings * {
+            min-width: 0;
+        }
+
+        #tab-settings .settings-card {
+            width: 100%;
+            max-width: 672px;
+        }
+
+        #tab-settings .settings-field-row {
+            display: flex;
+            align-items: stretch;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        #tab-settings .settings-field-row input {
+            display: block;
+            flex: 1 1 0%;
+            width: 1%;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        #tab-settings .settings-field-row .settings-currency {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 480px) {
+            #tab-settings .settings-card {
+                padding: 16px;
+            }
+
+            #tab-settings .settings-field-row .settings-currency {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+
+            #tab-settings .settings-field-row input {
+                padding-left: 12px;
+                padding-right: 12px;
+                font-size: 16px;
+            }
+        }
+
         .mobile-nav {
             display: none;
         }
@@ -789,7 +837,7 @@
             </div>
 
 
-            <div class="max-w-2xl glass-card p-6">
+            <div class="settings-card max-w-2xl glass-card p-6">
 
                 <div class="mb-6">
 
@@ -812,24 +860,25 @@
                             Exchange Rate
                         </label>
 
-                        <div class="flex">
+                        <div class="settings-field-row">
 
                             <span
-                                class="px-4 flex items-center bg-white/5 border border-white/10 border-r-0 rounded-l-xl text-gray-400"
+                                class="settings-currency px-4 flex items-center bg-white/5 border border-white/10 border-r-0 rounded-l-xl text-gray-400"
                             >
                                 $1 =
                             </span>
 
                             <input
                                 id="exchangeRate"
-                                type="number"
-                                step="0.01"
+                                type="text"
+                                inputmode="decimal"
+                                autocomplete="off"
                                 min="0"
                                 class="flex-1 bg-transparent border border-white/10 rounded-r-xl px-4 py-3 outline-none focus:border-red-500"
                                 placeholder="83.50"
                             >
 
-                            <span class="ml-3 flex items-center text-gray-500">
+                            <span class="settings-currency ml-3 flex items-center text-gray-500">
                                 INR
                             </span>
 
@@ -844,18 +893,19 @@
                             Minimum Withdrawal
                         </label>
 
-                        <div class="flex">
+                        <div class="settings-field-row">
 
                             <span
-                                class="px-4 flex items-center bg-white/5 border border-white/10 border-r-0 rounded-l-xl text-gray-400"
+                                class="settings-currency px-4 flex items-center bg-white/5 border border-white/10 border-r-0 rounded-l-xl text-gray-400"
                             >
                                 $
                             </span>
 
                             <input
                                 id="minimumWithdrawal"
-                                type="number"
-                                step="0.01"
+                                type="text"
+                                inputmode="decimal"
+                                autocomplete="off"
                                 min="0"
                                 class="flex-1 bg-transparent border border-white/10 rounded-r-xl px-4 py-3 outline-none focus:border-red-500"
                                 placeholder="10.00"
@@ -914,7 +964,7 @@
 
         const n = Number(value || 0);
 
-        return '$' + n.toFixed(2);
+        return '$' + n.toFixed(3);
 
     }
 
@@ -1147,7 +1197,7 @@
                 '₹' +
                 Number(
                     data.exchange_rate || 0
-                ).toFixed(2);
+                ).toFixed(3);
 
             document.getElementById(
                 'overviewMinimum'
@@ -1260,7 +1310,7 @@
 
                                 <input
                                     id="cpm-${user.id}"
-                                    value="${Number(user.custom_cpm || 0).toFixed(2)}"
+                                    value="${Number(user.custom_cpm || 0).toFixed(3)}"
                                     type="number"
                                     step="0.01"
                                     class="w-20 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs outline-none"
@@ -1623,18 +1673,19 @@
             ).value =
                 Number(
                     data.exchange_rate || 0
-                ).toFixed(2);
+                ).toFixed(3);
 
             document.getElementById(
                 'minimumWithdrawal'
             ).value =
                 Number(
                     data.minimum_withdrawal || 0
-                ).toFixed(2);
+                ).toFixed(3);
 
         } catch (error) {
 
-            console.error(error);
+            console.error('Unable to load admin settings:', error);
+            toast('Settings load failed: ' + error.message);
 
         }
 
