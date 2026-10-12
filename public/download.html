@@ -726,7 +726,67 @@
 
             <div class="file-details">
 
-                <div class="detail" id="fileSharedByRow">
+                <div class="detail">
+                    <div class="detail-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="1.8"
+                                d="M4 19V5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2z">
+                            </path>
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="1.8"
+                                d="M8 15v-3m4 3V8m4 7v-5">
+                            </path>
+                        </svg>
+                    </div>
+
+                    <div class="detail-text">
+                        <div class="detail-label">File Size</div>
+                        <div id="fileSize" class="detail-value">—</div>
+                    </div>
+                </div>
+
+                <div class="detail">
+                    <div class="detail-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="1.8"
+                                d="M4 6h16M4 10h16M4 14h16M4 18h16">
+                            </path>
+                        </svg>
+                    </div>
+
+                    <div class="detail-text">
+                        <div class="detail-label">File Type</div>
+                        <div id="fileType" class="detail-value mono">—</div>
+                    </div>
+                </div>
+
+                <div class="detail">
+                    <div class="detail-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="1.8"
+                                d="M8 3v4m8-4v4M4 11h16M5 5h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z">
+                            </path>
+                        </svg>
+                    </div>
+
+                    <div class="detail-text">
+                        <div class="detail-label">Shared</div>
+                        <div id="fileShared" class="detail-value">—</div>
+                    </div>
+                </div>
+
+                <div class="detail">
                     <div class="detail-icon">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
@@ -737,6 +797,7 @@
                             </path>
                         </svg>
                     </div>
+
                     <div class="detail-text">
                         <div class="detail-label">Shared by</div>
                         <div id="fileSharedBy" class="detail-value">—</div>
@@ -1409,27 +1470,8 @@ function renderFile(data) {
             : "";
 
     if (fileSharedBy) {
-        fileSharedBy.replaceChildren();
-
-        const sharedByUrl =
-            typeof file.sharedByUrl === "string"
-                ? file.sharedByUrl.trim()
-                : "";
-
-        if (
-            sharedBy &&
-            /^https?:\/\//i.test(sharedByUrl)
-        ) {
-            const link = document.createElement("a");
-            link.href = sharedByUrl;
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-            link.textContent = sharedBy;
-            link.className = "text-cyan-400 hover:text-cyan-300 underline underline-offset-2";
-            fileSharedBy.appendChild(link);
-        } else {
-            fileSharedBy.textContent = sharedBy || "—";
-        }
+        fileSharedBy.textContent =
+            sharedBy;
     }
 
     if (fileSharedByRow) {
