@@ -408,27 +408,7 @@
                 <div
                     class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
 
-                    <svg
-                        class="w-6 h-6 text-blue-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24">
-
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.608-2.296.07-2.572-1.065z">
-                        </path>
-
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z">
-                        </path>
-
-                    </svg>
+                    <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.608-2.296.07-2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
 
                 </div>
 
@@ -573,6 +553,23 @@
                             This is shown as "Shared by" on your download pages.
                         </p>
 
+                    </div>
+
+                    <div>
+                        <label for="sharedByUrlInput"
+                            class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                            Website URL
+                        </label>
+                        <input
+                            type="url"
+                            id="sharedByUrlInput"
+                            maxlength="500"
+                            placeholder="https://example.com"
+                            autocomplete="url"
+                            class="w-full bg-[#0a0e17] border border-gray-700 focus:border-cyan-500 rounded-xl py-3 px-4 text-gray-300 outline-none transition-all shadow-inner text-sm">
+                        <p class="text-[10px] text-gray-500 mt-1.5 ml-1">
+                            The Shared by name will link to this website. Include https://
+                        </p>
                     </div>
 
                     <div class="flex items-center justify-between gap-4 rounded-xl bg-[#0a0e17] border border-gray-700/70 px-4 py-3">
@@ -1130,6 +1127,16 @@
                 document.getElementById(
                     "sharedByEnabled"
                 );
+
+            const sharedByUrlInput =
+                document.getElementById("sharedByUrlInput");
+
+            if (sharedByUrlInput) {
+                sharedByUrlInput.value =
+                    typeof user.shared_by_url === "string"
+                        ? user.shared_by_url
+                        : "";
+            }
 
             const savedSharedBy =
                 typeof user.shared_by ===
@@ -1716,6 +1723,35 @@
             const sharedBy =
                 input.value.trim();
 
+            const sharedByUrlInput =
+                document.getElementById("sharedByUrlInput");
+
+            const sharedByUrl =
+                sharedByUrlInput
+                    ? sharedByUrlInput.value.trim()
+                    : "";
+
+            if (sharedByUrl.length > 500) {
+                showToast("error", "Website URL Too Long",
+                    "Website URL cannot exceed 500 characters.");
+                sharedByUrlInput.focus();
+                return;
+            }
+
+            if (sharedByUrl) {
+                try {
+                    const parsedUrl = new URL(sharedByUrl);
+                    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+                        throw new Error("Invalid protocol");
+                    }
+                } catch {
+                    showToast("error", "Invalid Website URL",
+                        "Enter a valid URL beginning with https:// or http://");
+                    sharedByUrlInput.focus();
+                    return;
+                }
+            }
+
             if (
                 sharedBy.length > 120
             ) {
@@ -1764,6 +1800,9 @@
                             JSON.stringify({
                                 sharedBy:
                                     sharedBy,
+
+                                sharedByUrl:
+                                    sharedByUrl,
 
                                 enabled:
                                     enabled
@@ -1829,6 +1868,13 @@
                 toggle.checked =
                     updatedEnabled &&
                     !!updatedSharedBy;
+
+                if (sharedByUrlInput) {
+                    sharedByUrlInput.value =
+                        typeof updatedUser.shared_by_url === "string"
+                            ? updatedUser.shared_by_url
+                            : "";
+                }
 
                 btn.innerText =
                     "Saved ✓";

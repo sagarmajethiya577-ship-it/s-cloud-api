@@ -810,6 +810,7 @@ async function getCurrentUser(
                     u.email,
                     u.shared_by,
                     u.shared_by_enabled,
+                    u.shared_by_url,
                     u.role,
                     u.balance,
                     u.custom_cpm,
@@ -868,6 +869,7 @@ async function getCurrentUser(
         email: session.email,
         shared_by: session.shared_by,
         shared_by_enabled: session.shared_by_enabled,
+        shared_by_url: session.shared_by_url,
         role: session.role,
         balance: session.balance,
         custom_cpm: session.custom_cpm,
@@ -3571,6 +3573,40 @@ export default {
                         ? body.sharedBy.trim()
                         : "";
 
+                const rawSharedByUrl =
+                    typeof body?.sharedByUrl === "string"
+                        ? body.sharedByUrl.trim()
+                        : "";
+
+                if (rawSharedByUrl.length > 500) {
+                    return new Response(JSON.stringify({
+                        status: "error",
+                        message: "Website URL cannot exceed 500 characters."
+                    }), {
+                        status: 400,
+                        headers: { ...corsHeaders, ...jsonHeaders() }
+                    });
+                }
+
+                let sharedByUrl = null;
+                if (rawSharedByUrl) {
+                    try {
+                        const parsedUrl = new URL(rawSharedByUrl);
+                        if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+                            throw new Error("Unsupported protocol");
+                        }
+                        sharedByUrl = parsedUrl.href;
+                    } catch {
+                        return new Response(JSON.stringify({
+                            status: "error",
+                            message: "Enter a valid website URL beginning with https:// or http://."
+                        }), {
+                            status: 400,
+                            headers: { ...corsHeaders, ...jsonHeaders() }
+                        });
+                    }
+                }
+
                 const requestedEnabled =
                     body?.enabled === true ||
                     body?.enabled === 1 ||
@@ -3614,12 +3650,14 @@ export default {
                         `UPDATE users
                          SET
                             shared_by = ?,
-                            shared_by_enabled = ?
+                            shared_by_enabled = ?,
+                            shared_by_url = ?
                          WHERE id = ?`
                     )
                     .bind(
                         sharedBy,
                         enabled,
+                        sharedByUrl,
                         user.id
                     )
                     .run();
@@ -6382,7 +6420,8 @@ export default {
                             `SELECT
                                  files.*,
                                  users.shared_by,
-                                 users.shared_by_enabled
+                                 users.shared_by_enabled,
+                                 users.shared_by_url
                              FROM files
                              LEFT JOIN users
                                  ON users.id = files.user_id
@@ -6773,6 +6812,15 @@ export default {
                                     ? record.shared_by.trim()
 
 
+                                    : null,
+
+                            sharedByUrl:
+                                Number(record.shared_by_enabled) === 1 &&
+                                typeof record.shared_by === "string" &&
+                                record.shared_by.trim() &&
+                                typeof record.shared_by_url === "string" &&
+                                /^https?:\/\//i.test(record.shared_by_url.trim())
+                                    ? record.shared_by_url.trim()
                                     : null
                         },
 

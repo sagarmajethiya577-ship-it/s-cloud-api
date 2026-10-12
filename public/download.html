@@ -798,7 +798,7 @@
                         </svg>
                     </div>
 
-                    <div class="detail-text">
+                    <div class="detail-text" id="fileSharedByRow">
                         <div class="detail-label">Shared by</div>
                         <div id="fileSharedBy" class="detail-value">—</div>
                     </div>
@@ -1470,8 +1470,27 @@ function renderFile(data) {
             : "";
 
     if (fileSharedBy) {
-        fileSharedBy.textContent =
-            sharedBy;
+        fileSharedBy.replaceChildren();
+
+        const sharedByUrl =
+            typeof file.sharedByUrl === "string"
+                ? file.sharedByUrl.trim()
+                : "";
+
+        if (
+            sharedBy &&
+            /^https?:\/\//i.test(sharedByUrl)
+        ) {
+            const link = document.createElement("a");
+            link.href = sharedByUrl;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = sharedBy;
+            link.className = "text-cyan-400 hover:text-cyan-300 underline underline-offset-2";
+            fileSharedBy.appendChild(link);
+        } else {
+            fileSharedBy.textContent = sharedBy || "—";
+        }
     }
 
     if (fileSharedByRow) {
