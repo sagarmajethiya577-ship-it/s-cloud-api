@@ -676,6 +676,10 @@
                                 </th>
 
                                 <th class="p-4">
+                                    Daily Uploads
+                                </th>
+
+                                <th class="p-4">
                                     Status
                                 </th>
 
@@ -1238,7 +1242,7 @@
 
         tbody.innerHTML = `
             <tr>
-                <td colspan="6"
+                <td colspan="7"
                     class="p-8 text-center text-gray-500">
                     Loading users...
                 </td>
@@ -1259,7 +1263,7 @@
 
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6"
+                        <td colspan="7"
                             class="p-8 text-center text-gray-500">
                             No users found
                         </td>
@@ -1327,6 +1331,31 @@
 
                         </td>
 
+                        <td class="p-4">
+                            <div class="text-xs text-gray-400 mb-2">
+                                Today: <span class="text-white">${Number(user.uploads_today || 0)}</span>
+                                ${user.daily_upload_limit === null || user.daily_upload_limit === undefined ? '/ Unlimited' : `/ ${Number(user.daily_upload_limit)} allowed`}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input
+                                    id="upload-limit-${user.id}"
+                                    value="${user.daily_upload_limit === null || user.daily_upload_limit === undefined ? '' : Number(user.daily_upload_limit)}"
+                                    type="number"
+                                    min="0"
+                                    max="1000000"
+                                    step="1"
+                                    inputmode="numeric"
+                                    placeholder="Unlimited"
+                                    aria-label="Daily upload limit for ${escapeHtml(user.email)}"
+                                    class="w-24 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs outline-none"
+                                >
+                                <button
+                                    onclick="saveUploadLimit('${user.id}')"
+                                    class="text-xs text-red-400 hover:text-red-300"
+                                >Save</button>
+                            </div>
+                            <div class="text-[10px] text-gray-500 mt-1">Blank = unlimited; 0 = blocked</div>
+                        </td>
 
                         <td class="p-4">
 
@@ -1376,7 +1405,7 @@
 
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6"
+                    <td colspan="7"
                         class="p-8 text-center text-red-400">
                         ${escapeHtml(error.message)}
                     </td>
@@ -1469,6 +1498,30 @@
 
         }
 
+    }
+
+
+    async function saveUploadLimit(userId) {
+        const input = document.getElementById('upload-limit-' + userId);
+        const raw = input.value.trim();
+        let dailyLimit = null;
+        if (raw !== '') {
+            dailyLimit = Number(raw);
+            if (!Number.isInteger(dailyLimit) || dailyLimit < 0 || dailyLimit > 1000000) {
+                toast('Enter a whole number from 0 to 1,000,000, or leave blank for Unlimited');
+                return;
+            }
+        }
+        try {
+            await api('/api/admin/user/upload-limit', {
+                method: 'POST',
+                body: JSON.stringify({ user_id: userId, daily_limit: dailyLimit })
+            });
+            toast(dailyLimit === null ? 'Daily upload limit set to Unlimited' : 'Daily upload limit updated');
+            loadUsers();
+        } catch (error) {
+            toast(error.message);
+        }
     }
 
 

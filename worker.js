@@ -2261,6 +2261,8 @@ export default {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawal_settings (id INTEGER PRIMARY KEY, minimum_amount REAL NOT NULL DEFAULT 10.00, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
                 await env.DB.prepare(`INSERT OR IGNORE INTO withdrawal_settings (id, minimum_amount) VALUES (1, 10.00)`).run();
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, method TEXT NOT NULL, payment_details TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, processed_at TIMESTAMP, processed_by INTEGER, rejection_reason TEXT)`).run();
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_daily_upload_usage (user_id INTEGER NOT NULL, usage_date TEXT NOT NULL, uploads_count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, usage_date))`).run();
 
                 const sendAdminJson = (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, ...jsonHeaders() } });
                 const path = url.pathname;
@@ -2278,8 +2280,21 @@ export default {
                 }
 
                 if (path === "/api/admin/users" && request.method === "GET") {
-                    const result = await env.DB.prepare(`SELECT u.id, u.name, u.email, u.balance, u.custom_cpm, u.status, (SELECT COUNT(*) FROM files f WHERE f.user_id = u.id) AS file_count FROM users u ORDER BY u.id DESC LIMIT 500`).all();
+                    const result = await env.DB.prepare(`SELECT u.id, u.name, u.email, u.balance, u.custom_cpm, u.status, (SELECT COUNT(*) FROM files f WHERE f.user_id = u.id) AS file_count, ul.daily_limit AS daily_upload_limit, COALESCE(du.uploads_count, 0) AS uploads_today FROM users u LEFT JOIN user_upload_limits ul ON ul.user_id = u.id LEFT JOIN user_daily_upload_usage du ON du.user_id = u.id AND du.usage_date = date('now') ORDER BY u.id DESC LIMIT 500`).all();
                     return sendAdminJson({ status: "success", data: result.results || [] });
+                }
+
+                if (path === "/api/admin/user/upload-limit" && request.method === "POST") {
+                    const body = await request.json();
+                    const userId = Number(body.user_id);
+                    const dailyLimit = body.daily_limit === null || body.daily_limit === "" || body.daily_limit === undefined ? null : Number(body.daily_limit);
+                    if (!Number.isInteger(userId) || userId < 1 || (dailyLimit !== null && (!Number.isInteger(dailyLimit) || dailyLimit < 0 || dailyLimit > 1000000))) {
+                        return sendAdminJson({ status: "error", message: "Daily upload limit must be blank for unlimited or a whole number from 0 to 1,000,000" }, 400);
+                    }
+                    const target = await env.DB.prepare(`SELECT id FROM users WHERE id = ? LIMIT 1`).bind(userId).first();
+                    if (!target) return sendAdminJson({ status: "error", message: "User not found" }, 404);
+                    await env.DB.prepare(`INSERT INTO user_upload_limits (user_id, daily_limit, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET daily_limit = excluded.daily_limit, updated_at = CURRENT_TIMESTAMP`).bind(userId, dailyLimit).run();
+                    return sendAdminJson({ status: "success", message: dailyLimit === null ? "Daily upload limit set to Unlimited" : `Daily upload limit set to ${dailyLimit}` });
                 }
 
                 if (path === "/api/admin/user/status" && request.method === "POST") {
@@ -5739,7 +5754,11 @@ export default {
                     "GET"
             )
         ) {
+            let uploadReservation = false;
+            const uploadUsageDate = new Date().toISOString().slice(0, 10);
             try {
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_daily_upload_usage (user_id INTEGER NOT NULL, usage_date TEXT NOT NULL, uploads_count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, usage_date))`).run();
 
                 let drive_url;
 
@@ -6107,6 +6126,32 @@ export default {
 
 
                 // --------------------------------------
+                // ENFORCE DAILY UPLOAD LIMIT (WEB + API)
+                // Atomically reserve one slot before copying.
+                // A blank/null limit means unlimited; 0 blocks uploads.
+                // --------------------------------------
+                const reserveResult = await env.DB.prepare(`
+                    INSERT INTO user_daily_upload_usage (user_id, usage_date, uploads_count)
+                    SELECT ?, date('now'), 1
+                    WHERE COALESCE((SELECT daily_limit FROM user_upload_limits WHERE user_id = ?), -1) = -1
+                       OR COALESCE((SELECT daily_limit FROM user_upload_limits WHERE user_id = ?), -1) >= 1
+                    ON CONFLICT(user_id, usage_date) DO UPDATE SET uploads_count = uploads_count + 1
+                    WHERE (SELECT daily_limit FROM user_upload_limits WHERE user_id = ?) IS NULL
+                       OR user_daily_upload_usage.uploads_count < (SELECT daily_limit FROM user_upload_limits WHERE user_id = ?)
+                `).bind(currentUser.id, currentUser.id, currentUser.id, currentUser.id, currentUser.id).run();
+
+                if (!reserveResult.meta?.changes) {
+                    const [limitRow, usageRow] = await Promise.all([
+                        env.DB.prepare(`SELECT daily_limit FROM user_upload_limits WHERE user_id = ?`).bind(currentUser.id).first(),
+                        env.DB.prepare(`SELECT uploads_count FROM user_daily_upload_usage WHERE user_id = ? AND usage_date = date('now')`).bind(currentUser.id).first()
+                    ]);
+                    const limit = Number(limitRow?.daily_limit ?? 0);
+                    const used = Number(usageRow?.uploads_count || 0);
+                    return new Response(JSON.stringify({ status: "error", message: `Daily upload limit reached (${used}/${limit}). Try again after the daily reset.`, code: "DAILY_UPLOAD_LIMIT", daily_limit: limit, uploads_today: used }), { status: 429, headers: { ...corsHeaders, ...jsonHeaders() } });
+                }
+                uploadReservation = true;
+
+                // --------------------------------------
                 // STEP 1 - COPY TO S-CLOUD DRIVE
                 //
                 // IMPORTANT:
@@ -6209,6 +6254,8 @@ export default {
                         "active"
                     )
                     .run();
+                // Upload has succeeded once its file record is committed.
+                uploadReservation = false;
 
 
                 // --------------------------------------
@@ -6469,6 +6516,14 @@ export default {
             } catch (
                 error
             ) {
+
+                if (uploadReservation) {
+                    try {
+                        await env.DB.prepare(`UPDATE user_daily_upload_usage SET uploads_count = CASE WHEN uploads_count > 0 THEN uploads_count - 1 ELSE 0 END WHERE user_id = ? AND usage_date = ?`).bind(currentUser.id, uploadUsageDate).run();
+                    } catch (releaseError) {
+                        console.error("Could not release failed upload reservation:", releaseError);
+                    }
+                }
 
                 console.error(
                     "Upload Error:",
