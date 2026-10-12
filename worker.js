@@ -2261,7 +2261,13 @@ export default {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawal_settings (id INTEGER PRIMARY KEY, minimum_amount REAL NOT NULL DEFAULT 10.00, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
                 await env.DB.prepare(`INSERT OR IGNORE INTO withdrawal_settings (id, minimum_amount) VALUES (1, 10.00)`).run();
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, method TEXT NOT NULL, payment_details TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, processed_at TIMESTAMP, processed_by INTEGER, rejection_reason TEXT)`).run();
-                try { await env.DB.prepare(`ALTER TABLE withdrawals ADD COLUMN payout_reference TEXT`).run(); } catch (_) {}
+                // Safe, idempotent migrations for databases created by earlier versions.
+                for (const migration of [
+                    `ALTER TABLE withdrawals ADD COLUMN processed_at TIMESTAMP`,
+                    `ALTER TABLE withdrawals ADD COLUMN processed_by INTEGER`,
+                    `ALTER TABLE withdrawals ADD COLUMN rejection_reason TEXT`,
+                    `ALTER TABLE withdrawals ADD COLUMN payout_reference TEXT`
+                ]) { try { await env.DB.prepare(migration).run(); } catch (_) {} }
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_daily_upload_usage (user_id INTEGER NOT NULL, usage_date TEXT NOT NULL, uploads_count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, usage_date))`).run();
 
@@ -2378,7 +2384,7 @@ export default {
                 return sendAdminJson({ status: "error", message: "Admin endpoint not found" }, 404);
             } catch (error) {
                 console.error("Admin API error:", error);
-                return new Response(JSON.stringify({ status: "error", message: "Admin request failed. Check Worker logs for details." }), { status: 500, headers: { ...corsHeaders, ...jsonHeaders() } });
+                return new Response(JSON.stringify({ status: "error", message: "Admin request failed: " + String(error?.message || error).slice(0, 240) }), { status: 500, headers: { ...corsHeaders, ...jsonHeaders() } });
             }
         }
 
@@ -4342,11 +4348,23 @@ export default {
         // Public exchange rate displayed on the withdrawal page.
         if (url.pathname === "/api/payout-info" && request.method === "GET") {
             try {
-                const rate = await env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first();
-                const settings = await env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first();
-                return jsonResponse({ status: 'success', exchange_rate: 83.5, minimum_withdrawal: Number(settings?.minimum_amount || 10) });
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_admin_settings (id INTEGER PRIMARY KEY CHECK (id = 1), exchange_rate REAL NOT NULL DEFAULT 1, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
+                await env.DB.prepare(`INSERT OR IGNORE INTO scloud_admin_settings (id, exchange_rate) VALUES (1, 1)`).run();
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawal_settings (id INTEGER PRIMARY KEY, minimum_amount REAL NOT NULL DEFAULT 10.00, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
+                await env.DB.prepare(`INSERT OR IGNORE INTO withdrawal_settings (id, minimum_amount) VALUES (1, 10.00)`).run();
+                const [rateRow, settings] = await Promise.all([
+                    env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first(),
+                    env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
+                ]);
+                const rate = Number(rateRow?.exchange_rate);
+                const minimum = Number(settings?.minimum_amount);
+                if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(minimum) || minimum < 0) {
+                    throw new Error("Payout settings contain invalid values");
+                }
+                return jsonResponse({ status: 'success', exchange_rate: rate, minimum_withdrawal: minimum });
             } catch (error) {
-                return jsonResponse({ status: 'success', exchange_rate: 83.5, minimum_withdrawal: 10 });
+                console.error("Payout info API error:", error);
+                return jsonResponse({ status: 'error', message: 'Unable to load payout settings' }, 500);
             }
         }
 

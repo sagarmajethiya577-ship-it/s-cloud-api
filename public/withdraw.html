@@ -492,7 +492,7 @@
                         </svg>
 
                         <span>
-                            Exchange Rate: $1.00 = ₹<span id="payoutExchangeRate">83.500</span> INR
+                            Exchange Rate: $1.00 = ₹<span id="payoutExchangeRate">...</span> INR
                         </span>
 
                     </div>
@@ -1296,6 +1296,28 @@
         // WITHDRAWAL DATA
         // ==========================================
 
+        async function loadPayoutInfo() {
+            const rateEl = document.getElementById("payoutExchangeRate");
+            if (!rateEl) return;
+            try {
+                const response = await fetch("/api/payout-info", {
+                    method: "GET",
+                    credentials: "include",
+                    cache: "no-store"
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.status !== "success") {
+                    throw new Error(data.message || "Unable to load exchange rate");
+                }
+                const rate = Number(data.exchange_rate);
+                if (!Number.isFinite(rate) || rate <= 0) throw new Error("Invalid exchange rate");
+                rateEl.textContent = rate.toFixed(3);
+            } catch (error) {
+                console.error("Payout info error:", error);
+                rateEl.textContent = "Unavailable";
+            }
+        }
+
         async function loadWithdrawalData() {
 
             const historyBody =
@@ -1823,7 +1845,7 @@
                     <span>Submitted ✓</span>
                 `;
 
-                await loadWithdrawalData();
+                loadWithdrawalData();
 
                 setTimeout(function() {
 
@@ -1909,6 +1931,8 @@
                 togglePaymentFields();
 
                 await loadUser();
+
+                await loadPayoutInfo();
 
                 await loadWithdrawalData();
 
