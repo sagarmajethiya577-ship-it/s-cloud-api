@@ -2260,14 +2260,16 @@ export default {
                 await env.DB.prepare(`INSERT OR IGNORE INTO scloud_admin_settings (id, exchange_rate) VALUES (1, 1)`).run();
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawal_settings (id INTEGER PRIMARY KEY, minimum_amount REAL NOT NULL DEFAULT 10.00, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
                 await env.DB.prepare(`INSERT OR IGNORE INTO withdrawal_settings (id, minimum_amount) VALUES (1, 10.00)`).run();
-                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, method TEXT NOT NULL, payment_details TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, processed_at TIMESTAMP, processed_by INTEGER, rejection_reason TEXT)`).run();
-                // Safe, idempotent migrations for databases created by earlier versions.
-                for (const migration of [
-                    `ALTER TABLE withdrawals ADD COLUMN processed_at TIMESTAMP`,
-                    `ALTER TABLE withdrawals ADD COLUMN processed_by INTEGER`,
-                    `ALTER TABLE withdrawals ADD COLUMN rejection_reason TEXT`,
-                    `ALTER TABLE withdrawals ADD COLUMN payout_reference TEXT`
-                ]) { try { await env.DB.prepare(migration).run(); } catch (_) {} }
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, method TEXT NOT NULL, payment_details TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, processed_at TIMESTAMP, processed_by INTEGER, rejection_reason TEXT)`).run();
+                // Existing installations may have an older withdrawals schema. Add missing optional columns without deleting records.
+                const withdrawalColumns = await env.DB.prepare(`PRAGMA table_info(withdrawals)`).all();
+                const withdrawalColumnNames = new Set((withdrawalColumns.results || []).map(c => String(c.name)));
+                if (!withdrawalColumnNames.has('payment_details')) {
+                    await env.DB.prepare(`ALTER TABLE withdrawals ADD COLUMN payment_details TEXT`).run();
+                }
+                if (!withdrawalColumnNames.has('payout_reference')) {
+                    await env.DB.prepare(`ALTER TABLE withdrawals ADD COLUMN payout_reference TEXT`).run();
+                }
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_daily_upload_usage (user_id INTEGER NOT NULL, usage_date TEXT NOT NULL, uploads_count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, usage_date))`).run();
 
@@ -2384,7 +2386,8 @@ export default {
                 return sendAdminJson({ status: "error", message: "Admin endpoint not found" }, 404);
             } catch (error) {
                 console.error("Admin API error:", error);
-                return new Response(JSON.stringify({ status: "error", message: "Admin request failed: " + String(error?.message || error).slice(0, 240) }), { status: 500, headers: { ...corsHeaders, ...jsonHeaders() } });
+                const detail = String(error?.message || 'Unknown database error').slice(0, 240);
+                return new Response(JSON.stringify({ status: "error", message: `Admin request failed: ${detail}` }), { status: 500, headers: { ...corsHeaders, ...jsonHeaders() } });
             }
         }
 
@@ -4331,7 +4334,14 @@ export default {
                 )
             `).run();
 
-            try { await env.DB.prepare(`ALTER TABLE withdrawals ADD COLUMN payout_reference TEXT`).run(); } catch (_) {}
+            const cols = await env.DB.prepare(`PRAGMA table_info(withdrawals)`).all();
+            const names = new Set((cols.results || []).map(c => String(c.name)));
+            if (!names.has('payment_details')) {
+                await env.DB.prepare(`ALTER TABLE withdrawals ADD COLUMN payment_details TEXT`).run();
+            }
+            if (!names.has('payout_reference')) {
+                await env.DB.prepare(`ALTER TABLE withdrawals ADD COLUMN payout_reference TEXT`).run();
+            }
 
             await env.DB.prepare(`
                 CREATE INDEX IF NOT EXISTS idx_withdrawals_user
@@ -4350,20 +4360,14 @@ export default {
             try {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_admin_settings (id INTEGER PRIMARY KEY CHECK (id = 1), exchange_rate REAL NOT NULL DEFAULT 1, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
                 await env.DB.prepare(`INSERT OR IGNORE INTO scloud_admin_settings (id, exchange_rate) VALUES (1, 1)`).run();
-                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawal_settings (id INTEGER PRIMARY KEY, minimum_amount REAL NOT NULL DEFAULT 10.00, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
-                await env.DB.prepare(`INSERT OR IGNORE INTO withdrawal_settings (id, minimum_amount) VALUES (1, 10.00)`).run();
-                const [rateRow, settings] = await Promise.all([
+                await ensureWithdrawalTables(env);
+                const [rate, settings] = await Promise.all([
                     env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first(),
                     env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
                 ]);
-                const rate = Number(rateRow?.exchange_rate);
-                const minimum = Number(settings?.minimum_amount);
-                if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(minimum) || minimum < 0) {
-                    throw new Error("Payout settings contain invalid values");
-                }
-                return jsonResponse({ status: 'success', exchange_rate: rate, minimum_withdrawal: minimum });
+                return jsonResponse({ status: 'success', exchange_rate: Number(rate?.exchange_rate ?? 1), minimum_withdrawal: Number(settings?.minimum_amount ?? 10) });
             } catch (error) {
-                console.error("Payout info API error:", error);
+                console.error('Payout info error:', error);
                 return jsonResponse({ status: 'error', message: 'Unable to load payout settings' }, 500);
             }
         }
