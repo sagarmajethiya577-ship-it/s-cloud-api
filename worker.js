@@ -2323,8 +2323,8 @@ export default {
                     const minimum = Number(body.minimum_withdrawal);
                     if (!Number.isFinite(rate) || rate <= 0 || rate > 1000000 || !Number.isFinite(minimum) || minimum < 0 || minimum > 100000000) return sendAdminJson({ status: "error", message: "Invalid settings values" }, 400);
                     await env.DB.batch([
-                        env.DB.prepare(`UPDATE scloud_admin_settings SET exchange_rate = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`).bind(rate),
-                        env.DB.prepare(`UPDATE withdrawal_settings SET minimum_amount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`).bind(minimum)
+                        env.DB.prepare(`INSERT INTO scloud_admin_settings (id, exchange_rate, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET exchange_rate = excluded.exchange_rate, updated_at = CURRENT_TIMESTAMP`).bind(rate),
+                        env.DB.prepare(`INSERT INTO withdrawal_settings (id, minimum_amount, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET minimum_amount = excluded.minimum_amount, updated_at = CURRENT_TIMESTAMP`).bind(minimum)
                     ]);
                     return sendAdminJson({ status: "success", message: "Settings saved" });
                 }
@@ -4382,7 +4382,7 @@ export default {
                 if (!Number.isFinite(amount) || amount < minimum) {
                     return jsonResponse({
                         status: "error",
-                        message: `Minimum withdrawal is $${minimum.toFixed(2)}`
+                        message: `Minimum withdrawal is $${minimum.toFixed(3)}`
                     }, 400);
                 }
 
