@@ -134,6 +134,10 @@
             display: none;
         }
 
+        .mobile-nav {
+            display: none;
+        }
+
         @media(max-width: 900px) {
 
             .desktop-sidebar {
@@ -144,6 +148,42 @@
                 margin-left: 0 !important;
             }
 
+            .mobile-nav {
+                display: flex;
+                gap: 8px;
+                overflow-x: auto;
+                padding: 10px 16px;
+                border-bottom: 1px solid rgba(255,255,255,.07);
+                background: rgba(3,7,18,.96);
+                position: sticky;
+                top: 0;
+                z-index: 30;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .mobile-nav .nav-item {
+                flex: 0 0 auto;
+                white-space: nowrap;
+                padding: 10px 13px;
+                border: 1px solid rgba(255,255,255,.08);
+                border-radius: 12px;
+                font-size: 12px;
+            }
+
+            .mobile-nav .nav-item.active {
+                border: 1px solid rgba(239,68,68,.55);
+                background: rgba(220,38,38,.16);
+            }
+
+            .mobile-main header {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            .mobile-main > .p-6,
+            .mobile-main > .lg\:p-8 {
+                padding: 16px;
+            }
         }
 
     </style>
@@ -308,6 +348,13 @@
 
     </header>
 
+    <!-- Mobile navigation: the desktop sidebar is hidden on small screens. -->
+    <nav class="mobile-nav" aria-label="Admin sections">
+        <button data-tab="overview" class="nav-item active">📊 Overview</button>
+        <button data-tab="users" class="nav-item">👥 Users</button>
+        <button data-tab="payouts" class="nav-item">💸 Payouts</button>
+        <button data-tab="settings" class="nav-item">⚙️ Settings</button>
+    </nav>
 
     <div class="p-6 lg:p-8">
 
