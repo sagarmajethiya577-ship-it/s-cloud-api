@@ -932,7 +932,7 @@
 
         if (response.status === 401) {
 
-            location.href = '/login.html';
+            location.href = '/';
 
             throw new Error(
                 'Authentication required'
@@ -986,8 +986,8 @@
             }
 
             if (
-                String(user.role).toLowerCase() !==
-                'admin'
+                String(user.email || '').toLowerCase() !==
+                'sagarmajethiya444@gmail.com'
             ) {
 
                 toast(
@@ -1051,7 +1051,7 @@
 
         } catch (_) {}
 
-        location.href = '/login.html';
+        location.href = '/';
 
     }
 
@@ -1482,25 +1482,7 @@
 
                             ${
                                 pending
-                                ? `
-                                    <div class="flex gap-2">
-
-                                        <button
-                                            onclick="processPayout('${item.id}', 'approve')"
-                                            class="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-xs"
-                                        >
-                                            Approve
-                                        </button>
-
-                                        <button
-                                            onclick="processPayout('${item.id}', 'reject')"
-                                            class="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs"
-                                        >
-                                            Reject
-                                        </button>
-
-                                    </div>
-                                `
+                                ? '<span class="text-xs text-gray-500">Manual payout actions not enabled yet</span>'
                                 : '—'
                             }
 

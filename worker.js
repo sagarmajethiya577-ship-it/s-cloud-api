@@ -2226,6 +2226,119 @@ export default {
                 request.url
             );
 
+        // ==================================================
+        // PRIVATE ADMIN PANEL + SERVER-SIDE AUTHORIZATION
+        // ==================================================
+        const ADMIN_EMAIL = "sagarmajethiya444@gmail.com";
+        const isAdminApi = url.pathname.startsWith("/api/admin/");
+
+        if (url.pathname === "/admin1061") {
+            const adminPageUser = await getCurrentUser(request, env);
+            if (!adminPageUser) {
+                const loginUrl = new URL("/", request.url);
+                loginUrl.searchParams.set("redirect", "/admin1061");
+                return Response.redirect(loginUrl.toString(), 302);
+            }
+            if (String(adminPageUser.email || "").toLowerCase() !== ADMIN_EMAIL) {
+                return new Response("Not Found", { status: 404, headers: { "Content-Type": "text/plain; charset=UTF-8", "Cache-Control": "no-store" } });
+            }
+            return env.ASSETS.fetch(new Request(new URL("/admin.html", request.url), request));
+        }
+
+        if (isAdminApi) {
+            const adminUser = await getCurrentUser(request, env);
+            if (!adminUser) {
+                return new Response(JSON.stringify({ status: "error", message: "Authentication required" }), { status: 401, headers: { ...corsHeaders, ...jsonHeaders() } });
+            }
+            if (String(adminUser.email || "").toLowerCase() !== ADMIN_EMAIL) {
+                return new Response(JSON.stringify({ status: "error", message: "Admin access required" }), { status: 403, headers: { ...corsHeaders, ...jsonHeaders() } });
+            }
+
+            try {
+                // Reuse the existing withdrawal tables and add only a small settings table.
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_admin_settings (id INTEGER PRIMARY KEY CHECK (id = 1), exchange_rate REAL NOT NULL DEFAULT 1, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
+                await env.DB.prepare(`INSERT OR IGNORE INTO scloud_admin_settings (id, exchange_rate) VALUES (1, 1)`).run();
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawal_settings (id INTEGER PRIMARY KEY, minimum_amount REAL NOT NULL DEFAULT 10.00, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
+                await env.DB.prepare(`INSERT OR IGNORE INTO withdrawal_settings (id, minimum_amount) VALUES (1, 10.00)`).run();
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, method TEXT NOT NULL, payment_details TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, processed_at TIMESTAMP, processed_by INTEGER, rejection_reason TEXT)`).run();
+
+                const sendAdminJson = (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, ...jsonHeaders() } });
+                const path = url.pathname;
+
+                if (path === "/api/admin/overview" && request.method === "GET") {
+                    const [users, files, paid, pending, settings] = await Promise.all([
+                        env.DB.prepare(`SELECT COUNT(*) AS total FROM users`).first(),
+                        env.DB.prepare(`SELECT COUNT(*) AS total FROM files`).first(),
+                        env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total FROM withdrawals WHERE status = 'completed'`).first(),
+                        env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total FROM withdrawals WHERE status = 'pending'`).first(),
+                        env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
+                    ]);
+                    const rate = await env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first();
+                    return sendAdminJson({ status: "success", data: { total_users: Number(users?.total || 0), total_files: Number(files?.total || 0), total_paid: Number(paid?.total || 0), pending_amount: Number(pending?.total || 0), exchange_rate: Number(rate?.exchange_rate || 1), minimum_withdrawal: Number(settings?.minimum_amount || 10) } });
+                }
+
+                if (path === "/api/admin/users" && request.method === "GET") {
+                    const result = await env.DB.prepare(`SELECT u.id, u.name, u.email, u.balance, u.custom_cpm, u.status, (SELECT COUNT(*) FROM files f WHERE f.user_id = u.id) AS file_count FROM users u ORDER BY u.id DESC LIMIT 500`).all();
+                    return sendAdminJson({ status: "success", data: result.results || [] });
+                }
+
+                if (path === "/api/admin/user/status" && request.method === "POST") {
+                    const body = await request.json();
+                    const userId = Number(body.user_id);
+                    const status = String(body.status || "");
+                    if (!Number.isInteger(userId) || userId < 1 || !["active", "banned"].includes(status)) return sendAdminJson({ status: "error", message: "Invalid user or status" }, 400);
+                    const target = await env.DB.prepare(`SELECT id, email FROM users WHERE id = ? LIMIT 1`).bind(userId).first();
+                    if (!target) return sendAdminJson({ status: "error", message: "User not found" }, 404);
+                    if (String(target.email || "").toLowerCase() === ADMIN_EMAIL) return sendAdminJson({ status: "error", message: "The owner account cannot be banned" }, 400);
+                    await env.DB.prepare(`UPDATE users SET status = ? WHERE id = ?`).bind(status, userId).run();
+                    return sendAdminJson({ status: "success", message: "User status updated" });
+                }
+
+                if (path === "/api/admin/user/cpm" && request.method === "POST") {
+                    const body = await request.json();
+                    const userId = Number(body.user_id);
+                    const cpm = Number(body.custom_cpm);
+                    if (!Number.isInteger(userId) || userId < 1 || !Number.isFinite(cpm) || cpm < 0 || cpm > 100000) return sendAdminJson({ status: "error", message: "Invalid user or CPM" }, 400);
+                    const result = await env.DB.prepare(`UPDATE users SET custom_cpm = ? WHERE id = ?`).bind(cpm, userId).run();
+                    if (!result.meta?.changes) return sendAdminJson({ status: "error", message: "User not found" }, 404);
+                    return sendAdminJson({ status: "success", message: "CPM updated" });
+                }
+
+                if (path === "/api/admin/payouts" && request.method === "GET") {
+                    const result = await env.DB.prepare(`SELECT w.id, w.user_id, w.amount, w.method, w.payment_details, w.status, w.created_at, u.name, u.email FROM withdrawals w LEFT JOIN users u ON u.id = w.user_id ORDER BY CASE WHEN w.status = 'pending' THEN 0 ELSE 1 END, w.id DESC LIMIT 500`).all();
+                    return sendAdminJson({ status: "success", data: result.results || [] });
+                }
+
+                if (path === "/api/admin/settings" && request.method === "GET") {
+                    const [rate, minimum] = await Promise.all([
+                        env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first(),
+                        env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
+                    ]);
+                    return sendAdminJson({ status: "success", data: { exchange_rate: Number(rate?.exchange_rate || 1), minimum_withdrawal: Number(minimum?.minimum_amount || 10) } });
+                }
+
+                if (path === "/api/admin/settings" && request.method === "POST") {
+                    const body = await request.json();
+                    const rate = Number(body.exchange_rate);
+                    const minimum = Number(body.minimum_withdrawal);
+                    if (!Number.isFinite(rate) || rate <= 0 || rate > 1000000 || !Number.isFinite(minimum) || minimum < 0 || minimum > 100000000) return sendAdminJson({ status: "error", message: "Invalid settings values" }, 400);
+                    await env.DB.batch([
+                        env.DB.prepare(`UPDATE scloud_admin_settings SET exchange_rate = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`).bind(rate),
+                        env.DB.prepare(`UPDATE withdrawal_settings SET minimum_amount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`).bind(minimum)
+                    ]);
+                    return sendAdminJson({ status: "success", message: "Settings saved" });
+                }
+
+                if (path === "/api/admin/payout" && request.method === "POST") {
+                    return sendAdminJson({ status: "error", message: "Payout processing is intentionally disabled until the manual UPI/bank workflow is implemented" }, 409);
+                }
+
+                return sendAdminJson({ status: "error", message: "Admin endpoint not found" }, 404);
+            } catch (error) {
+                console.error("Admin API error:", error);
+                return new Response(JSON.stringify({ status: "error", message: "Admin request failed. Check Worker logs for details." }), { status: 500, headers: { ...corsHeaders, ...jsonHeaders() } });
+            }
+        }
 
         // ==================================================
         // API KEY MANAGEMENT
@@ -7726,6 +7839,14 @@ export default {
             "/settings.html",
             "/withdraw.html"
         ];
+
+        // The underlying admin document must not be directly accessible.
+        if (url.pathname === "/admin.html") {
+            const directAdminUser = await getCurrentUser(request, env);
+            if (!directAdminUser) return Response.redirect(new URL("/", request.url).toString(), 302);
+            if (String(directAdminUser.email || "").toLowerCase() !== "sagarmajethiya444@gmail.com") return new Response("Not Found", { status: 404 });
+            return env.ASSETS.fetch(new Request(new URL("/admin.html", request.url), request));
+        }
 
         const isProtectedPage =
             Object.prototype.hasOwnProperty.call(
