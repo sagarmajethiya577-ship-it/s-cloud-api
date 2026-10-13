@@ -2285,7 +2285,7 @@ export default {
                         env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
                     ]);
                     const rate = await env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first();
-                    return sendAdminJson({ status: "success", data: { total_users: Number(users?.total || 0), total_files: Number(files?.total || 0), total_paid: Number(paid?.total || 0), pending_amount: Number(pending?.total || 0), exchange_rate: Number(rate?.exchange_rate ?? 1), minimum_withdrawal: Number(settings?.minimum_amount ?? 10) } });
+                    return sendAdminJson({ status: "success", data: { total_users: Number(users?.total || 0), total_files: Number(files?.total || 0), total_paid: Number(paid?.total || 0), pending_amount: Number(pending?.total || 0), exchange_rate: Number(rate?.exchange_rate || 1), minimum_withdrawal: Number(settings?.minimum_amount ?? 10) } });
                 }
 
                 if (path === "/api/admin/users" && request.method === "GET") {
@@ -2329,7 +2329,7 @@ export default {
                 }
 
                 if (path === "/api/admin/payouts" && request.method === "GET") {
-                    const result = await env.DB.prepare(`SELECT w.id, w.user_id, w.amount, w.method, w.payment_details, w.status, w.created_at, w.processed_at, w.rejection_reason, w.payout_reference, u.name, u.email FROM withdrawals w LEFT JOIN users u ON u.id = w.user_id ORDER BY CASE WHEN w.status = 'pending' THEN 0 ELSE 1 END, w.id DESC LIMIT 500`).all();
+                    const result = await env.DB.prepare(`SELECT w.id, w.user_id, w.amount, w.method, w.payment_details, w.status, w.requested_at AS created_at, w.processed_at, w.rejection_reason, w.payout_reference, u.name, u.email FROM withdrawals w LEFT JOIN users u ON u.id = w.user_id ORDER BY CASE WHEN w.status = 'pending' THEN 0 ELSE 1 END, w.id DESC LIMIT 500`).all();
                     return sendAdminJson({ status: "success", data: result.results || [] });
                 }
 
@@ -2338,7 +2338,7 @@ export default {
                         env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first(),
                         env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
                     ]);
-                    return sendAdminJson({ status: "success", data: { exchange_rate: Number(rate?.exchange_rate ?? 1), minimum_withdrawal: Number(minimum?.minimum_amount ?? 10) } });
+                    return sendAdminJson({ status: "success", data: { exchange_rate: Number(rate?.exchange_rate || 1), minimum_withdrawal: Number(minimum?.minimum_amount ?? 10) } });
                 }
 
                 if (path === "/api/admin/settings" && request.method === "POST") {
@@ -4414,7 +4414,7 @@ export default {
                         amount,
                         method,
                         status,
-                        created_at,
+                        requested_at AS created_at,
                         processed_at,
                         rejection_reason
                     FROM withdrawals
