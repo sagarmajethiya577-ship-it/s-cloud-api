@@ -2201,6 +2201,15 @@ export default {
                 "Content-Type, Authorization, X-API-Key"
         };
 
+        // Shared JSON response helper used by API routes.
+        const jsonResponse = (payload, status = 200) => new Response(
+            JSON.stringify(payload),
+            {
+                status,
+                headers: { ...corsHeaders, ...jsonHeaders() }
+            }
+        );
+
 
         // ------------------------------------------
         // OPTIONS
