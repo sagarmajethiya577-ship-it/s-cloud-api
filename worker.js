@@ -2285,7 +2285,7 @@ export default {
                         env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
                     ]);
                     const rate = await env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first();
-                    return sendAdminJson({ status: "success", data: { total_users: Number(users?.total || 0), total_files: Number(files?.total || 0), total_paid: Number(paid?.total || 0), pending_amount: Number(pending?.total || 0), exchange_rate: Number(rate?.exchange_rate || 1), minimum_withdrawal: Number(settings?.minimum_amount || 10) } });
+                    return sendAdminJson({ status: "success", data: { total_users: Number(users?.total || 0), total_files: Number(files?.total || 0), total_paid: Number(paid?.total || 0), pending_amount: Number(pending?.total || 0), exchange_rate: Number(rate?.exchange_rate ?? 1), minimum_withdrawal: Number(settings?.minimum_amount ?? 10) } });
                 }
 
                 if (path === "/api/admin/users" && request.method === "GET") {
@@ -2338,7 +2338,7 @@ export default {
                         env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first(),
                         env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
                     ]);
-                    return sendAdminJson({ status: "success", data: { exchange_rate: Number(rate?.exchange_rate || 1), minimum_withdrawal: Number(minimum?.minimum_amount || 10) } });
+                    return sendAdminJson({ status: "success", data: { exchange_rate: Number(rate?.exchange_rate ?? 1), minimum_withdrawal: Number(minimum?.minimum_amount ?? 10) } });
                 }
 
                 if (path === "/api/admin/settings" && request.method === "POST") {
@@ -4425,7 +4425,7 @@ export default {
                 return jsonResponse({
                     status: "success",
                     balance: Number(user.balance || 0),
-                    minimumAmount: Number(settings?.minimum_amount || 10),
+                    minimumAmount: Number(settings?.minimum_amount ?? 10),
                     pendingAmount: Number(pending?.total || 0),
                     totalPaid: Number(paid?.total || 0),
                     history: history.results || []
@@ -4454,7 +4454,7 @@ export default {
                     WHERE id = 1
                 `).first();
 
-                const minimum = Number(settings?.minimum_amount || 10);
+                const minimum = Number(settings?.minimum_amount ?? 10);
 
                 if (!Number.isFinite(amount) || amount < minimum) {
                     return jsonResponse({

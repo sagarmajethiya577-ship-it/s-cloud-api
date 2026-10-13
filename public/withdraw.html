@@ -1339,7 +1339,7 @@
                     Number(data.balance || 0);
 
                 minimumWithdrawal =
-                    Number(data.minimumAmount || 10);
+                    Number(data.minimumAmount ?? 10);
 
                 const pending =
                     Number(data.pendingAmount || 0);

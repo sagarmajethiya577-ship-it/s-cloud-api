@@ -1200,7 +1200,7 @@
             ).textContent =
                 '₹' +
                 Number(
-                    data.exchange_rate || 0
+                    data.exchange_rate ?? 0
                 ).toFixed(3);
 
             document.getElementById(
@@ -1710,14 +1710,14 @@
                 'exchangeRate'
             ).value =
                 Number(
-                    data.exchange_rate || 0
+                    data.exchange_rate ?? 0
                 ).toFixed(3);
 
             document.getElementById(
                 'minimumWithdrawal'
             ).value =
                 Number(
-                    data.minimum_withdrawal || 0
+                    data.minimum_withdrawal ?? 0
                 ).toFixed(3);
 
         } catch (error) {
