@@ -492,7 +492,7 @@
                         </svg>
 
                         <span>
-                            Exchange Rate: $1.00 = ₹<span id="payoutExchangeRate">83.500</span> INR
+                            Exchange Rate: $1.00 = ₹<span id="payoutExchangeRate">—</span> INR
                         </span>
 
                     </div>
@@ -1293,6 +1293,34 @@
         }
 
         // ==========================================
+        // LIVE PAYOUT SETTINGS
+        // ==========================================
+
+        async function loadPayoutInfo() {
+            const rateNode = document.getElementById("payoutExchangeRate");
+            if (!rateNode) return;
+
+            try {
+                const response = await fetch("/api/payout-info", {
+                    method: "GET",
+                    credentials: "include",
+                    cache: "no-store"
+                });
+                const data = await response.json().catch(() => ({}));
+                const rate = Number(data.exchange_rate);
+
+                if (response.ok && data.status === "success" && Number.isFinite(rate) && rate > 0) {
+                    rateNode.textContent = rate.toFixed(3);
+                } else {
+                    rateNode.textContent = "—";
+                }
+            } catch (error) {
+                console.error("Payout settings error:", error);
+                rateNode.textContent = "—";
+            }
+        }
+
+        // ==========================================
         // WITHDRAWAL DATA
         // ==========================================
 
@@ -1908,9 +1936,11 @@
 
                 togglePaymentFields();
 
-                await loadUser();
-
-                await loadWithdrawalData();
+                await Promise.all([
+                    loadUser(),
+                    loadWithdrawalData(),
+                    loadPayoutInfo()
+                ]);
 
             }
         );
