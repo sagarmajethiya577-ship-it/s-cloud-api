@@ -492,7 +492,7 @@
                         </svg>
 
                         <span>
-                            Exchange Rate: $1.00 = ₹<span id="payoutExchangeRate">—</span> INR
+                            Exchange Rate: $1 = ₹<span id="payoutExchangeRate">—</span> INR
                         </span>
 
                     </div>
@@ -552,6 +552,7 @@
                                 </div>
 
                             </div>
+                            <p id="methodMinimumHint" class="text-xs text-gray-400 mt-2">Minimum withdrawal: loading…</p>
 
                         </div>
 
@@ -1310,9 +1311,30 @@
                 const rate = Number(data.exchange_rate);
 
                 if (response.ok && data.status === "success" && Number.isFinite(rate) && rate > 0) {
-                    rateNode.textContent = rate.toFixed(3);
+                    rateNode.textContent = rate.toLocaleString("en-IN", { maximumFractionDigits: 3 });
                 } else {
                     rateNode.textContent = "—";
+                }
+                const methodSelect = document.getElementById("payoutMethod");
+                if (methodSelect && Array.isArray(data.methods)) {
+                    const current = methodSelect.value;
+                    const labels = { upi: "UPI (India Only)", bank: "Bank Transfer", paypal: "PayPal", crypto: "Crypto (USDT TRC20)" };
+                    const enabled = data.methods.filter(item => Number(item.enabled) === 1);
+                    methodSelect.innerHTML = enabled.map(item => `<option value="${item.method}">${labels[item.method] || item.method}</option>`).join("");
+                    if (enabled.some(item => item.method === current)) methodSelect.value = current;
+                    const selected = enabled.find(item => item.method === methodSelect.value);
+                    const minNode = document.getElementById("methodMinimumHint");
+                    if (minNode) minNode.textContent = selected ? `Minimum for this method: $${Math.max(Number(data.minimum_withdrawal || 0), Number(selected.minimum_amount || 0)).toLocaleString("en-US", { maximumFractionDigits: 3 })}` : "No payment methods are currently available.";
+                    methodSelect.disabled = enabled.length === 0;
+                    if (enabled.length === 0) {
+                        const submit = document.querySelector('#withdrawForm button[type="submit"]');
+                        if (submit) submit.disabled = true;
+                    }
+                    methodSelect.onchange = () => {
+                        const item = enabled.find(entry => entry.method === methodSelect.value);
+                        if (minNode) minNode.textContent = item ? `Minimum for this method: $${Math.max(Number(data.minimum_withdrawal || 0), Number(item.minimum_amount || 0)).toLocaleString("en-US", { maximumFractionDigits: 3 })}` : "";
+                        togglePaymentFields();
+                    };
                 }
             } catch (error) {
                 console.error("Payout settings error:", error);

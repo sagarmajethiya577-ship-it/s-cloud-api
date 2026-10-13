@@ -2269,6 +2269,13 @@ export default {
                 await env.DB.prepare(`INSERT OR IGNORE INTO scloud_admin_settings (id, exchange_rate) VALUES (1, 1)`).run();
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawal_settings (id INTEGER PRIMARY KEY, minimum_amount REAL NOT NULL DEFAULT 10.00, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
                 await env.DB.prepare(`INSERT OR IGNORE INTO withdrawal_settings (id, minimum_amount) VALUES (1, 10.00)`).run();
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS payout_method_settings (method TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1, minimum_amount REAL NOT NULL DEFAULT 10, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
+                await env.DB.batch([
+                    env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES ('upi', 1, 10)`),
+                    env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES ('bank', 1, 10)`),
+                    env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES ('paypal', 1, 10)`),
+                    env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES ('crypto', 1, 10)`)
+                ]);
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, method TEXT NOT NULL, payment_details TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, processed_at TIMESTAMP, processed_by INTEGER, rejection_reason TEXT)`).run();
                 // Existing installations may have an older withdrawals schema. Add missing optional columns without deleting records.
                 const withdrawalColumns = await env.DB.prepare(`PRAGMA table_info(withdrawals)`).all();
@@ -2340,6 +2347,30 @@ export default {
                 if (path === "/api/admin/payouts" && request.method === "GET") {
                     const result = await env.DB.prepare(`SELECT w.id, w.user_id, w.amount, w.method, w.payment_details, w.status, w.requested_at AS created_at, w.processed_at, w.rejection_reason, w.payout_reference, u.name, u.email FROM withdrawals w LEFT JOIN users u ON u.id = w.user_id ORDER BY CASE WHEN w.status = 'pending' THEN 0 ELSE 1 END, w.id DESC LIMIT 500`).all();
                     return sendAdminJson({ status: "success", data: result.results || [] });
+                }
+
+                if (path === "/api/admin/payout-methods" && request.method === "GET") {
+                    const result = await env.DB.prepare(`SELECT method, enabled, minimum_amount FROM payout_method_settings ORDER BY CASE method WHEN 'upi' THEN 1 WHEN 'bank' THEN 2 WHEN 'paypal' THEN 3 ELSE 4 END`).all();
+                    return sendAdminJson({ status: "success", data: result.results || [] });
+                }
+
+                if (path === "/api/admin/payout-methods" && request.method === "POST") {
+                    const body = await request.json();
+                    const allowed = new Set(["upi", "bank", "paypal", "crypto"]);
+                    if (!Array.isArray(body.methods) || body.methods.length !== 4) return sendAdminJson({ status: "error", message: "Submit all four payment methods" }, 400);
+                    const seen = new Set();
+                    const statements = [];
+                    for (const item of body.methods) {
+                        const method = String(item?.method || "").toLowerCase();
+                        const enabled = item?.enabled === true || item?.enabled === 1 ? 1 : item?.enabled === false || item?.enabled === 0 ? 0 : -1;
+                        const minimum = Number(item?.minimum_amount);
+                        if (!allowed.has(method) || seen.has(method) || enabled < 0 || !Number.isFinite(minimum) || minimum < 0 || minimum > 100000000) return sendAdminJson({ status: "error", message: "Invalid method settings or minimum amount" }, 400);
+                        seen.add(method);
+                        statements.push(env.DB.prepare(`INSERT INTO payout_method_settings (method, enabled, minimum_amount, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(method) DO UPDATE SET enabled = excluded.enabled, minimum_amount = excluded.minimum_amount, updated_at = CURRENT_TIMESTAMP`).bind(method, enabled, minimum));
+                    }
+                    if (seen.size !== 4) return sendAdminJson({ status: "error", message: "Submit all four payment methods" }, 400);
+                    await env.DB.batch(statements);
+                    return sendAdminJson({ status: "success", message: "Payment method settings saved" });
                 }
 
                 if (path === "/api/admin/settings" && request.method === "GET") {
@@ -4370,11 +4401,19 @@ export default {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_admin_settings (id INTEGER PRIMARY KEY CHECK (id = 1), exchange_rate REAL NOT NULL DEFAULT 1, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
                 await env.DB.prepare(`INSERT OR IGNORE INTO scloud_admin_settings (id, exchange_rate) VALUES (1, 1)`).run();
                 await ensureWithdrawalTables(env);
-                const [rate, settings] = await Promise.all([
-                    env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first(),
-                    env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS payout_method_settings (method TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1, minimum_amount REAL NOT NULL DEFAULT 10, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
+                await env.DB.batch([
+                    env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES ('upi', 1, 10)`),
+                    env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES ('bank', 1, 10)`),
+                    env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES ('paypal', 1, 10)`),
+                    env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES ('crypto', 1, 10)`)
                 ]);
-                return jsonResponse({ status: 'success', exchange_rate: Number(rate?.exchange_rate ?? 1), minimum_withdrawal: Number(settings?.minimum_amount ?? 10) });
+                const [rate, settings, methods] = await Promise.all([
+                    env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first(),
+                    env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first(),
+                    env.DB.prepare(`SELECT method, enabled, minimum_amount FROM payout_method_settings`).all()
+                ]);
+                return jsonResponse({ status: 'success', exchange_rate: Number(rate?.exchange_rate ?? 1), minimum_withdrawal: Number(settings?.minimum_amount ?? 10), methods: methods.results || [] });
             } catch (error) {
                 console.error('Payout info error:', error);
                 return jsonResponse({ status: 'error', message: 'Unable to load payout settings' }, 500);
@@ -4463,7 +4502,17 @@ export default {
                     WHERE id = 1
                 `).first();
 
-                const minimum = Number(settings?.minimum_amount ?? 10);
+                const globalMinimum = Number(settings?.minimum_amount ?? 10);
+                if (! ["upi", "bank", "paypal", "crypto"].includes(method)) {
+                    return jsonResponse({ status: "error", message: "Invalid payment method" }, 400);
+                }
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS payout_method_settings (method TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1, minimum_amount REAL NOT NULL DEFAULT 10, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
+                await env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES (?, 1, 10)`).bind(method).run();
+                const methodSettings = await env.DB.prepare(`SELECT enabled, minimum_amount FROM payout_method_settings WHERE method = ?`).bind(method).first();
+                if (!methodSettings || Number(methodSettings.enabled) !== 1) {
+                    return jsonResponse({ status: "error", message: "This payment method is currently unavailable. Please choose another method." }, 400);
+                }
+                const minimum = Math.max(globalMinimum, Number(methodSettings.minimum_amount ?? 10));
 
                 if (!Number.isFinite(amount) || amount < minimum) {
                     return jsonResponse({
@@ -4476,13 +4525,6 @@ export default {
                     return jsonResponse({
                         status: "error",
                         message: "Insufficient balance"
-                    }, 400);
-                }
-
-                if (!["upi", "bank", "paypal", "crypto"].includes(method)) {
-                    return jsonResponse({
-                        status: "error",
-                        message: "Invalid payment method"
                     }, 400);
                 }
 

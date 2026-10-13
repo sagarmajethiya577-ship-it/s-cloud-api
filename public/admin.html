@@ -932,6 +932,17 @@
 
             </div>
 
+            <div class="glass-card p-6 mt-6">
+                <div class="mb-5">
+                    <h3 class="font-semibold text-lg">Payment Method Controls</h3>
+                    <p class="text-xs text-gray-500 mt-1">Turn each withdrawal method on/off and set its minimum amount. The global minimum above still applies.</p>
+                </div>
+                <div id="payoutMethodSettings" class="space-y-4">
+                    <p class="text-sm text-gray-500">Loading payment methods…</p>
+                </div>
+                <button id="savePayoutMethodsButton" onclick="savePayoutMethodSettings()" class="w-full mt-5 py-3 rounded-xl bg-red-600 hover:bg-red-500 font-semibold transition">Save Payment Method Settings</button>
+            </div>
+
         </section>
 
     </div>
@@ -1730,6 +1741,47 @@
     }
 
 
+    const payoutMethodLabels = { upi: 'UPI (India Only)', bank: 'Bank Transfer', paypal: 'PayPal', crypto: 'Crypto (USDT TRC20)' };
+
+    async function loadPayoutMethodSettings() {
+        const container = document.getElementById('payoutMethodSettings');
+        if (!container) return;
+        try {
+            const result = await api('/api/admin/payout-methods');
+            const methods = result.data || [];
+            container.innerHTML = methods.map(item => `
+                <div class="rounded-xl border border-white/10 p-4" data-payout-method="${escapeHtml(item.method)}">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <label class="font-medium">${escapeHtml(payoutMethodLabels[item.method] || item.method)}</label>
+                        <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" class="payout-method-enabled" ${Number(item.enabled) === 1 ? 'checked' : ''}> Enabled</label>
+                    </div>
+                    <label class="block text-xs text-gray-400 mb-1">Minimum withdrawal (USD)</label>
+                    <input type="number" min="0" step="0.001" class="payout-method-minimum w-full bg-transparent border border-white/10 rounded-lg px-3 py-2" value="${Number(item.minimum_amount ?? 10)}">
+                </div>`).join('');
+        } catch (error) {
+            container.innerHTML = `<p class="text-sm text-red-400">${escapeHtml(error.message)}</p>`;
+            toast('Payment methods load failed: ' + error.message);
+        }
+    }
+
+    async function savePayoutMethodSettings() {
+        const button = document.getElementById('savePayoutMethodsButton');
+        const rows = Array.from(document.querySelectorAll('[data-payout-method]'));
+        const methods = rows.map(row => ({
+            method: row.getAttribute('data-payout-method'),
+            enabled: row.querySelector('.payout-method-enabled').checked,
+            minimum_amount: Number(row.querySelector('.payout-method-minimum').value)
+        }));
+        if (methods.length !== 4 || methods.some(item => !Number.isFinite(item.minimum_amount) || item.minimum_amount < 0)) { toast('Enter a valid minimum for all four payment methods'); return; }
+        button.disabled = true; button.textContent = 'Saving…';
+        try {
+            await api('/api/admin/payout-methods', { method: 'POST', body: JSON.stringify({ methods }) });
+            toast('Payment method settings saved');
+            await loadPayoutMethodSettings();
+        } catch (error) { toast(error.message); }
+        finally { button.disabled = false; button.textContent = 'Save Payment Method Settings'; }
+    }
+
     async function saveSettings() {
 
         const button =
@@ -1806,6 +1858,7 @@
             );
 
             await loadSettings();
+            await loadPayoutMethodSettings();
             await loadOverview();
 
         } catch (error) {
@@ -1934,6 +1987,7 @@
 
         if (tab === 'settings') {
             loadSettings();
+        loadPayoutMethodSettings();
         }
 
     }
