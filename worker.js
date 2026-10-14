@@ -2293,15 +2293,14 @@ export default {
                 const path = url.pathname;
 
                 if (path === "/api/admin/overview" && request.method === "GET") {
-                    const [users, files, paid, pending, settings] = await Promise.all([
+                    const [users, files, paid, pending] = await Promise.all([
                         env.DB.prepare(`SELECT COUNT(*) AS total FROM users`).first(),
                         env.DB.prepare(`SELECT COUNT(*) AS total FROM files`).first(),
                         env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total FROM withdrawals WHERE status = 'completed'`).first(),
                         env.DB.prepare(`SELECT COALESCE(SUM(amount), 0) AS total FROM withdrawals WHERE status = 'pending'`).first(),
-                        env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
                     ]);
                     const rate = await env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first();
-                    return sendAdminJson({ status: "success", data: { total_users: Number(users?.total || 0), total_files: Number(files?.total || 0), total_paid: Number(paid?.total || 0), pending_amount: Number(pending?.total || 0), exchange_rate: Number(rate?.exchange_rate || 1), minimum_withdrawal: Number(settings?.minimum_amount ?? 10) } });
+                    return sendAdminJson({ status: "success", data: { total_users: Number(users?.total || 0), total_files: Number(files?.total || 0), total_paid: Number(paid?.total || 0), pending_amount: Number(pending?.total || 0), exchange_rate: Number(rate?.exchange_rate || 1) } });
                 }
 
                 if (path === "/api/admin/users" && request.method === "GET") {
@@ -2374,23 +2373,16 @@ export default {
                 }
 
                 if (path === "/api/admin/settings" && request.method === "GET") {
-                    const [rate, minimum] = await Promise.all([
-                        env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first(),
-                        env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first()
-                    ]);
-                    return sendAdminJson({ status: "success", data: { exchange_rate: Number(rate?.exchange_rate || 1), minimum_withdrawal: Number(minimum?.minimum_amount ?? 10) } });
+                    const rate = await env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first();
+                    return sendAdminJson({ status: "success", data: { exchange_rate: Number(rate?.exchange_rate || 1) } });
                 }
 
                 if (path === "/api/admin/settings" && request.method === "POST") {
                     const body = await request.json();
                     const rate = Number(body.exchange_rate);
-                    const minimum = Number(body.minimum_withdrawal);
-                    if (!Number.isFinite(rate) || rate <= 0 || rate > 1000000 || !Number.isFinite(minimum) || minimum < 0 || minimum > 100000000) return sendAdminJson({ status: "error", message: "Invalid settings values" }, 400);
-                    await env.DB.batch([
-                        env.DB.prepare(`INSERT INTO scloud_admin_settings (id, exchange_rate, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET exchange_rate = excluded.exchange_rate, updated_at = CURRENT_TIMESTAMP`).bind(rate),
-                        env.DB.prepare(`INSERT INTO withdrawal_settings (id, minimum_amount, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET minimum_amount = excluded.minimum_amount, updated_at = CURRENT_TIMESTAMP`).bind(minimum)
-                    ]);
-                    return sendAdminJson({ status: "success", message: "Settings saved" });
+                    if (!Number.isFinite(rate) || rate <= 0 || rate > 1000000) return sendAdminJson({ status: "error", message: "Invalid exchange rate" }, 400);
+                    await env.DB.prepare(`INSERT INTO scloud_admin_settings (id, exchange_rate, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET exchange_rate = excluded.exchange_rate, updated_at = CURRENT_TIMESTAMP`).bind(rate).run();
+                    return sendAdminJson({ status: "success", message: "Exchange rate saved" });
                 }
 
                 if (path === "/api/admin/payout" && request.method === "POST") {
@@ -4408,12 +4400,11 @@ export default {
                     env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES ('paypal', 1, 10)`),
                     env.DB.prepare(`INSERT OR IGNORE INTO payout_method_settings (method, enabled, minimum_amount) VALUES ('crypto', 1, 10)`)
                 ]);
-                const [rate, settings, methods] = await Promise.all([
+                const [rate, methods] = await Promise.all([
                     env.DB.prepare(`SELECT exchange_rate FROM scloud_admin_settings WHERE id = 1`).first(),
-                    env.DB.prepare(`SELECT minimum_amount FROM withdrawal_settings WHERE id = 1`).first(),
                     env.DB.prepare(`SELECT method, enabled, minimum_amount FROM payout_method_settings`).all()
                 ]);
-                return jsonResponse({ status: 'success', exchange_rate: Number(rate?.exchange_rate ?? 1), minimum_withdrawal: Number(settings?.minimum_amount ?? 10), methods: methods.results || [] });
+                return jsonResponse({ status: 'success', exchange_rate: Number(rate?.exchange_rate ?? 1), methods: methods.results || [] });
             } catch (error) {
                 console.error('Payout info error:', error);
                 return jsonResponse({ status: 'error', message: 'Unable to load payout settings' }, 500);
@@ -4436,12 +4427,6 @@ export default {
             await ensureWithdrawalTables(env);
 
             if (request.method === "GET") {
-                const settings = await env.DB.prepare(`
-                    SELECT minimum_amount
-                    FROM withdrawal_settings
-                    WHERE id = 1
-                `).first();
-
                 const pending = await env.DB.prepare(`
                     SELECT COALESCE(SUM(amount), 0) AS total
                     FROM withdrawals
@@ -4473,7 +4458,6 @@ export default {
                 return jsonResponse({
                     status: "success",
                     balance: Number(user.balance || 0),
-                    minimumAmount: Number(settings?.minimum_amount ?? 10),
                     pendingAmount: Number(pending?.total || 0),
                     totalPaid: Number(paid?.total || 0),
                     history: history.results || []
@@ -4496,13 +4480,6 @@ export default {
                 const method = String(body.method || "").toLowerCase();
                 const details = body.paymentDetails || {};
 
-                const settings = await env.DB.prepare(`
-                    SELECT minimum_amount
-                    FROM withdrawal_settings
-                    WHERE id = 1
-                `).first();
-
-                const globalMinimum = Number(settings?.minimum_amount ?? 10);
                 if (! ["upi", "bank", "paypal", "crypto"].includes(method)) {
                     return jsonResponse({ status: "error", message: "Invalid payment method" }, 400);
                 }
@@ -4512,12 +4489,12 @@ export default {
                 if (!methodSettings || Number(methodSettings.enabled) !== 1) {
                     return jsonResponse({ status: "error", message: "This payment method is currently unavailable. Please choose another method." }, 400);
                 }
-                const minimum = Math.max(globalMinimum, Number(methodSettings.minimum_amount ?? 10));
+                const minimum = Number(methodSettings.minimum_amount ?? 0);
 
                 if (!Number.isFinite(amount) || amount < minimum) {
                     return jsonResponse({
                         status: "error",
-                        message: `Minimum withdrawal is $${minimum.toFixed(3)}`
+                        message: `Minimum withdrawal is $${minimum.toLocaleString("en-US", { maximumFractionDigits: 3 })}`
                     }, 400);
                 }
 

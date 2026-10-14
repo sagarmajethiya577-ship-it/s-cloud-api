@@ -581,24 +581,7 @@
                             </span>
 
                         </div>
-
-
-                        <div class="flex justify-between">
-
-                            <span class="text-sm text-gray-400">
-                                Minimum Withdrawal
-                            </span>
-
-                            <span
-                                id="overviewMinimum"
-                                class="font-medium"
-                            >
-                                —
-                            </span>
-
-                        </div>
-
-                    </div>
+</div>
 
                 </div>
 
@@ -891,35 +874,6 @@
                     </div>
 
 
-                    <div>
-
-                        <label class="block text-sm text-gray-400 mb-2">
-                            Minimum Withdrawal
-                        </label>
-
-                        <div class="settings-field-row">
-
-                            <span
-                                class="settings-currency px-4 flex items-center bg-white/5 border border-white/10 border-r-0 rounded-l-xl text-gray-400"
-                            >
-                                $
-                            </span>
-
-                            <input
-                                id="minimumWithdrawal"
-                                type="text"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                min="0"
-                                class="flex-1 bg-transparent border border-white/10 rounded-r-xl px-4 py-3 outline-none focus:border-red-500"
-                                placeholder="10.00"
-                            >
-
-                        </div>
-
-                    </div>
-
-
                     <button
                         id="saveSettingsButton"
                         onclick="saveSettings()"
@@ -935,7 +889,7 @@
             <div class="glass-card p-6 mt-6">
                 <div class="mb-5">
                     <h3 class="font-semibold text-lg">Payment Method Controls</h3>
-                    <p class="text-xs text-gray-500 mt-1">Turn each withdrawal method on/off and set its minimum amount. The global minimum above still applies.</p>
+                    <p class="text-xs text-gray-500 mt-1">Turn each withdrawal method on/off and set its own minimum withdrawal amount.</p>
                 </div>
                 <div id="payoutMethodSettings" class="space-y-4">
                     <p class="text-sm text-gray-500">Loading payment methods…</p>
@@ -1210,18 +1164,8 @@
                 'overviewRate'
             ).textContent =
                 '₹' +
-                Number(
-                    data.exchange_rate || 0
-                ).toFixed(3);
-
-            document.getElementById(
-                'overviewMinimum'
-            ).textContent =
-                money(
-                    data.minimum_withdrawal
-                );
-
-            document.getElementById(
+                Number(data.exchange_rate || 0).toLocaleString('en-IN', { maximumFractionDigits: 3 });
+document.getElementById(
                 'withdrawStatus'
             ).innerHTML =
                 '<span class="status-dot status-online mr-2"></span>Active';
@@ -1720,18 +1664,8 @@
             document.getElementById(
                 'exchangeRate'
             ).value =
-                Number(
-                    data.exchange_rate || 0
-                ).toFixed(3);
-
-            document.getElementById(
-                'minimumWithdrawal'
-            ).value =
-                Number(
-                    data.minimum_withdrawal || 0
-                ).toFixed(3);
-
-        } catch (error) {
+                Number(data.exchange_rate || 0).toLocaleString('en-IN', { maximumFractionDigits: 3 });
+} catch (error) {
 
             console.error('Unable to load admin settings:', error);
             toast('Settings load failed: ' + error.message);
@@ -1783,288 +1717,29 @@
     }
 
     async function saveSettings() {
-
-        const button =
-            document.getElementById(
-                'saveSettingsButton'
-            );
-
-        const exchangeRate =
-            Number(
-                document.getElementById(
-                    'exchangeRate'
-                ).value
-            );
-
-        const minimumWithdrawal =
-            Number(
-                document.getElementById(
-                    'minimumWithdrawal'
-                ).value
-            );
-
-
-        if (
-            !Number.isFinite(exchangeRate) ||
-            exchangeRate <= 0
-        ) {
-
-            toast(
-                'Enter a valid exchange rate'
-            );
-
+        const button = document.getElementById('saveSettingsButton');
+        const exchangeRate = Number(document.getElementById('exchangeRate').value);
+        if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+            toast('Enter a valid exchange rate');
             return;
-
         }
-
-
-        if (
-            !Number.isFinite(minimumWithdrawal) ||
-            minimumWithdrawal < 0
-        ) {
-
-            toast(
-                'Enter a valid minimum withdrawal'
-            );
-
-            return;
-
-        }
-
-
         button.disabled = true;
-
-        button.textContent =
-            'Saving...';
-
-
+        button.textContent = 'Saving...';
         try {
-
-            await api(
-                '/api/admin/settings',
-                {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        exchange_rate:
-                            exchangeRate,
-                        minimum_withdrawal:
-                            minimumWithdrawal
-                    })
-                }
-            );
-
-            toast(
-                'Settings saved successfully'
-            );
-
+            await api('/api/admin/settings', {
+                method: 'POST',
+                body: JSON.stringify({ exchange_rate: exchangeRate })
+            });
+            toast('Exchange rate saved successfully');
             await loadSettings();
-            await loadPayoutMethodSettings();
             await loadOverview();
-
         } catch (error) {
-
-            toast(error.message);
-
+            toast(error.message || 'Unable to save exchange rate');
         } finally {
-
             button.disabled = false;
-
-            button.textContent =
-                'Save Settings';
-
+            button.textContent = 'Save Settings';
         }
-
     }
-
-
-    // =================================================
-    // TAB SYSTEM
-    // =================================================
-
-    function openTab(tab) {
-
-        document
-            .querySelectorAll(
-                '[id^="tab-"]'
-            )
-            .forEach(section => {
-
-                section.classList.add(
-                    'hidden-tab'
-                );
-
-            });
-
-
-        document
-            .querySelectorAll(
-                '.nav-item'
-            )
-            .forEach(button => {
-
-                button.classList.remove(
-                    'active'
-                );
-
-            });
-
-
-        const section =
-            document.getElementById(
-                'tab-' + tab
-            );
-
-        if (section) {
-
-            section.classList.remove(
-                'hidden-tab'
-            );
-
-        }
-
-
-        const button =
-            document.querySelector(
-                `[data-tab="${tab}"]`
-            );
-
-        if (button) {
-
-            button.classList.add(
-                'active'
-            );
-
-        }
-
-
-        const titles = {
-
-            overview: [
-                'God Mode',
-                'S-Cloud administration panel'
-            ],
-
-            users: [
-                'Manage Users',
-                'Manage publisher accounts and CPM'
-            ],
-
-            payouts: [
-                'Payout Requests',
-                'Approve or reject publisher withdrawals'
-            ],
-
-            settings: [
-                'Admin Settings',
-                'Control global S-Cloud payout settings'
-            ]
-
-        };
-
-
-        if (titles[tab]) {
-
-            document.getElementById(
-                'pageTitle'
-            ).textContent =
-                titles[tab][0];
-
-            document.getElementById(
-                'pageSubtitle'
-            ).textContent =
-                titles[tab][1];
-
-        }
-
-
-        if (tab === 'users') {
-            loadUsers();
-        }
-
-        if (tab === 'payouts') {
-            loadPayouts();
-        }
-
-        if (tab === 'settings') {
-            loadSettings();
-        loadPayoutMethodSettings();
-        }
-
-    }
-
-
-    // =================================================
-    // INIT
-    // =================================================
-
-    document
-        .querySelectorAll(
-            '.nav-item'
-        )
-        .forEach(button => {
-
-            button.addEventListener(
-                'click',
-                () => {
-
-                    openTab(
-                        button.dataset.tab
-                    );
-
-                }
-            );
-
-        });
-
-
-    document
-        .getElementById(
-            'profileButton'
-        )
-        .addEventListener(
-            'click',
-            () => {
-
-                document
-                    .getElementById(
-                        'profileMenu'
-                    )
-                    .classList.toggle(
-                        'hidden'
-                    );
-
-            }
-        );
-
-
-    document.addEventListener(
-        'click',
-        event => {
-
-            const menu =
-                document.getElementById(
-                    'profileMenu'
-                );
-
-            const button =
-                document.getElementById(
-                    'profileButton'
-                );
-
-            if (
-                !menu.contains(event.target) &&
-                !button.contains(event.target)
-            ) {
-
-                menu.classList.add(
-                    'hidden'
-                );
-
-            }
-
-        }
-    );
-
 
     async function init() {
 
@@ -2087,7 +1762,7 @@
 
 <script>
 (async function loadPayoutExchangeRate(){
-  try { const r = await fetch('/api/payout-info'); const d = await r.json(); if (d && d.status === 'success') { const el = document.getElementById('payoutExchangeRate'); if (el) el.textContent = Number(d.exchange_rate || 83.5).toFixed(3); } } catch (_) {}
+  try { const r = await fetch('/api/payout-info'); const d = await r.json(); if (d && d.status === 'success') { const el = document.getElementById('payoutExchangeRate'); if (el) el.textContent = Number(d.exchange_rate || 83.5).toLocaleString('en-IN', { maximumFractionDigits: 3 }); } } catch (_) {}
 })();
 </script>
 

@@ -552,7 +552,6 @@
                                 </div>
 
                             </div>
-                            <p id="methodMinimumHint" class="text-xs text-gray-400 mt-2">Minimum withdrawal: loading…</p>
 
                         </div>
 
@@ -565,7 +564,7 @@
 
                             <input type="number"
                                    id="withdrawAmount"
-                                   placeholder="e.g. 25.00"
+                                   placeholder="Minimum Amount: loading…"
                                    min="10"
                                    step="0.01"
                                    inputmode="decimal"
@@ -846,6 +845,7 @@
         // ==========================================
 
         let minimumWithdrawal = 10;
+        let payoutMethods = [];
         let currentBalance = 0;
         let withdrawalSubmitting = false;
         let toastTimer = null;
@@ -1319,22 +1319,31 @@
                 if (methodSelect && Array.isArray(data.methods)) {
                     const current = methodSelect.value;
                     const labels = { upi: "UPI (India Only)", bank: "Bank Transfer", paypal: "PayPal", crypto: "Crypto (USDT TRC20)" };
-                    const enabled = data.methods.filter(item => Number(item.enabled) === 1);
-                    methodSelect.innerHTML = enabled.map(item => `<option value="${item.method}">${labels[item.method] || item.method}</option>`).join("");
-                    if (enabled.some(item => item.method === current)) methodSelect.value = current;
-                    const selected = enabled.find(item => item.method === methodSelect.value);
-                    const minNode = document.getElementById("methodMinimumHint");
-                    if (minNode) minNode.textContent = selected ? `Minimum for this method: $${Math.max(Number(data.minimum_withdrawal || 0), Number(selected.minimum_amount || 0)).toLocaleString("en-US", { maximumFractionDigits: 3 })}` : "No payment methods are currently available.";
-                    methodSelect.disabled = enabled.length === 0;
-                    if (enabled.length === 0) {
+                    payoutMethods = data.methods.filter(item => Number(item.enabled) === 1);
+                    methodSelect.innerHTML = payoutMethods.map(item => `<option value="${item.method}">${labels[item.method] || item.method}</option>`).join("");
+                    if (payoutMethods.some(item => item.method === current)) methodSelect.value = current;
+                    methodSelect.disabled = payoutMethods.length === 0;
+                    if (payoutMethods.length === 0) {
                         const submit = document.querySelector('#withdrawForm button[type="submit"]');
                         if (submit) submit.disabled = true;
+                        const amountInput = document.getElementById("withdrawAmount");
+                        if (amountInput) amountInput.placeholder = "No payment methods available";
                     }
-                    methodSelect.onchange = () => {
-                        const item = enabled.find(entry => entry.method === methodSelect.value);
-                        if (minNode) minNode.textContent = item ? `Minimum for this method: $${Math.max(Number(data.minimum_withdrawal || 0), Number(item.minimum_amount || 0)).toLocaleString("en-US", { maximumFractionDigits: 3 })}` : "";
-                        togglePaymentFields();
+                    const updateMethodMinimum = () => {
+                        const selected = payoutMethods.find(item => item.method === methodSelect.value);
+                        const amountInput = document.getElementById("withdrawAmount");
+                        minimumWithdrawal = selected ? Number(selected.minimum_amount || 0) : 0;
+                        if (amountInput) {
+                            amountInput.min = String(minimumWithdrawal);
+                            amountInput.placeholder = selected ? `Minimum Amount: $${minimumWithdrawal.toLocaleString("en-US", { maximumFractionDigits: 3 })}` : "No payment methods available";
+                        }
+                        const minDisplay = document.getElementById("minimumPayout");
+                        if (minDisplay) minDisplay.textContent = selected ? formatMoney(minimumWithdrawal) : "—";
+                        const amountHint = document.getElementById("amountHint");
+                        if (amountHint) amountHint.textContent = selected ? `Minimum amount: ${formatMoney(minimumWithdrawal)} • Available: ${formatMoney(currentBalance)}` : "No payment methods are currently available.";
                     };
+                    methodSelect.onchange = () => { updateMethodMinimum(); togglePaymentFields(); };
+                    updateMethodMinimum();
                 }
             } catch (error) {
                 console.error("Payout settings error:", error);
@@ -1388,9 +1397,6 @@
                 currentBalance =
                     Number(data.balance || 0);
 
-                minimumWithdrawal =
-                    Number(data.minimumAmount ?? 10);
-
                 const pending =
                     Number(data.pendingAmount || 0);
 
@@ -1412,27 +1418,16 @@
                 ).textContent =
                     formatMoney(totalPaid);
 
-                document.getElementById(
-                    "minimumPayout"
-                ).textContent =
-                    formatMoney(minimumWithdrawal);
-
                 const amountInput =
                     document.getElementById(
                         "withdrawAmount"
                     );
 
-                amountInput.min =
-                    minimumWithdrawal.toFixed(3);
-
-                amountInput.placeholder =
-                    `e.g. ${minimumWithdrawal.toFixed(3)}`;
-
                 const amountHint =
                     document.getElementById("amountHint");
 
                 amountHint.textContent =
-                    `Minimum withdrawal: ${formatMoney(minimumWithdrawal)} • Available: ${formatMoney(currentBalance)}`;
+                    `Available: ${formatMoney(currentBalance)}`;
 
                 renderHistory(
                     Array.isArray(data.history)
