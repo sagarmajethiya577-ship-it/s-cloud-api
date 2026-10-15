@@ -169,6 +169,37 @@ async function sha256Hex(
 
 
 // ==================================================
+// FIRST-PARTY VISITOR COOKIE
+// ==================================================
+
+function readCookie(request, name) {
+    const cookieHeader =
+        request.headers.get("Cookie") || "";
+
+    for (const part of cookieHeader.split(";")) {
+        const separator = part.indexOf("=");
+        if (separator < 0) continue;
+
+        const key = part.slice(0, separator).trim();
+        if (key !== name) continue;
+
+        return part.slice(separator + 1).trim();
+    }
+
+    return null;
+}
+
+function createVisitorId() {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return Array.from(
+        bytes,
+        byte => byte.toString(16).padStart(2, "0")
+    ).join("");
+}
+
+
+// ==================================================
 // API KEY ENCRYPTION
 // ==================================================
 
@@ -1557,43 +1588,19 @@ async function creditDownloadEarning(
             };
         }
 
-        const indiaDate =
-            new Intl.DateTimeFormat(
-                "en-CA",
-                {
-                    timeZone:
-                        "Asia/Kolkata",
-                    year:
-                        "numeric",
-                    month:
-                        "2-digit",
-                    day:
-                        "2-digit"
-                }
-            ).format(
-                new Date()
-            );
-
         const ipHash =
-            await sha256Hex(
-                visitorIP
-            );
+            await sha256Hex(visitorIP);
 
-        const downloadId =
-            `paid:${indiaDate}:${ipHash}`;
+        const browserId = readCookie(request, "scloud_vid");
+        const browserHash = browserId
+            ? await sha256Hex(browserId)
+            : null;
 
         const earningAmount =
-            Number(
-                (
-                    cpm /
-                    1000
-                ).toFixed(6)
-            );
+            Number((cpm / 1000).toFixed(6));
 
         if (
-            !Number.isFinite(
-                earningAmount
-            ) ||
+            !Number.isFinite(earningAmount) ||
             earningAmount <= 0
         ) {
             return {
@@ -1602,89 +1609,99 @@ async function creditDownloadEarning(
             };
         }
 
-        /*
-         * The UNIQUE partial index on
-         * earnings(download_id) guarantees
-         * one paid view per IP per India day.
-         *
-         * SQLite changes() is checked by the
-         * following UPDATE. If INSERT OR IGNORE
-         * was ignored because the IP already earned
-         * today, changes() is 0 and balance is not
-         * increased.
-         */
+        // One earning per uploader per rolling 24 hours for either
+        // the same IP or the same first-party browser cookie.
+        // Also respect legacy IP/day earnings created before migration.
+        const uniqueDownloadId =
+            `earning:${crypto.randomUUID()}`;
+
         const batchResult =
             await env.DB.batch([
-                env.DB
-                    .prepare(
-                        `INSERT OR IGNORE INTO earnings
-                        (
-                            user_id,
-                            file_id,
-                            download_id,
-                            amount,
-                            type,
-                            status,
-                            description
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?)`
+                env.DB.prepare(
+                    `INSERT INTO visitor_activity
+                    (user_id, activity_type, ip_hash, browser_hash, occurred_at)
+                    SELECT ?, 'earning', ?, ?, CURRENT_TIMESTAMP
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM visitor_activity va
+                        WHERE va.user_id = ?
+                          AND va.activity_type = 'earning'
+                          AND va.occurred_at >= datetime('now', '-24 hours')
+                          AND (
+                              va.ip_hash = ?
+                              OR (? IS NOT NULL AND va.browser_hash = ?)
+                          )
                     )
-                    .bind(
-                        record.user_id,
-                        record.id,
-                        downloadId,
-                        earningAmount,
-                        "download",
-                        "credited",
-                        "Unique download earning"
-                    ),
-
-                env.DB
-                    .prepare(
-                        `UPDATE users
-                         SET balance =
-                             COALESCE(balance, 0) + ?
-                         WHERE id = ?
-                           AND changes() > 0`
-                    )
-                    .bind(
-                        earningAmount,
-                        record.user_id
-                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM earnings e
+                        WHERE e.user_id = ?
+                          AND e.created_at >= datetime('now', '-24 hours')
+                          AND e.download_id LIKE 'paid:%:' || ?
+                    )`
+                ).bind(
+                    record.user_id,
+                    ipHash,
+                    browserHash,
+                    record.user_id,
+                    ipHash,
+                    browserHash,
+                    browserHash,
+                    record.user_id,
+                    ipHash
+                ),
+                env.DB.prepare(
+                    `INSERT OR IGNORE INTO earnings
+                    (user_id, file_id, download_id, amount, type, status, description)
+                    SELECT ?, ?, ?, ?, ?, ?, ?
+                    WHERE changes() > 0`
+                ).bind(
+                    record.user_id,
+                    record.id,
+                    uniqueDownloadId,
+                    earningAmount,
+                    "download",
+                    "credited",
+                    "Unique download earning (24h IP/browser limit)"
+                ),
+                env.DB.prepare(
+                    `UPDATE users
+                     SET balance = COALESCE(balance, 0) + ?
+                     WHERE id = ? AND changes() > 0`
+                ).bind(
+                    earningAmount,
+                    record.user_id
+                )
             ]);
 
-        const insertResult =
-            batchResult &&
-            batchResult[0];
-
-        const credited =
-            Number(
-                insertResult?.meta
-                    ?.changes || 0
-            ) > 0;
+        const guardInserted =
+            Number(batchResult?.[0]?.meta?.changes || 0) > 0;
+        const earningInserted =
+            Number(batchResult?.[1]?.meta?.changes || 0) > 0;
+        const credited = guardInserted && earningInserted;
 
         if (credited) {
             console.log(
-                `[EARNING] CREDITED | file=${record.short_id || record.id} | user=${record.user_id} | amount=${earningAmount} | date=${indiaDate}`
+                `[EARNING] CREDITED | file=${record.short_id || record.id} | user=${record.user_id} | amount=${earningAmount} | limit=rolling-24h`
             );
 
             return {
                 credited: true,
                 amount:
                     earningAmount,
-                date:
-                    indiaDate
+                window:
+                    "rolling-24h"
             };
         }
 
         console.log(
-            `[EARNING] SKIPPED | file=${record.short_id || record.id} | reason=already_earned_today`
+            `[EARNING] SKIPPED | file=${record.short_id || record.id} | reason=already_earned_within_24h`
         );
 
         return {
             credited: false,
             reason:
-                "already_earned_today"
+                "already_earned_within_24h"
         };
 
     } catch (error) {
@@ -6725,61 +6742,99 @@ export default {
                     });
                 }
 
-                await env.DB
-                    .prepare(
-                        `UPDATE files
-                         SET views = COALESCE(views, 0) + 1
-                         WHERE id = ?`
-                    )
-                    .bind(
-                        record.id
-                    )
-                    .run();
-
                 // ==========================================
-                // VIEW LOGGING
+                // UNIQUE VIEW: UPLOADER + IP/BROWSER, 24 HOURS
                 // ==========================================
 
                 const viewerIp =
                     request.headers.get("CF-Connecting-IP") ||
                     request.headers.get("X-Real-IP") ||
-                    (
-                        request.headers.get("X-Forwarded-For") || ""
-                    )
+                    (request.headers.get("X-Forwarded-For") || "")
                         .split(",")[0]
                         .trim() ||
                     "unknown";
 
+                const viewerIpHash = await sha256Hex(viewerIp);
+
+                // Create the browser ID on the first /file request too,
+                // not only on /d/, so direct/API entry points can establish it.
+                let viewerBrowserId = readCookie(request, "scloud_vid");
+                let shouldSetVisitorCookie = false;
+                if (!viewerBrowserId || !/^[a-f0-9]{48}$/.test(viewerBrowserId)) {
+                    viewerBrowserId = createVisitorId();
+                    shouldSetVisitorCookie = true;
+                }
+                const viewerBrowserHash = await sha256Hex(viewerBrowserId);
                 const viewerUserAgent =
-                    request.headers.get("User-Agent") ||
-                    null;
+                    request.headers.get("User-Agent") || null;
 
                 try {
-                    await env.DB
+                    const viewGuard = await env.DB
                         .prepare(
-                            `INSERT INTO views_log
-                             (
-                                 file_id,
-                                 ip_address,
-                                 user_agent
-                             )
-                             VALUES (?, ?, ?)`
+                            `INSERT INTO visitor_activity
+                            (user_id, activity_type, ip_hash, browser_hash, occurred_at)
+                            SELECT ?, 'view', ?, ?, CURRENT_TIMESTAMP
+                            WHERE NOT EXISTS (
+                                SELECT 1
+                                FROM visitor_activity va
+                                WHERE va.user_id = ?
+                                  AND va.activity_type = 'view'
+                                  AND va.occurred_at >= datetime('now', '-24 hours')
+                                  AND (
+                                      va.ip_hash = ?
+                                      OR (? IS NOT NULL AND va.browser_hash = ?)
+                                  )
+                            )
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM views_log vl
+                                INNER JOIN files f ON f.id = vl.file_id
+                                WHERE f.user_id = ?
+                                  AND vl.viewed_at >= datetime('now', '-24 hours')
+                                  AND vl.ip_address = ?
+                            )`
                         )
                         .bind(
-                            record.id,
-                            viewerIp,
-                            viewerUserAgent
+                            record.user_id,
+                            viewerIpHash,
+                            viewerBrowserHash,
+                            record.user_id,
+                            viewerIpHash,
+                            viewerBrowserHash,
+                            viewerBrowserHash,
+                            record.user_id,
+                            viewerIp
                         )
                         .run();
 
-                    console.log(
-                        `[VIEWS] Logged | file=${shortId} | ip=${viewerIp}`
-                    );
+                    const uniqueView =
+                        Number(viewGuard?.meta?.changes || 0) > 0;
+
+                    if (uniqueView) {
+                        await env.DB.batch([
+                            env.DB.prepare(
+                                `UPDATE files
+                                 SET views = COALESCE(views, 0) + 1
+                                 WHERE id = ?`
+                            ).bind(record.id),
+                            env.DB.prepare(
+                                `INSERT INTO views_log (file_id, ip_address, user_agent)
+                                 VALUES (?, ?, ?)`
+                            ).bind(record.id, viewerIp, viewerUserAgent)
+                        ]);
+
+                        console.log(
+                            `[VIEWS] Unique view logged | file=${shortId} | user=${record.user_id}`
+                        );
+                    } else {
+                        console.log(
+                            `[VIEWS] Duplicate blocked | file=${shortId} | user=${record.user_id}`
+                        );
+                    }
 
                 } catch (viewLogError) {
-
                     console.error(
-                        `[VIEWS] Log failed | file=${shortId}:`,
+                        `[VIEWS] Guard/log failed | file=${shortId}:`,
                         viewLogError.message
                     );
                 }
@@ -7028,6 +7083,17 @@ export default {
 
 
 
+                const fileResponseHeaders = new Headers({
+                    "Content-Type": "application/json",
+                    ...corsHeaders
+                });
+                if (shouldSetVisitorCookie) {
+                    fileResponseHeaders.append(
+                        "Set-Cookie",
+                        `scloud_vid=${viewerBrowserId}; Max-Age=31536000; Path=/; Secure; HttpOnly; SameSite=Lax`
+                    );
+                }
+
                 return new Response(
                     JSON.stringify({
                         status: "success",
@@ -7109,11 +7175,7 @@ export default {
                     }),
                     {
                         status: 200,
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-                            ...corsHeaders
-                        }
+                        headers: fileResponseHeaders
                     }
                 );
 
@@ -7200,9 +7262,28 @@ export default {
                         request
                     );
 
-                return env.ASSETS.fetch(
+                const assetResponse = await env.ASSETS.fetch(
                     downloadRequest
                 );
+
+                // Set a first-party, HttpOnly browser ID so the same browser
+                // can be recognized after IP changes (e.g. airplane mode/VPN).
+                let visitorId = readCookie(request, "scloud_vid");
+                const cookieHeaders = new Headers(assetResponse.headers);
+
+                if (!visitorId || !/^[a-f0-9]{48}$/.test(visitorId)) {
+                    visitorId = createVisitorId();
+                    cookieHeaders.append(
+                        "Set-Cookie",
+                        `scloud_vid=${visitorId}; Max-Age=31536000; Path=/; Secure; HttpOnly; SameSite=Lax`
+                    );
+                }
+
+                return new Response(assetResponse.body, {
+                    status: assetResponse.status,
+                    statusText: assetResponse.statusText,
+                    headers: cookieHeaders
+                });
             }
 
             return new Response(
