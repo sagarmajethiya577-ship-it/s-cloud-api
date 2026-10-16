@@ -1637,7 +1637,7 @@ async function creditDownloadEarning(
                         FROM earnings e
                         WHERE e.user_id = ?
                           AND e.created_at >= datetime('now', '-24 hours')
-                          AND e.download_id LIKE 'paid:%:' || ?
+                          AND substr(e.download_id, 1, 5) = 'paid:' AND substr(e.download_id, -64) = ?
                     )`
                 ).bind(
                     record.user_id,
