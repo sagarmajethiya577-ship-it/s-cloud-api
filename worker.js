@@ -12,6 +12,64 @@ import { uploadToToxCloud } from "./toxcloud.js";
 
 
 // ==================================================
+// DOWNLOAD WORKER METADATA SYNC
+// ==================================================
+async function syncDownloadMetadata(record, env) {
+    if (!record || !env.DOWNLOAD_WORKER_URL || !env.DOWNLOAD_SYNC_SECRET) {
+        return false;
+    }
+
+    const status = record.status === "deleted"
+        ? "deleted"
+        : Number(record.sharing_enabled ?? 1) === 0
+            ? "private"
+            : "active";
+
+    const metadata = {
+        short_id: String(record.short_id || record.id),
+        file_name: String(record.file_name || "Download"),
+        file_size: record.file_size ?? null,
+        drive_url: record.drive_url || null,
+        hubcloud_url: record.hubcloud_url || null,
+        gdflix_url: record.gdflix_url || null,
+        drivetot_url: record.drivetot_url || null,
+        pdlink_share_id: record.pdlink_share_id || null,
+        toxcloud_url: record.toxcloud_url || null,
+        fast_links: record.fast_links || null,
+        fast_links_expires_at: record.fast_links_expires_at || null,
+        updated_at: record.updated_at || record.last_updated || null
+    };
+
+    // Timestamp-based monotonic version; stale versions are rejected by Download Worker D1.
+    const version = Math.max(Date.now(), Number(record.download_sync_version || 0) + 1);
+    const base = String(env.DOWNLOAD_WORKER_URL).replace(/\/+$/, "");
+
+    try {
+        const response = await fetch(`${base}/internal/sync`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Sync-Secret": env.DOWNLOAD_SYNC_SECRET
+            },
+            body: JSON.stringify({
+                file_id: String(record.id || record.short_id),
+                metadata,
+                version,
+                status
+            })
+        });
+        if (!response.ok) {
+            console.error("[DOWNLOAD SYNC] Failed", record.short_id || record.id, response.status);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error("[DOWNLOAD SYNC] Request failed", record.short_id || record.id, error?.message || error);
+        return false;
+    }
+}
+
+// ==================================================
 // RANDOM SHORT ID GENERATOR
 // ==================================================
 
@@ -2172,6 +2230,14 @@ async function prepareFastLinks(shortId, env) {
             console.log(
                 `[FAST] Fast-link DB save END ${shortId} | elapsed=${elapsed()}`
             );
+
+            // Sync updated mirrors/fast links to the separate Download Worker.
+            const syncedRecord = await env.DB.prepare(
+                "SELECT * FROM files WHERE id = ? LIMIT 1"
+            ).bind(record.id).first();
+            if (syncedRecord) {
+                await syncDownloadMetadata(syncedRecord, env);
+            }
 
             console.log(
                 `[FAST] COMPLETE ${shortId} | total=${elapsed()}`
@@ -7236,11 +7302,15 @@ export default {
                 }
 
                 if (Number(fileRecord.sharing_enabled ?? 1) === 0) {
+                    // Keep Download Worker metadata in sync with private status.
+                    ctx.waitUntil(syncDownloadMetadata(fileRecord, env));
                     return new Response("Sharing is turned off for this file.", {
                         status: 403,
                         headers: corsHeaders
                     });
                 }
+                // Sync is background-only; never delay the download page response.
+                ctx.waitUntil(syncDownloadMetadata(fileRecord, env));
             } catch (error) {
                 console.error("Public link check error:", error);
                 return new Response("Unable to verify this file link.", {
