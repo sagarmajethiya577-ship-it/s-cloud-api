@@ -29,6 +29,11 @@ async function syncDownloadMetadata(record, env) {
         short_id: String(record.short_id || record.id),
         file_name: String(record.file_name || "Download"),
         file_size: record.file_size ?? null,
+        mime_type: record.mime_type || record.file_type || null,
+        created_at: record.created_at || record.last_updated || null,
+        shared_by_enabled: Number(record.shared_by_enabled ?? 0),
+        shared_by: record.shared_by || null,
+        shared_by_url: record.shared_by_url || null,
         drive_url: record.drive_url || null,
         hubcloud_url: record.hubcloud_url || null,
         gdflix_url: record.gdflix_url || null,
@@ -52,7 +57,7 @@ async function syncDownloadMetadata(record, env) {
                 "X-Sync-Secret": env.DOWNLOAD_SYNC_SECRET
             },
             body: JSON.stringify({
-                file_id: String(record.id || record.short_id),
+                file_id: String(record.short_id || record.id),
                 metadata,
                 version,
                 status
