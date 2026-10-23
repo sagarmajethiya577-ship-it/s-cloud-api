@@ -15,7 +15,19 @@ import { uploadToToxCloud } from "./toxcloud.js";
 // DOWNLOAD WORKER METADATA SYNC
 // ==================================================
 async function syncDownloadMetadata(record, env) {
+    console.log("[DOWNLOAD SYNC DEBUG]", {
+        hasRecord: !!record,
+        shortId: record?.short_id || record?.id || null,
+        hasDownloadWorkerUrl: !!env.DOWNLOAD_WORKER_URL,
+        hasDownloadSyncSecret: !!env.DOWNLOAD_SYNC_SECRET
+    });
+
     if (!record || !env.DOWNLOAD_WORKER_URL || !env.DOWNLOAD_SYNC_SECRET) {
+        console.error("[DOWNLOAD SYNC] Missing configuration", {
+            hasRecord: !!record,
+            hasDownloadWorkerUrl: !!env.DOWNLOAD_WORKER_URL,
+            hasDownloadSyncSecret: !!env.DOWNLOAD_SYNC_SECRET
+        });
         return false;
     }
 
