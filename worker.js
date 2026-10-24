@@ -6177,6 +6177,9 @@ export default {
                 let exactFileSize =
                     "Unknown";
 
+                let actualMimeType =
+                    null;
+
 
                 try {
 
@@ -6221,6 +6224,12 @@ export default {
 
                         actualFileName =
                             metaData.name;
+
+                        actualMimeType =
+                            typeof metaData.mimeType === "string" &&
+                            metaData.mimeType.trim()
+                                ? metaData.mimeType.trim()
+                                : null;
 
 
                         if (
@@ -6427,11 +6436,12 @@ export default {
                             user_id,
                             file_name,
                             file_size,
+                            mime_type,
                             drive_url,
                             last_updated,
                             status
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
                     )
                     .bind(
                         shortId,
@@ -6439,6 +6449,7 @@ export default {
                         currentUser.id,
                         actualFileName,
                         exactFileSize,
+                        actualMimeType,
                         scloudDriveUrl,
                         currentTime,
                         "active"
@@ -7191,7 +7202,7 @@ export default {
                             type:
                                 record.mime_type ||
                                 record.file_type ||
-                                "video/x-matroska",
+                                "application/octet-stream",
 
                             shared:
                                 record.created_at ||
