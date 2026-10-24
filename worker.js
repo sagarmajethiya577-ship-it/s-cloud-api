@@ -6448,8 +6448,43 @@ export default {
                         "active"
                     )
                     .run();
+
                 // Upload has succeeded once its file record is committed.
                 uploadReservation = false;
+
+                // --------------------------------------
+                // INITIAL DOWNLOAD WORKER SYNC
+                //
+                // Make the new file available in DOWNLOAD_DB
+                // immediately after the Main DB insert.
+                // This runs in the background and does not
+                // delay the successful upload response.
+                // --------------------------------------
+                ctx.waitUntil(
+                    (async () => {
+                        try {
+                            const initialSyncRecord =
+                                await env.DB
+                                    .prepare(
+                                        "SELECT * FROM files WHERE id = ? LIMIT 1"
+                                    )
+                                    .bind(shortId)
+                                    .first();
+
+                            if (initialSyncRecord) {
+                                await syncDownloadMetadata(
+                                    initialSyncRecord,
+                                    env
+                                );
+                            }
+                        } catch (syncError) {
+                            console.error(
+                                "[DOWNLOAD SYNC] Initial upload sync failed:",
+                                syncError
+                            );
+                        }
+                    })()
+                );
 
 
                 // --------------------------------------
