@@ -5587,7 +5587,7 @@ export default {
                             currentUser.id
                         )
                         .run();
-                        if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, file_id));
+                        await syncToDownloadWorker(env, file_id);
 
 
                 if (
@@ -5703,7 +5703,7 @@ export default {
                     fileId,
                     currentUser.id
                 ).run();
-                if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, fileId));
+                await syncToDownloadWorker(env, fileId);
 
                 if ((result.meta?.changes ?? 0) === 0) {
                     return new Response(JSON.stringify({
@@ -5794,7 +5794,7 @@ export default {
                             currentUser.id
                         )
                         .run();
-                        if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, file_id));
+                        await syncToDownloadWorker(env, file_id);
 
 
                 if (
@@ -5941,7 +5941,7 @@ export default {
             )
         ) {
             let uploadReservation = false;
-                if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, shortId));
+                await syncToDownloadWorker(env, shortId);
             const uploadUsageDate = new Date().toISOString().slice(0, 10);
             try {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
@@ -6458,7 +6458,7 @@ export default {
 
                 // Upload has succeeded once its file record is committed.
                 uploadReservation = false;
-                if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, shortId));
+                await syncToDownloadWorker(env, shortId);
 
                 // --------------------------------------
                 // INITIAL DOWNLOAD WORKER SYNC
@@ -6552,7 +6552,7 @@ export default {
                                     shortId
                                 )
                                 .run();
-                                    if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, shortId));
+                                    await syncToDownloadWorker(env, shortId);
 
                             console.log(
                                 `[PDLINK] Share ID saved | file=${shortId} | share=${pdlinkResult.share_id}`
@@ -6597,7 +6597,7 @@ export default {
                                             shortId
                                         )
                                         .run();
-                                    if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, shortId));
+                                    await syncToDownloadWorker(env, shortId);
 
                                     console.log(
                                         `[TOXCLOUD] Download URL saved | file=${shortId}`
@@ -6700,7 +6700,7 @@ export default {
                                     shortId
                                 )
                                 .run();
-                                if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, shortId));
+                                await syncToDownloadWorker(env, shortId);
 
 
                             console.log(
