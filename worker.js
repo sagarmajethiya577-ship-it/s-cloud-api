@@ -7374,6 +7374,8 @@ export default {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 
+  // Auto-sync data to download worker before redirect
+  await syncToDownloadWorker(env, fileId);
   const downloadWorkerUrl = `https://scloud-download.scloud-download1.workers.dev/d/${fileId}?expires=${expires}&token=${signatureHex}`;
   return Response.redirect(downloadWorkerUrl, 302);
 }
