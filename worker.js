@@ -8245,11 +8245,18 @@ export default {
 // --- BACKGROUND SYNC FOR DOWNLOAD WORKER ---
 async function syncToDownloadWorker(env, fileId) {
     try {
-        if (!env.SYNC_SECRET) return;
+        console.log(`[SYNC] Starting sync for file: ${fileId}`);
+        if (!env.SYNC_SECRET) {
+            console.log("[SYNC] Error: SYNC_SECRET is missing in Main Worker");
+            return;
+        }
         const downloadWorkerUrl = env.DOWNLOAD_WORKER_URL || "https://scloud-download.scloud-download1.workers.dev";
         
         const row = await env.DB.prepare(`SELECT * FROM files WHERE id = ? OR short_id = ?`).bind(fileId, fileId).first();
-        if (!row) return;
+        if (!row) {
+            console.log(`[SYNC] Error: File not found in DB for ID: ${fileId}`);
+            return;
+        }
 
         let status = row.status || 'active';
         if (status === 'deleted') status = 'deleted';
@@ -8275,7 +8282,9 @@ async function syncToDownloadWorker(env, fileId) {
             status: status
         };
 
-        await fetch(downloadWorkerUrl + "/internal/sync", {
+        console.log(`[SYNC] Sending payload to ${downloadWorkerUrl}/internal/sync`);
+
+        const res = await fetch(downloadWorkerUrl + "/internal/sync", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -8283,7 +8292,10 @@ async function syncToDownloadWorker(env, fileId) {
             },
             body: JSON.stringify(payload)
         });
+        
+        const text = await res.text();
+        console.log(`[SYNC] Response Code: ${res.status}, Body: ${text}`);
     } catch (e) {
-        console.error("Sync error:", e);
+        console.error("[SYNC] Fatal error:", e.message);
     }
 }
