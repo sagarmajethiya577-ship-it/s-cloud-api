@@ -7331,100 +7331,44 @@ export default {
         // PUBLIC DOWNLOAD PAGE
         // ==================================================
 
-        if (
-            url.pathname.startsWith("/d/") &&
-            request.method === "GET"
-        ) {
-            const shortId =
-                url.pathname
-                    .split("/")
-                    .filter(Boolean)[1];
+        if (url.pathname.startsWith("/d/") && request.method === "GET") {
+  let fileId = "";
+  try {
+    fileId = decodeURIComponent(url.pathname.slice("/d/".length).split("/")[0]);
+  } catch {
+    return new Response("Invalid link", { status: 400 });
+  }
 
-            if (!shortId) {
-                return new Response(
-                    "Invalid download link.",
-                    {
-                        status: 400,
-                        headers: corsHeaders
-                    }
-                );
-            }
+  if (!fileId || !/^[A-Za-z0-9_-]{1,100}$/.test(fileId)) {
+    return new Response("Invalid link", { status: 400 });
+  }
 
-            try {
-                const fileRecord = await env.DB.prepare(
-                    `SELECT * FROM files WHERE short_id = ? OR id = ? LIMIT 1`
-                ).bind(shortId, shortId).first();
+  const row = await env.DB.prepare(`SELECT status FROM files WHERE file_id = ?`).bind(fileId).first();
 
-                if (!fileRecord || fileRecord.status === "deleted") {
-                    return new Response("File not found.", {
-                        status: 404,
-                        headers: corsHeaders
-                    });
-                }
+  if (!row || row.status !== "active") {
+    return new Response("File not found, deleted, or private.", { status: 404 });
+  }
 
-                if (Number(fileRecord.sharing_enabled ?? 1) === 0) {
-                    // Keep Download Worker metadata in sync with private status.
-                    ctx.waitUntil(syncDownloadMetadata(fileRecord, env));
-                    return new Response("Sharing is turned off for this file.", {
-                        status: 403,
-                        headers: corsHeaders
-                    });
-                }
-                // Sync is background-only; never delay the download page response.
-                ctx.waitUntil(syncDownloadMetadata(fileRecord, env));
-            } catch (error) {
-                console.error("Public link check error:", error);
-                return new Response("Unable to verify this file link.", {
-                    status: 503,
-                    headers: corsHeaders
-                });
-            }
+  const expires = Math.floor(Date.now() / 1000) + 600;
+  const dataToSign = `${fileId}:${expires}`;
 
-            if (
-                env.ASSETS &&
-                typeof env.ASSETS.fetch === "function"
-            ) {
-                const downloadRequest =
-                    new Request(
-                        new URL(
-                            "/download.html",
-                            request.url
-                        ),
-                        request
-                    );
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(env.SYNC_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  
+  const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(dataToSign));
+  const signatureHex = Array.from(new Uint8Array(signatureBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 
-                const assetResponse = await env.ASSETS.fetch(
-                    downloadRequest
-                );
-
-                // Set a first-party, HttpOnly browser ID so the same browser
-                // can be recognized after IP changes (e.g. airplane mode/VPN).
-                let visitorId = readCookie(request, "scloud_vid");
-                const cookieHeaders = new Headers(assetResponse.headers);
-
-                if (!visitorId || !/^[a-f0-9]{48}$/.test(visitorId)) {
-                    visitorId = createVisitorId();
-                    cookieHeaders.append(
-                        "Set-Cookie",
-                        `scloud_vid=${visitorId}; Max-Age=31536000; Path=/; Secure; HttpOnly; SameSite=Lax`
-                    );
-                }
-
-                return new Response(assetResponse.body, {
-                    status: assetResponse.status,
-                    statusText: assetResponse.statusText,
-                    headers: cookieHeaders
-                });
-            }
-
-            return new Response(
-                "Download page unavailable.",
-                {
-                    status: 503,
-                    headers: corsHeaders
-                }
-            );
-        }
+  const downloadWorkerUrl = `https://scloud-download.scloud-download1.workers.dev/d/${fileId}?expires=${expires}&token=${signatureHex}`;
+  return Response.redirect(downloadWorkerUrl, 302);
+}
 
 
         // ==================================================
