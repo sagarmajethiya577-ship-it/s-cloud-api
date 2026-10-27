@@ -5587,6 +5587,7 @@ export default {
                             currentUser.id
                         )
                         .run();
+                        if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, file_id));
 
 
                 if (
@@ -5702,6 +5703,7 @@ export default {
                     fileId,
                     currentUser.id
                 ).run();
+                if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, fileId));
 
                 if ((result.meta?.changes ?? 0) === 0) {
                     return new Response(JSON.stringify({
@@ -5792,6 +5794,7 @@ export default {
                             currentUser.id
                         )
                         .run();
+                        if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, file_id));
 
 
                 if (
@@ -5938,6 +5941,7 @@ export default {
             )
         ) {
             let uploadReservation = false;
+                if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, shortId));
             const uploadUsageDate = new Date().toISOString().slice(0, 10);
             try {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
@@ -6454,6 +6458,7 @@ export default {
 
                 // Upload has succeeded once its file record is committed.
                 uploadReservation = false;
+                if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, shortId));
 
                 // --------------------------------------
                 // INITIAL DOWNLOAD WORKER SYNC
@@ -6547,6 +6552,7 @@ export default {
                                     shortId
                                 )
                                 .run();
+                                    if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, shortId));
 
                             console.log(
                                 `[PDLINK] Share ID saved | file=${shortId} | share=${pdlinkResult.share_id}`
@@ -6591,6 +6597,7 @@ export default {
                                             shortId
                                         )
                                         .run();
+                                    if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, shortId));
 
                                     console.log(
                                         `[TOXCLOUD] Download URL saved | file=${shortId}`
@@ -6693,6 +6700,7 @@ export default {
                                     shortId
                                 )
                                 .run();
+                                if (typeof ctx !== "undefined") ctx.waitUntil(syncToDownloadWorker(env, shortId));
 
 
                             console.log(
@@ -8232,3 +8240,50 @@ export default {
         );
     }
 };
+
+
+// --- BACKGROUND SYNC FOR DOWNLOAD WORKER ---
+async function syncToDownloadWorker(env, fileId) {
+    try {
+        if (!env.SYNC_SECRET) return;
+        const downloadWorkerUrl = env.DOWNLOAD_WORKER_URL || "https://scloud-download.scloud-download1.workers.dev";
+        
+        const row = await env.DB.prepare(`SELECT * FROM files WHERE id = ? OR short_id = ?`).bind(fileId, fileId).first();
+        if (!row) return;
+
+        let status = row.status || 'active';
+        if (status === 'deleted') status = 'deleted';
+        else if (row.sharing_enabled === 0) status = 'private';
+        else status = 'active';
+
+        const metadata = {
+            title: row.file_name,
+            size: row.file_size,
+            mime_type: row.mime_type,
+            hubcloud_link: row.hubcloud_url,
+            gdflix_link: row.gdflix_url,
+            gofile_link: row.drivetot_url,
+            toxcloud_link: row.toxcloud_url,
+            pixeldrain_link: row.pdlink_share_id,
+            shared_by: row.user_id
+        };
+
+        const payload = {
+            file_id: row.short_id || row.id,
+            metadata: metadata,
+            version: Math.floor(Date.now() / 1000),
+            status: status
+        };
+
+        await fetch(downloadWorkerUrl + "/internal/sync", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Sync-Secret": env.SYNC_SECRET
+            },
+            body: JSON.stringify(payload)
+        });
+    } catch (e) {
+        console.error("Sync error:", e);
+    }
+}
