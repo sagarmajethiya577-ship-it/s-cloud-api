@@ -6351,19 +6351,22 @@ export default {
                 // temporarily and is NEVER saved to DB.
                 // --------------------------------------
 
+                console.log("[UPLOAD DEBUG] S-Cloud me copy start ho raha hai URL:", cleanUrl);
+
                 const scloudResult =
                     await copyFileToSCloud(
                         cleanUrl,
                         env
                     );
-
+                
+                console.log("[UPLOAD DEBUG] S-Cloud Copy ka result:", JSON.stringify(scloudResult));
 
                 if (
                     !scloudResult ||
                     !scloudResult.fileId
                 ) {
                     throw new Error(
-                        "S-Cloud Copy Failed"
+                        "S-Cloud Copy Failed: " + JSON.stringify(scloudResult)
                     );
                 }
 
@@ -6754,17 +6757,19 @@ export default {
                     }
                 }
 
-                console.error(
-                    "Upload Error:",
-                    error
-                );
+                // ==============================
+                // ADVANCED ERROR LOGGING ADDED
+                // ==============================
+                console.error("[UPLOAD ERROR MESSAGE]:", error.message);
+                console.error("[UPLOAD ERROR STACK]:", error.stack);
 
                 return new Response(
                     JSON.stringify({
                         status:
                             "error",
                         message:
-                            error.message
+                            error.message,
+                        stack_trace: error.stack
                     }),
                     {
                         status: 500,
