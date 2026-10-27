@@ -7343,7 +7343,7 @@ export default {
     return new Response("Invalid link", { status: 400 });
   }
 
-  const row = await env.DB.prepare(`SELECT status FROM files WHERE file_id = ?`).bind(fileId).first();
+  const row = await env.DB.prepare(`SELECT status FROM files WHERE short_id = ?`).bind(fileId).first();
 
   if (!row || row.status !== "active") {
     return new Response("File not found, deleted, or private.", { status: 404 });
