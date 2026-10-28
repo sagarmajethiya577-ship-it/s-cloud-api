@@ -6983,103 +6983,6 @@ export default {
                     });
                 }
 
-                // ==========================================
-                // UNIQUE VIEW: UPLOADER + IP/BROWSER, 24 HOURS
-                // ==========================================
-
-                const viewerIp =
-                    request.headers.get("CF-Connecting-IP") ||
-                    request.headers.get("X-Real-IP") ||
-                    (request.headers.get("X-Forwarded-For") || "")
-                        .split(",")[0]
-                        .trim() ||
-                    "unknown";
-
-                const viewerIpHash = await sha256Hex(viewerIp);
-
-                // Create the browser ID on the first /file request too,
-                // not only on /d/, so direct/API entry points can establish it.
-                let viewerBrowserId = readCookie(request, "scloud_vid");
-                let shouldSetVisitorCookie = false;
-                if (!viewerBrowserId || !/^[a-f0-9]{48}$/.test(viewerBrowserId)) {
-                    viewerBrowserId = createVisitorId();
-                    shouldSetVisitorCookie = true;
-                }
-                const viewerBrowserHash = await sha256Hex(viewerBrowserId);
-                const viewerUserAgent =
-                    request.headers.get("User-Agent") || null;
-
-                try {
-                    const viewGuard = await env.DB
-                        .prepare(
-                            `INSERT INTO visitor_activity
-                            (user_id, activity_type, ip_hash, browser_hash, occurred_at)
-                            SELECT ?, 'view', ?, ?, CURRENT_TIMESTAMP
-                            WHERE NOT EXISTS (
-                                SELECT 1
-                                FROM visitor_activity va
-                                WHERE va.user_id = ?
-                                  AND va.activity_type = 'view'
-                                  AND va.occurred_at >= datetime('now', '-24 hours')
-                                  AND (
-                                      va.ip_hash = ?
-                                      OR (? IS NOT NULL AND va.browser_hash = ?)
-                                  )
-                            )
-                            AND NOT EXISTS (
-                                SELECT 1
-                                FROM views_log vl
-                                INNER JOIN files f ON f.id = vl.file_id
-                                WHERE f.user_id = ?
-                                  AND vl.viewed_at >= datetime('now', '-24 hours')
-                                  AND vl.ip_address = ?
-                            )`
-                        )
-                        .bind(
-                            record.user_id,
-                            viewerIpHash,
-                            viewerBrowserHash,
-                            record.user_id,
-                            viewerIpHash,
-                            viewerBrowserHash,
-                            viewerBrowserHash,
-                            record.user_id,
-                            viewerIp
-                        )
-                        .run();
-
-                    const uniqueView =
-                        Number(viewGuard?.meta?.changes || 0) > 0;
-
-                    if (uniqueView) {
-                        await env.DB.batch([
-                            env.DB.prepare(
-                                `UPDATE files
-                                 SET views = COALESCE(views, 0) + 1
-                                 WHERE id = ?`
-                            ).bind(record.id),
-                            env.DB.prepare(
-                                `INSERT INTO views_log (file_id, ip_address, user_agent)
-                                 VALUES (?, ?, ?)`
-                            ).bind(record.id, viewerIp, viewerUserAgent)
-                        ]);
-
-                        console.log(
-                            `[VIEWS] Unique view logged | file=${shortId} | user=${record.user_id}`
-                        );
-                    } else {
-                        console.log(
-                            `[VIEWS] Duplicate blocked | file=${shortId} | user=${record.user_id}`
-                        );
-                    }
-
-                } catch (viewLogError) {
-                    console.error(
-                        `[VIEWS] Guard/log failed | file=${shortId}:`,
-                        viewLogError.message
-                    );
-                }
-
                 const currentTime =
                     Date.now();
 
@@ -7328,13 +7231,6 @@ export default {
                     "Content-Type": "application/json",
                     ...corsHeaders
                 });
-                if (shouldSetVisitorCookie) {
-                    fileResponseHeaders.append(
-                        "Set-Cookie",
-                        `scloud_vid=${viewerBrowserId}; Max-Age=31536000; Path=/; Secure; HttpOnly; SameSite=Lax`
-                    );
-                }
-
                 return new Response(
                     JSON.stringify({
                         status: "success",
@@ -7479,6 +7375,142 @@ export default {
     );
   }
 
+  // ==================================================
+  // UNIQUE VIEW AT THE REAL PUBLIC ENTRY POINT
+  //
+  // One publisher can receive at most one eligible view
+  // from the same IP/browser identity during 24 hours.
+  // ==================================================
+
+  const viewerIp =
+    request.headers.get("CF-Connecting-IP") ||
+    request.headers.get("X-Real-IP") ||
+    (request.headers.get("X-Forwarded-For") || "")
+      .split(",")[0]
+      .trim() ||
+    "unknown";
+
+  const viewerIpHash =
+    await sha256Hex(viewerIp);
+
+  let viewerBrowserId =
+    readCookie(request, "scloud_vid");
+
+  let shouldSetVisitorCookie = false;
+
+  if (
+    !viewerBrowserId ||
+    !/^[a-f0-9]{48}$/.test(viewerBrowserId)
+  ) {
+    viewerBrowserId =
+      createVisitorId();
+
+    shouldSetVisitorCookie = true;
+  }
+
+  const viewerBrowserHash =
+    await sha256Hex(viewerBrowserId);
+
+  const viewerUserAgent =
+    request.headers.get("User-Agent") ||
+    null;
+
+  try {
+    const viewGuard =
+      await env.DB
+        .prepare(
+          `INSERT INTO visitor_activity
+           (user_id, activity_type, ip_hash, browser_hash, occurred_at)
+
+           SELECT ?, 'view', ?, ?, CURRENT_TIMESTAMP
+
+           WHERE NOT EXISTS (
+             SELECT 1
+             FROM visitor_activity va
+             WHERE va.user_id = ?
+               AND va.activity_type = 'view'
+               AND va.occurred_at >= datetime('now', '-24 hours')
+               AND (
+                 va.ip_hash = ?
+                 OR (
+                   ? IS NOT NULL
+                   AND va.browser_hash = ?
+                 )
+               )
+           )
+
+           AND NOT EXISTS (
+             SELECT 1
+             FROM views_log vl
+             INNER JOIN files f
+               ON f.id = vl.file_id
+             WHERE f.user_id = ?
+               AND vl.viewed_at >= datetime('now', '-24 hours')
+               AND vl.ip_address = ?
+           )`
+        )
+        .bind(
+          row.user_id,
+          viewerIpHash,
+          viewerBrowserHash,
+
+          row.user_id,
+          viewerIpHash,
+          viewerBrowserHash,
+          viewerBrowserHash,
+
+          row.user_id,
+          viewerIp
+        )
+        .run();
+
+    const uniqueView =
+      Number(
+        viewGuard?.meta?.changes || 0
+      ) > 0;
+
+    if (uniqueView) {
+      await env.DB.batch([
+        env.DB
+          .prepare(
+            `UPDATE files
+             SET views = COALESCE(views, 0) + 1
+             WHERE id = ?`
+          )
+          .bind(row.id),
+
+        env.DB
+          .prepare(
+            `INSERT INTO views_log
+             (file_id, ip_address, user_agent)
+             VALUES (?, ?, ?)`
+          )
+          .bind(
+            row.id,
+            viewerIp,
+            viewerUserAgent
+          )
+      ]);
+
+      console.log(
+        `[VIEWS] Unique /d view logged | file=${fileId} | user=${row.user_id}`
+      );
+    } else {
+      console.log(
+        `[VIEWS] Duplicate /d view blocked | file=${fileId} | user=${row.user_id}`
+      );
+    }
+
+  } catch (viewLogError) {
+    // View analytics must never break a valid download.
+    console.error(
+      `[VIEWS] /d guard/log failed | file=${fileId}:`,
+      viewLogError?.message ||
+      viewLogError
+    );
+  }
+
+
   const expires = Math.floor(Date.now() / 1000) + 600;
   const dataToSign = `${fileId}:${expires}`;
 
@@ -7509,7 +7541,22 @@ export default {
   const downloadWorkerUrl =
     `${downloadWorkerBase}/d/${encodeURIComponent(fileId)}` +
     `?expires=${expires}&token=${signatureHex}`;
-  return Response.redirect(downloadWorkerUrl, 302);
+  const redirectHeaders = new Headers({
+    "Location": downloadWorkerUrl,
+    "Cache-Control": "no-store"
+  });
+
+  if (shouldSetVisitorCookie) {
+    redirectHeaders.append(
+      "Set-Cookie",
+      `scloud_vid=${viewerBrowserId}; Max-Age=31536000; Path=/; Secure; HttpOnly; SameSite=Lax`
+    );
+  }
+
+  return new Response(null, {
+    status: 302,
+    headers: redirectHeaders
+  });
 }
 
 
