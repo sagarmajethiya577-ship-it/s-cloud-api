@@ -7512,7 +7512,19 @@ export default {
 
 
   const expires = Math.floor(Date.now() / 1000) + 600;
-  const dataToSign = `${fileId}:${expires}`;
+
+  // Per-entry cryptographically random access nonce.
+  // This becomes part of the HMAC-protected credential.
+  const accessBytes = new Uint8Array(24);
+  crypto.getRandomValues(accessBytes);
+
+  const accessNonce =
+    Array.from(accessBytes)
+      .map(b => b.toString(16).padStart(2, "0"))
+      .join("");
+
+  const dataToSign =
+    `${fileId}:${expires}:${accessNonce}`;
 
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -7540,7 +7552,9 @@ export default {
 
   const downloadWorkerUrl =
     `${downloadWorkerBase}/d/${encodeURIComponent(fileId)}` +
-    `?expires=${expires}&token=${signatureHex}`;
+    `?expires=${expires}` +
+    `&access=${encodeURIComponent(accessNonce)}` +
+    `&token=${signatureHex}`;
   const redirectHeaders = new Headers({
     "Location": downloadWorkerUrl,
     "Cache-Control": "no-store"
