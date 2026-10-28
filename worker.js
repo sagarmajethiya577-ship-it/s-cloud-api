@@ -5587,7 +5587,25 @@ export default {
                             currentUser.id
                         )
                         .run();
-                        await syncToDownloadWorker(env, file_id);
+                        {
+                            const downloadSyncRecord =
+                                await env.DB
+                                    .prepare(
+                                        "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                                    )
+                                    .bind(
+                                        file_id,
+                                        file_id
+                                    )
+                                    .first();
+    
+                            if (downloadSyncRecord) {
+                                await syncDownloadMetadata(
+                                    downloadSyncRecord,
+                                    env
+                                );
+                            }
+                        }
 
 
                 if (
@@ -5703,7 +5721,25 @@ export default {
                     fileId,
                     currentUser.id
                 ).run();
-                await syncToDownloadWorker(env, fileId);
+                {
+                    const downloadSyncRecord =
+                        await env.DB
+                            .prepare(
+                                "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                            )
+                            .bind(
+                                fileId,
+                                fileId
+                            )
+                            .first();
+    
+                    if (downloadSyncRecord) {
+                        await syncDownloadMetadata(
+                            downloadSyncRecord,
+                            env
+                        );
+                    }
+                }
 
                 if ((result.meta?.changes ?? 0) === 0) {
                     return new Response(JSON.stringify({
@@ -5794,7 +5830,25 @@ export default {
                             currentUser.id
                         )
                         .run();
-                        await syncToDownloadWorker(env, file_id);
+                        {
+                            const downloadSyncRecord =
+                                await env.DB
+                                    .prepare(
+                                        "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                                    )
+                                    .bind(
+                                        file_id,
+                                        file_id
+                                    )
+                                    .first();
+    
+                            if (downloadSyncRecord) {
+                                await syncDownloadMetadata(
+                                    downloadSyncRecord,
+                                    env
+                                );
+                            }
+                        }
 
 
                 if (
@@ -5941,7 +5995,6 @@ export default {
             )
         ) {
             let uploadReservation = false;
-                await syncToDownloadWorker(env, shortId);
             const uploadUsageDate = new Date().toISOString().slice(0, 10);
             try {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
@@ -6458,7 +6511,6 @@ export default {
 
                 // Upload has succeeded once its file record is committed.
                 uploadReservation = false;
-                await syncToDownloadWorker(env, shortId);
 
                 // --------------------------------------
                 // INITIAL DOWNLOAD WORKER SYNC
@@ -6552,7 +6604,25 @@ export default {
                                     shortId
                                 )
                                 .run();
-                                    await syncToDownloadWorker(env, shortId);
+                                    {
+                                        const downloadSyncRecord =
+                                            await env.DB
+                                                .prepare(
+                                                    "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                                                )
+                                                .bind(
+                                                    shortId,
+                                                    shortId
+                                                )
+                                                .first();
+    
+                                        if (downloadSyncRecord) {
+                                            await syncDownloadMetadata(
+                                                downloadSyncRecord,
+                                                env
+                                            );
+                                        }
+                                    }
 
                             console.log(
                                 `[PDLINK] Share ID saved | file=${shortId} | share=${pdlinkResult.share_id}`
@@ -6597,7 +6667,25 @@ export default {
                                             shortId
                                         )
                                         .run();
-                                    await syncToDownloadWorker(env, shortId);
+                                    {
+                                        const downloadSyncRecord =
+                                            await env.DB
+                                                .prepare(
+                                                    "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                                                )
+                                                .bind(
+                                                    shortId,
+                                                    shortId
+                                                )
+                                                .first();
+    
+                                        if (downloadSyncRecord) {
+                                            await syncDownloadMetadata(
+                                                downloadSyncRecord,
+                                                env
+                                            );
+                                        }
+                                    }
 
                                     console.log(
                                         `[TOXCLOUD] Download URL saved | file=${shortId}`
@@ -6700,7 +6788,25 @@ export default {
                                     shortId
                                 )
                                 .run();
-                                await syncToDownloadWorker(env, shortId);
+                                {
+                                    const downloadSyncRecord =
+                                        await env.DB
+                                            .prepare(
+                                                "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                                            )
+                                            .bind(
+                                                shortId,
+                                                shortId
+                                            )
+                                            .first();
+    
+                                    if (downloadSyncRecord) {
+                                        await syncDownloadMetadata(
+                                            downloadSyncRecord,
+                                            env
+                                        );
+                                    }
+                                }
 
 
                             console.log(
@@ -7351,10 +7457,26 @@ export default {
     return new Response("Invalid link", { status: 400 });
   }
 
-  const row = await env.DB.prepare(`SELECT status FROM files WHERE short_id = ?`).bind(fileId).first();
+  const row = await env.DB
+    .prepare(`SELECT * FROM files WHERE short_id = ? LIMIT 1`)
+    .bind(fileId)
+    .first();
 
-  if (!row || row.status !== "active") {
-    return new Response("File not found, deleted, or private.", { status: 404 });
+  if (
+    !row ||
+    row.status !== "active" ||
+    Number(row.sharing_enabled ?? 1) === 0
+  ) {
+    return new Response(
+      "File not found, deleted, or private.",
+      {
+        status: 404,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store"
+        }
+      }
+    );
   }
 
   const expires = Math.floor(Date.now() / 1000) + 600;
@@ -7374,9 +7496,19 @@ export default {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 
-  // Auto-sync data to download worker before redirect
-  await syncToDownloadWorker(env, fileId);
-  const downloadWorkerUrl = `https://scloud-download.scloud-download1.workers.dev/d/${fileId}?expires=${expires}&token=${signatureHex}`;
+  // Keep Download Worker metadata fresh before redirect.
+  // This uses the ONE canonical sync format.
+  await syncDownloadMetadata(row, env);
+
+  const downloadWorkerBase =
+    String(
+      env.DOWNLOAD_WORKER_URL ||
+      "https://scloud-download.scloud-download1.workers.dev"
+    ).replace(/\/+$/, "");
+
+  const downloadWorkerUrl =
+    `${downloadWorkerBase}/d/${encodeURIComponent(fileId)}` +
+    `?expires=${expires}&token=${signatureHex}`;
   return Response.redirect(downloadWorkerUrl, 302);
 }
 
@@ -8242,62 +8374,3 @@ export default {
         );
     }
 };
-
-
-// --- BACKGROUND SYNC FOR DOWNLOAD WORKER ---
-async function syncToDownloadWorker(env, fileId) {
-    try {
-        console.log(`[SYNC] Starting sync for file: ${fileId}`);
-        if (!env.SYNC_SECRET) {
-            console.log("[SYNC] Error: SYNC_SECRET is missing in Main Worker");
-            return;
-        }
-        const downloadWorkerUrl = env.DOWNLOAD_WORKER_URL || "https://scloud-download.scloud-download1.workers.dev";
-        
-        const row = await env.DB.prepare(`SELECT * FROM files WHERE id = ? OR short_id = ?`).bind(fileId, fileId).first();
-        if (!row) {
-            console.log(`[SYNC] Error: File not found in DB for ID: ${fileId}`);
-            return;
-        }
-
-        let status = row.status || 'active';
-        if (status === 'deleted') status = 'deleted';
-        else if (row.sharing_enabled === 0) status = 'private';
-        else status = 'active';
-
-        const metadata = {
-            title: row.file_name,
-            size: row.file_size,
-            mime_type: row.mime_type,
-            hubcloud_link: row.hubcloud_url,
-            gdflix_link: row.gdflix_url,
-            gofile_link: row.drivetot_url,
-            toxcloud_link: row.toxcloud_url,
-            pixeldrain_link: row.pdlink_share_id,
-            shared_by: row.user_id
-        };
-
-        const payload = {
-            file_id: row.short_id || row.id,
-            metadata: metadata,
-            version: Math.floor(Date.now() / 1000),
-            status: status
-        };
-
-        console.log(`[SYNC] Sending payload to ${downloadWorkerUrl}/internal/sync`);
-
-        const res = await fetch(downloadWorkerUrl + "/internal/sync", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-Sync-Secret": env.SYNC_SECRET
-            },
-            body: JSON.stringify(payload)
-        });
-        
-        const text = await res.text();
-        console.log(`[SYNC] Response Code: ${res.status}, Body: ${text}`);
-    } catch (e) {
-        console.error("[SYNC] Fatal error:", e.message);
-    }
-}
