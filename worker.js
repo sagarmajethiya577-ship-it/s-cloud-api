@@ -2114,6 +2114,35 @@ async function prepareFastLinks(shortId, env) {
                         console.log(
                             `[FAST] Extracted mirror URLs saved ${shortId} | elapsed=${elapsed()}`
                         );
+
+                        // Immediately sync recovered source metadata.
+                        // Do not depend on the later GDFlix fast-link
+                        // generation succeeding.
+                        try {
+                            const recoveredSyncRecord =
+                                await env.DB
+                                    .prepare(
+                                        "SELECT * FROM files WHERE id = ? LIMIT 1"
+                                    )
+                                    .bind(record.id)
+                                    .first();
+
+                            if (recoveredSyncRecord) {
+                                await syncDownloadMetadata(
+                                    recoveredSyncRecord,
+                                    env
+                                );
+
+                                console.log(
+                                    `[FAST] Recovered mirrors synced ${shortId} | elapsed=${elapsed()}`
+                                );
+                            }
+                        } catch (syncError) {
+                            console.error(
+                                `[FAST] Recovered mirror sync FAILED ${shortId} | elapsed=${elapsed()} |`,
+                                syncError?.message || syncError
+                            );
+                        }
                     }
                 } catch (error) {
                     console.error(
@@ -7374,6 +7403,21 @@ export default {
       }
     );
   }
+
+  // ==================================================
+  // DOWNLOAD ENTRY SELF-HEALING
+  //
+  // Restore the old /file behavior for the real public /d
+  // entry point. Missing Drivetot / HubCloud / GDFlix metadata
+  // can continue preparing in the background without delaying
+  // the signed redirect to the Download Worker.
+  // ==================================================
+  ctx.waitUntil(
+    prepareFastLinks(
+      fileId,
+      env
+    )
+  );
 
   // ==================================================
   // UNIQUE VIEW AT THE REAL PUBLIC ENTRY POINT
