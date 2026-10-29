@@ -8034,9 +8034,34 @@ export default {
                             env
                         );
 
-                        return Response.redirect(
-                            record.toxcloud_url,
-                            302
+                        /*
+                         * Earning is already credited above.
+                         *
+                         * Send the browser back to the authenticated
+                         * Download Worker TOXcloud resolver.
+                         * The existing per-file Download-domain
+                         * session cookie authorizes /api/toxcloud/.
+                         */
+                        const downloadWorkerBase =
+                            String(
+                                env.DOWNLOAD_WORKER_URL ||
+                                "https://scloud-download.scloud-download1.workers.dev"
+                            ).replace(/\/+$/, "");
+
+                        const toxcloudResolverUrl =
+                            `${downloadWorkerBase}/api/toxcloud/${encodeURIComponent(shortId)}`;
+
+                        return new Response(
+                            null,
+                            {
+                                status: 302,
+                                headers: {
+                                    "Location":
+                                        toxcloudResolverUrl,
+                                    "Cache-Control":
+                                        "no-store"
+                                }
+                            }
                         );
 
                     } catch (error) {
