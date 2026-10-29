@@ -8067,166 +8067,34 @@ export default {
 
 
                 // ------------------------------------------
-                // INSTANT DOWNLOAD
+                // INSTANT DOWNLOAD - FRESH MG DIRECT
                 // ------------------------------------------
 
                 if (
                     action ===
                     "instant"
                 ) {
-                    const currentTime =
-                        Date.now();
-
-                    if (
-                        !hasValidFastLinks(
-                            record,
-                            currentTime
-                        )
-                    ) {
-                        ctx.waitUntil(
-                            prepareFastLinks(
-                                shortId,
-                                env
-                            )
-                        );
-
-                        return new Response(
-                            JSON.stringify({
-                                status:
-                                    "preparing",
-                                message:
-                                    "Instant download is still preparing."
-                            }),
-                            {
-                                status: 202,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
-                    }
-
-                    let links = null;
-
-                    try {
-                        links =
-                            JSON.parse(
-                                record.fast_links
-                            );
-                    } catch (error) {
-                        links = null;
-                    }
-
-                    if (!links) {
-                        ctx.waitUntil(
-                            prepareFastLinks(
-                                shortId,
-                                env
-                            )
-                        );
-
-                        return new Response(
-                            JSON.stringify({
-                                status:
-                                    "preparing",
-                                message:
-                                    "Instant download is still preparing."
-                            }),
-                            {
-                                status: 202,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
-                    }
-
                     /*
-                     * bypassGDFlix() output is kept as-is.
-                     * Find the first usable URL without
-                     * changing the scraper's structure.
+                     * TOXcloud is only used as the source
+                     * for resolving a fresh MG/MEGA direct URL.
+                     *
+                     * Nothing is cached or stored.
+                     * File bytes never pass through this Worker.
                      */
 
-                    let instantUrl = null;
+                    const toxcloudUrl =
+                        typeof record.toxcloud_url === "string"
+                            ? record.toxcloud_url.trim()
+                            : "";
 
-                    if (
-                        typeof links ===
-                        "string"
-                    ) {
-                        instantUrl =
-                            links;
-                    } else if (
-                        Array.isArray(
-                            links
-                        )
-                    ) {
-                        instantUrl =
-                            links.find(
-                                item =>
-                                    typeof item ===
-                                        "string" &&
-                                    /^https?:\/\//i.test(
-                                        item
-                                    )
-                            ) || null;
-                    } else if (
-                        links &&
-                        typeof links ===
-                            "object"
-                    ) {
-                        const candidates = [
-                            links.download,
-                            links.download_url,
-                            links.direct,
-                            links.direct_url,
-                            links.url,
-                            links.link,
-                            links.fast,
-                            links.fast_url
-                        ];
-
-                        instantUrl =
-                            candidates.find(
-                                item =>
-                                    typeof item ===
-                                        "string" &&
-                                    /^https?:\/\//i.test(
-                                        item
-                                    )
-                            ) || null;
-
-                        if (
-                            !instantUrl
-                        ) {
-                            const values =
-                                Object.values(
-                                    links
-                                );
-
-                            instantUrl =
-                                values.find(
-                                    item =>
-                                        typeof item ===
-                                            "string" &&
-                                        /^https?:\/\//i.test(
-                                            item
-                                        )
-                                ) || null;
-                        }
-                    }
-
-                    if (!instantUrl) {
+                    if (!toxcloudUrl) {
                         return new Response(
                             JSON.stringify({
-                                status:
-                                    "error",
-                                message:
-                                    "Instant download link is unavailable."
+                                status: "error",
+                                message: "Instant download is not available yet."
                             }),
                             {
-                                status: 503,
+                                status: 404,
                                 headers: {
                                     ...corsHeaders,
                                     ...jsonHeaders()
@@ -8235,16 +8103,273 @@ export default {
                         );
                     }
 
-                    await creditDownloadEarning(
-                        record,
-                        request,
-                        env
-                    );
+                    let toxParsed;
 
-                    return Response.redirect(
-                        instantUrl,
-                        302
-                    );
+                    try {
+                        toxParsed =
+                            new URL(toxcloudUrl);
+                    } catch {
+                        return new Response(
+                            JSON.stringify({
+                                status: "error",
+                                message: "Invalid TOXcloud source URL."
+                            }),
+                            {
+                                status: 502,
+                                headers: {
+                                    ...corsHeaders,
+                                    ...jsonHeaders()
+                                }
+                            }
+                        );
+                    }
+
+                    const toxHost =
+                        toxParsed.hostname.toLowerCase();
+
+                    if (
+                        toxParsed.protocol !== "https:" ||
+                        (
+                            toxHost !== "toxcloud.info" &&
+                            !toxHost.endsWith(".toxcloud.info")
+                        )
+                    ) {
+                        return new Response(
+                            JSON.stringify({
+                                status: "error",
+                                message: "Unexpected TOXcloud source."
+                            }),
+                            {
+                                status: 502,
+                                headers: {
+                                    ...corsHeaders,
+                                    ...jsonHeaders()
+                                }
+                            }
+                        );
+                    }
+
+                    try {
+                        console.log(
+                            `[INSTANT MG] Resolve START | file=${shortId}`
+                        );
+
+                        const browserHeaders = {
+                            "User-Agent":
+                                "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/140.0.0.0 Mobile Safari/537.36",
+                            "Accept":
+                                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                        };
+
+                        const toxResponse =
+                            await fetch(
+                                toxcloudUrl,
+                                {
+                                    method: "GET",
+                                    headers:
+                                        browserHeaders,
+                                    redirect:
+                                        "follow"
+                                }
+                            );
+
+                        const toxHtml =
+                            await toxResponse.text();
+
+                        if (!toxResponse.ok) {
+                            throw new Error(
+                                `TOXcloud fetch failed (${toxResponse.status})`
+                            );
+                        }
+
+                        const buttonMatch =
+                            toxHtml.match(
+                                /<button[^>]*id=["']cloud-dl-btn["'][^>]*>/i
+                            );
+
+                        if (!buttonMatch) {
+                            throw new Error(
+                                "MGCloud download button not found"
+                            );
+                        }
+
+                        const button =
+                            buttonMatch[0];
+
+                        const megaMatch =
+                            button.match(
+                                /data-megaid=["']([^"']+)["']/i
+                            );
+
+                        const tempMatch =
+                            button.match(
+                                /data-tempid=["']([^"']+)["']/i
+                            );
+
+                        const megaId =
+                            megaMatch?.[1]?.trim() ||
+                            "";
+
+                        const tempId =
+                            tempMatch?.[1]?.trim() ||
+                            "";
+
+                        if (!megaId || !tempId) {
+                            throw new Error(
+                                "MGCloud IDs not found"
+                            );
+                        }
+
+                        /*
+                         * IMPORTANT:
+                         * Use data-tempid from the actual button.
+                         * Do not use the TOXcloud URL slug.
+                         */
+                        const payload =
+                            JSON.stringify({
+                                id: megaId,
+                                temp_id: tempId,
+                                expires:
+                                    Date.now() +
+                                    (3600 * 1000)
+                            });
+
+                        const cloudToken =
+                            btoa(
+                                encodeURIComponent(
+                                    payload
+                                )
+                            );
+
+                        const cloudUrl =
+                            "https://fast.toxcloud.shop/cloud?token=" +
+                            encodeURIComponent(
+                                cloudToken
+                            );
+
+                        const cloudResponse =
+                            await fetch(
+                                cloudUrl,
+                                {
+                                    method: "GET",
+                                    headers:
+                                        browserHeaders,
+                                    redirect:
+                                        "follow"
+                                }
+                            );
+
+                        const cloudHtml =
+                            await cloudResponse.text();
+
+                        if (!cloudResponse.ok) {
+                            throw new Error(
+                                `MGCloud resolver failed (${cloudResponse.status})`
+                            );
+                        }
+
+                        const directMatch =
+                            cloudHtml.match(
+                                /https:\/\/[^"'<> ]+\.userstorage\.mega\.co\.nz\/dl\/[^"'<> ]+/i
+                            );
+
+                        if (!directMatch) {
+                            throw new Error(
+                                "Fresh MG direct URL not found"
+                            );
+                        }
+
+                        const instantUrl =
+                            directMatch[0]
+                                .replaceAll(
+                                    "&amp;",
+                                    "&"
+                                )
+                                .replaceAll(
+                                    "&#39;",
+                                    "'"
+                                );
+
+                        let directParsed;
+
+                        try {
+                            directParsed =
+                                new URL(
+                                    instantUrl
+                                );
+                        } catch {
+                            throw new Error(
+                                "Invalid MG direct URL"
+                            );
+                        }
+
+                        const directHost =
+                            directParsed.hostname.toLowerCase();
+
+                        if (
+                            directParsed.protocol !== "https:" ||
+                            !directHost.endsWith(
+                                ".userstorage.mega.co.nz"
+                            )
+                        ) {
+                            throw new Error(
+                                "Unexpected MG direct host"
+                            );
+                        }
+
+                        console.log(
+                            `[INSTANT MG] Resolve SUCCESS | file=${shortId} | host=${directHost}`
+                        );
+
+                        /*
+                         * Preserve the existing Instant Download
+                         * earning behavior.
+                         */
+                        await creditDownloadEarning(
+                            record,
+                            request,
+                            env
+                        );
+
+                        return new Response(
+                            null,
+                            {
+                                status: 302,
+                                headers: {
+                                    "Location":
+                                        instantUrl,
+                                    "Cache-Control":
+                                        "no-store, no-cache, must-revalidate",
+                                    "Pragma":
+                                        "no-cache",
+                                    "Referrer-Policy":
+                                        "no-referrer"
+                                }
+                            }
+                        );
+
+                    } catch (error) {
+                        console.error(
+                            `[INSTANT MG] Resolve ERROR | file=${shortId}:`,
+                            error?.message ||
+                            error
+                        );
+
+                        return new Response(
+                            JSON.stringify({
+                                status: "error",
+                                message:
+                                    "Instant download link could not be resolved."
+                            }),
+                            {
+                                status: 502,
+                                headers: {
+                                    ...corsHeaders,
+                                    ...jsonHeaders()
+                                }
+                            }
+                        );
+                    }
                 }
 
 
