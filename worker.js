@@ -8371,6 +8371,16 @@ export default {
                             env
                         );
 
+                        if (
+                            url.searchParams.get("mode") ===
+                            "json"
+                        ) {
+                            return jsonResponse({
+                                status: "success",
+                                url: instantUrl
+                            });
+                        }
+
                         return new Response(
                             null,
                             {
