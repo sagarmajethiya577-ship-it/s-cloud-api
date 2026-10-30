@@ -24,6 +24,46 @@ async function syncDownloadMetadata(record, env) {
         return false;
     }
 
+    // Shared By settings belong to the users table, not files.
+    // Hydrate them here so every sync path (upload, /d/:id, mirror
+    // updates, rename, sharing changes and self-healing) sends the
+    // correct publisher settings to the Download Worker.
+    let sharedByEnabled = record.shared_by_enabled;
+    let sharedByName = record.shared_by;
+    let sharedByUrl = record.shared_by_url;
+
+    if (
+        record.user_id != null &&
+        (
+            sharedByEnabled === undefined ||
+            sharedByName === undefined ||
+            sharedByUrl === undefined
+        )
+    ) {
+        try {
+            const publisherSettings = await env.DB
+                .prepare(
+                    `SELECT shared_by, shared_by_enabled, shared_by_url
+                     FROM users
+                     WHERE id = ?
+                     LIMIT 1`
+                )
+                .bind(record.user_id)
+                .first();
+
+            if (publisherSettings) {
+                sharedByEnabled ??= publisherSettings.shared_by_enabled;
+                sharedByName ??= publisherSettings.shared_by;
+                sharedByUrl ??= publisherSettings.shared_by_url;
+            }
+        } catch (sharedByError) {
+            console.error(
+                "[DOWNLOAD SYNC] Could not load Shared By settings:",
+                sharedByError?.message || sharedByError
+            );
+        }
+    }
+
     const status = record.status === "deleted"
         ? "deleted"
         : Number(record.sharing_enabled ?? 1) === 0
@@ -36,9 +76,9 @@ async function syncDownloadMetadata(record, env) {
         file_size: record.file_size ?? null,
         mime_type: record.mime_type || record.file_type || null,
         created_at: record.created_at || record.last_updated || null,
-        shared_by_enabled: Number(record.shared_by_enabled ?? 0),
-        shared_by: record.shared_by || null,
-        shared_by_url: record.shared_by_url || null,
+        shared_by_enabled: Number(sharedByEnabled ?? 0),
+        shared_by: sharedByName || null,
+        shared_by_url: sharedByUrl || null,
         drive_url: record.drive_url || null,
         hubcloud_url: record.hubcloud_url || null,
         gdflix_url: record.gdflix_url || null,
