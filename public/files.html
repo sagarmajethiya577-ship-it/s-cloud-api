@@ -1111,6 +1111,29 @@
                 <span id="actionSharingLabel">Turn Sharing Off</span>
             </button>
 
+            <div class="border-t border-gray-700/50"></div>
+
+            <button
+                id="actionDelete"
+                type="button"
+                class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition text-left"
+            >
+                <svg
+                    class="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4h6v3m-9 0h12"
+                    ></path>
+                </svg>
+                Delete
+            </button>
+
         </div>
     </div>
 
@@ -4022,6 +4045,20 @@
                             event.preventDefault();
                             event.stopPropagation();
                             toggleFileSharing(activeActionFile);
+                        }
+                    );
+                }
+
+                const deleteButton =
+                    $("actionDelete");
+
+                if (deleteButton) {
+                    deleteButton.addEventListener(
+                        "click",
+                        function(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            openDeleteModal(activeActionFile);
                         }
                     );
                 }
