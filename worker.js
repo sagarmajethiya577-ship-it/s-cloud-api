@@ -2402,15 +2402,18 @@ export default {
         // ANIMEPLEX: SESSION-GATED, READ-ONLY MIRROR DIRECTORY
         // Only saved D1 URLs. No PDLink call, /go/, credit, or scraper.
         // ==================================================
-        if (url.pathname.startsWith('/animeplex.in@proton.me/')) {
+        // Both allowlisted accounts can see ONLY their own file records.
+        // Browsers may encode '@' as '%40' in the URL path.
+        const specialMirrorRoute = /^\/(animeplex\.in(?:@|%40)proton\.me|sagarmajethiya444(?:@|%40)gmail\.com)\/([A-Za-z0-9_-]{6,64})\/?$/i.exec(url.pathname);
+        const specialMirrorPrefix = /^\/(?:animeplex\.in|sagarmajethiya444)(?:@|%40)/i.test(url.pathname);
+        if (specialMirrorPrefix) {
             if (request.method !== 'GET') {
                 return new Response('Method Not Allowed', {
                     status: 405, headers: { 'Allow': 'GET', 'Cache-Control': 'no-store' }
                 });
             }
 
-            const specialMatch = /^\/animeplex\.in@proton\.me\/([A-Za-z0-9_-]{6,64})\/?$/.exec(url.pathname);
-            if (!specialMatch) {
+            if (!specialMirrorRoute) {
                 return new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
             }
 
@@ -2420,11 +2423,14 @@ export default {
                 login.searchParams.set('redirect', url.pathname);
                 return Response.redirect(login.toString(), 302);
             }
-            if (String(specialUser.email || '').trim().toLowerCase() !== 'animeplex.in@proton.me') {
+            // The URL email must equal the logged-in account email; no admin bypass.
+            const routeEmail = specialMirrorRoute[1].replace(/%40/ig, '@').toLowerCase();
+            const sessionEmail = String(specialUser.email || '').trim().toLowerCase();
+            if (sessionEmail !== routeEmail) {
                 return new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
             }
 
-            const fileIdentifier = specialMatch[1];
+            const fileIdentifier = specialMirrorRoute[2];
             const specialRecord = await env.DB.prepare(`
                 SELECT id, short_id, file_name, status, sharing_enabled,
                        hubcloud_url, gdflix_url, drivetot_url, toxcloud_url,
@@ -2432,10 +2438,11 @@ export default {
                        last_updated
                 FROM files
                 WHERE (short_id = ? OR id = ?)
+                  AND user_id = ?
                   AND COALESCE(status, '') != 'deleted'
                   AND COALESCE(sharing_enabled, 1) != 0
                 LIMIT 1
-            `).bind(fileIdentifier, fileIdentifier).first();
+            `).bind(fileIdentifier, fileIdentifier, specialUser.id).first();
 
             if (!specialRecord) {
                 return new Response('File Not Found or Sharing Disabled', {
