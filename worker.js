@@ -2397,6 +2397,137 @@ export default {
                 request.url
             );
 
+
+        // ==================================================
+        // ANIMEPLEX: SESSION-GATED, READ-ONLY MIRROR DIRECTORY
+        // Only saved D1 URLs. No PDLink call, /go/, credit, or scraper.
+        // ==================================================
+        if (url.pathname.startsWith('/animeplex.in@proton.me/')) {
+            if (request.method !== 'GET') {
+                return new Response('Method Not Allowed', {
+                    status: 405, headers: { 'Allow': 'GET', 'Cache-Control': 'no-store' }
+                });
+            }
+
+            const specialMatch = /^\/animeplex\.in@proton\.me\/([A-Za-z0-9_-]{6,64})\/?$/.exec(url.pathname);
+            if (!specialMatch) {
+                return new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+            }
+
+            const specialUser = await getCurrentUser(request, env);
+            if (!specialUser) {
+                const login = new URL('/', request.url);
+                login.searchParams.set('redirect', url.pathname);
+                return Response.redirect(login.toString(), 302);
+            }
+            if (String(specialUser.email || '').trim().toLowerCase() !== 'animeplex.in@proton.me') {
+                return new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+            }
+
+            const fileIdentifier = specialMatch[1];
+            const specialRecord = await env.DB.prepare(`
+                SELECT id, short_id, file_name, status, sharing_enabled,
+                       hubcloud_url, gdflix_url, drivetot_url, toxcloud_url,
+                       drive_url, pdlink_share_id, fast_links, fast_links_expires_at,
+                       last_updated
+                FROM files
+                WHERE (short_id = ? OR id = ?)
+                  AND COALESCE(status, '') != 'deleted'
+                  AND COALESCE(sharing_enabled, 1) != 0
+                LIMIT 1
+            `).bind(fileIdentifier, fileIdentifier).first();
+
+            if (!specialRecord) {
+                return new Response('File Not Found or Sharing Disabled', {
+                    status: 404, headers: { 'Cache-Control': 'no-store' }
+                });
+            }
+
+            const cleanLink = (value) => {
+                if (typeof value !== 'string') return null;
+                const raw = value.trim();
+                if (!raw || /^(not found|null|undefined|none|n\/a)$/i.test(raw)) return null;
+                try {
+                    const parsed = new URL(raw);
+                    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+                    if (parsed.username || parsed.password) return null;
+                    return parsed.toString();
+                } catch { return null; }
+            };
+            const escapeText = (value) => String(value == null ? '' : value)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+
+            const mirrors = [];
+            for (const [label, key] of [
+                ['HubCloud', 'hubcloud_url'],
+                ['GDFlix', 'gdflix_url'],
+                ['DriveToT', 'drivetot_url'],
+                ['TOXCloud', 'toxcloud_url'],
+                ['Original Google Drive', 'drive_url']
+            ]) {
+                const directUrl = cleanLink(specialRecord[key]);
+                if (directUrl) mirrors.push({ label, url: directUrl });
+            }
+
+            // Fast links are cached D1 values and may be expiring URLs.
+            // Never scrape or refresh in this endpoint.
+            if (hasValidFastLinks(specialRecord, Date.now())) {
+                try {
+                    const fast = JSON.parse(specialRecord.fast_links);
+                    const candidates = Array.isArray(fast) ? fast :
+                        (fast && typeof fast === 'object' ? Object.values(fast) : []);
+                    let index = 0;
+                    for (const candidate of candidates) {
+                        if (index >= 20) break;
+                        const candidateUrl = cleanLink(
+                            typeof candidate === 'string' ? candidate :
+                            candidate && typeof candidate === 'object' ? (candidate.url || candidate.link) : null
+                        );
+                        if (candidateUrl && !mirrors.some(item => item.url === candidateUrl)) {
+                            index++;
+                            mirrors.push({ label: `Cached Fast Link ${index}`, url: candidateUrl });
+                        }
+                    }
+                } catch (_) { /* invalid cache is just unavailable */ }
+            }
+
+            const pageTitle = escapeText(specialRecord.file_name || fileIdentifier);
+            const rows = mirrors.map(item => `<li><span>${escapeText(item.label)}</span>` +
+                `<a href="${escapeText(item.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open mirror</a>` +
+                `<code>${escapeText(item.url)}</code></li>`).join('');
+            const pdlinkNotice = specialRecord.pdlink_share_id
+                ? '<p class="note">Gofile / Pixeldrain: D1 mein sirf PDLink share ID hai, direct URLs saved nahi hain. Is endpoint se PDLink API call nahi hoti.</p>'
+                : '';
+            const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S-Cloud | Private Mirror Links</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0c1220;color:#e6edf8;font-family:system-ui,-apple-system,sans-serif}
+main{max-width:860px;margin:40px auto;padding:24px}.tag{color:#92a4bc;font-size:13px;letter-spacing:.09em;text-transform:uppercase}
+h1{font-size:24px;overflow-wrap:anywhere}ul{list-style:none;padding:0}li{border:1px solid #2b394f;border-radius:12px;padding:14px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#121c2b}
+li span{font-weight:650;flex:1;min-width:120px}a{color:#dcecff;text-decoration:none;background:#1555a1;border-radius:8px;padding:9px 13px}a:focus,a:hover{background:#2673cc}
+code{flex-basis:100%;color:#9bb6d0;overflow-wrap:anywhere;font-size:12px}.note{color:#a9bad1;font-size:14px}.empty{padding:20px;border:1px solid #34445e;border-radius:10px}
+</style></head><body><main><div class="tag">Private mirror access · Signed-in only</div>
+<h1>${pageTitle}</h1><p>File ID: ${escapeText(fileIdentifier)}</p>
+${rows ? `<ul>${rows}</ul>` : '<p class="empty">No direct mirror URLs saved in D1 for this file.</p>'}
+${pdlinkNotice}<p class="note">Read-only: no earnings, view credit, mirror generation, or PDLink upload.</p>
+</main></body></html>`;
+            return new Response(html, {
+                status: 200,
+                headers: {
+                    'Content-Type': 'text/html; charset=UTF-8',
+                    'Cache-Control': 'private, no-store, max-age=0',
+                    'Vary': 'Cookie',
+                    'Referrer-Policy': 'no-referrer',
+                    'X-Robots-Tag': 'noindex, nofollow',
+                    'X-Content-Type-Options': 'nosniff',
+                    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+                }
+            });
+        }
+
         // ==================================================
         // PRIVATE ADMIN PANEL + SERVER-SIDE AUTHORIZATION
         // ==================================================
@@ -5081,10 +5212,7 @@ export default {
                                     0
                                 ) AS total
                              FROM earnings e
-                             INNER JOIN files f
-                                ON f.id = e.file_id
                              WHERE e.user_id = ?
-                             AND f.status != 'deleted'
                              AND date(
                                  e.created_at,
                                  '+05:30'
@@ -5168,10 +5296,7 @@ export default {
                                     0
                                 ) AS total
                              FROM earnings e
-                             INNER JOIN files f
-                                ON f.id = e.file_id
                              WHERE e.user_id = ?
-                             AND f.status != 'deleted'
                              AND strftime(
                                  '%Y-%m',
                                  e.created_at,
@@ -5842,141 +5967,110 @@ export default {
 
 
         // ==================================================
-        // 8. DELETE FILE (legacy endpoint; not shown in publisher menu)
+        // 8. PERMANENT DELETE FROM FILES (preserve financial history)
         // ==================================================
-
-        if (
-            url.pathname ===
-                "/api/delete" &&
-            request.method ===
-                "POST"
-        ) {
+        if (url.pathname === '/api/delete' && request.method === 'POST') {
             try {
-
-                const body =
-                    await request.json();
-
-                const {
-                    file_id
-                } = body;
-
-
-                if (
-                    !file_id
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "File ID is required"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
+                const body = await request.json();
+                const fileId = String(body?.file_id || '').trim();
+                if (!fileId || fileId.length > 128) {
+                    return new Response(JSON.stringify({ status: 'error', message: 'Valid file ID is required.' }), {
+                        status: 400, headers: { ...corsHeaders, ...jsonHeaders() }
+                    });
                 }
 
+                const file = await env.DB.prepare(`
+                    SELECT * FROM files
+                    WHERE (id = ? OR short_id = ?) AND user_id = ?
+                      AND COALESCE(status, '') != 'deleted'
+                    LIMIT 1
+                `).bind(fileId, fileId, currentUser.id).first();
 
-                const result =
-                    await env.DB
-                        .prepare(
-                            `UPDATE files
-                             SET status = 'deleted',
-                                 updated_at = CURRENT_TIMESTAMP
-                             WHERE
-                                (id = ? OR short_id = ?)
-                                AND user_id = ?
-                                AND status != 'deleted'`
-                        )
-                        .bind(
-                            file_id,
-                            file_id,
-                            currentUser.id
-                        )
-                        .run();
-                        {
-                            const downloadSyncRecord =
-                                await env.DB
-                                    .prepare(
-                                        "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
-                                    )
-                                    .bind(
-                                        file_id,
-                                        file_id
-                                    )
-                                    .first();
-    
-                            if (downloadSyncRecord) {
-                                await syncDownloadMetadata(
-                                    downloadSyncRecord,
-                                    env
-                                );
-                            }
-                        }
-
-
-                if (
-                    (result.meta?.changes ??
-                        0) === 0
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "File not found"
-                        }),
-                        {
-                            status: 404,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
+                if (!file) {
+                    return new Response(JSON.stringify({ status: 'error', message: 'File not found.' }), {
+                        status: 404, headers: { ...corsHeaders, ...jsonHeaders() }
+                    });
                 }
 
-
-                return new Response(
-                    JSON.stringify({
-                        status:
-                            "success",
-                        message:
-                            "Deleted successfully!"
-                    }),
-                    {
-                        status: 200,
-                        headers: {
-                            ...corsHeaders,
-                            ...jsonHeaders()
-                        }
-                    }
+                // Financial ledger MUST survive deletion, including previously
+                // withdrawn earnings. Fail safely if FK rules could alter it.
+                const ledgerFK = await env.DB.prepare('PRAGMA foreign_key_list(earnings)').all();
+                const hasLedgerForeignKey = (ledgerFK?.results || []).some(fk =>
+                    String(fk.table || '').toLowerCase() === 'files'
                 );
-
-            } catch (
-                error
-            ) {
-
-                return new Response(
-                    JSON.stringify({
-                        status:
-                            "error",
-                        message:
-                            error.message
-                    }),
-                    {
-                        status: 500,
-                        headers: {
-                            ...corsHeaders,
-                            ...jsonHeaders()
-                        }
+                if (hasLedgerForeignKey) {
+                    const ledgerEntries = await env.DB.prepare(
+                        'SELECT COUNT(*) AS total FROM earnings WHERE file_id = ?'
+                    ).bind(file.id).first();
+                    if (Number(ledgerEntries?.total || 0) > 0) {
+                        return new Response(JSON.stringify({
+                            status: 'error',
+                            message: 'Deletion blocked: financial ledger has a files foreign key. Preserve earnings via a separate D1 schema migration first.'
+                        }), { status: 409, headers: { ...corsHeaders, ...jsonHeaders() } });
                     }
+                }
+
+                // Disable cached/signed download in the separate Download Worker
+                // BEFORE removing the D1 source row. Abort on sync failure.
+                const disabled = await syncDownloadMetadata(
+                    { ...file, status: 'deleted', sharing_enabled: 0 }, env
                 );
+                if (!disabled) {
+                    return new Response(JSON.stringify({
+                        status: 'error',
+                        message: 'Download Worker could not confirm link disablement. No file was deleted; try again.'
+                    }), { status: 503, headers: { ...corsHeaders, ...jsonHeaders() } });
+                }
+
+                // The tracking table is created by the rotation script, so it
+                // may not exist in some installations. Check it before batch.
+                const hasTracking = await env.DB.prepare(`
+                    SELECT name FROM sqlite_master
+                    WHERE type = 'table' AND name = 'pdlink_rotation_jobs'
+                    LIMIT 1
+                `).first();
+                const statements = [
+                    env.DB.prepare(`
+                        DELETE FROM files
+                        WHERE id = ? AND user_id = ?
+                          AND COALESCE(status, '') != 'deleted'
+                    `).bind(file.id, currentUser.id)
+                ];
+                if (hasTracking) {
+                    statements.push(env.DB.prepare(`
+                        DELETE FROM pdlink_rotation_jobs
+                        WHERE record_id = ? AND changes() > 0
+                    `).bind(file.id));
+                }
+                // D1 batches run transactionally. No earnings, balance,
+                // withdrawals, or visitor accounting rows are modified.
+                const results = await env.DB.batch(statements);
+                const deletedCount = Number(results?.[0]?.meta?.changes || 0);
+                if (deletedCount !== 1) {
+                    return new Response(JSON.stringify({
+                        status: 'error',
+                        message: 'File was not removed; please refresh and check before retrying.'
+                    }), { status: 409, headers: { ...corsHeaders, ...jsonHeaders() } });
+                }
+                const remaining = await env.DB.prepare(
+                    'SELECT id FROM files WHERE id = ? LIMIT 1'
+                ).bind(file.id).first();
+                if (remaining) {
+                    return new Response(JSON.stringify({
+                        status: 'error', message: 'D1 deletion verification failed.'
+                    }), { status: 500, headers: { ...corsHeaders, ...jsonHeaders() } });
+                }
+                return new Response(JSON.stringify({
+                    status: 'success',
+                    message: 'File permanently removed from D1. Historical earnings and withdrawals preserved.',
+                    deleted_id: file.id
+                }), { status: 200, headers: { ...corsHeaders, ...jsonHeaders() } });
+            } catch (error) {
+                console.error('[DELETE] Permanent delete failed:', error);
+                return new Response(JSON.stringify({
+                    status: 'error',
+                    message: 'Deletion could not be confirmed. Check D1 and Download Worker state before retrying.'
+                }), { status: 500, headers: { ...corsHeaders, ...jsonHeaders() } });
             }
         }
 

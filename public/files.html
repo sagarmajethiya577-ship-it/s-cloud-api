@@ -1278,7 +1278,7 @@
 
                     <div class="min-w-0">
                         <p class="text-sm text-gray-300">
-                            Are you sure you want to delete this file?
+                            Permanently delete this file from S-Cloud? Its download link will stop working. Past earnings, balance and withdrawals will stay unchanged.
                         </p>
 
                         <p
@@ -3546,8 +3546,7 @@
                 }
 
                 // Remove it from the current list immediately.
-                // The /api/files endpoint also excludes soft-deleted files,
-                // so the row stays gone after refresh.
+                // The D1 files row is permanently removed; hide it immediately.
                 allFiles = allFiles.filter(file => {
                     const shortId = String(file?.short_id || "");
                     const id = String(file?.id || "");
@@ -3561,7 +3560,7 @@
                 showToast(
                     "success",
                     "File Deleted",
-                    "The public file link has been disabled."
+                    "Permanently deleted from S-Cloud. Past earnings are preserved."
                 );
 
             } catch (error) {
