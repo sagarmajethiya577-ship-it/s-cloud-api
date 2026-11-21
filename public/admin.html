@@ -234,6 +234,18 @@
             }
         }
 
+
+        /* Mirror Servers controls: native God Mode red/charcoal visual language. */
+        #tab-mirrors .mirror-admin-badge { font-size:11px; padding:5px 10px; border-radius:999px; border:1px solid; font-weight:600; white-space:nowrap; }
+        #tab-mirrors .mirror-admin-badge.is-locked {color:#fbbf24;background:rgba(245,158,11,.09);border-color:rgba(245,158,11,.25)}
+        #tab-mirrors .mirror-admin-badge.is-unlocked {color:#34d399;background:rgba(16,185,129,.09);border-color:rgba(16,185,129,.25)}
+        #tab-mirrors .mirror-admin-action {border:1px solid;transition:background .2s;color:#fff;}
+        #tab-mirrors .mirror-admin-action.is-locked {background:#dc2626;border-color:#ef4444}
+        #tab-mirrors .mirror-admin-action.is-locked:hover:not(:disabled) {background:#ef4444}
+        #tab-mirrors .mirror-admin-action.is-unlocked {color:#fbbf24;background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.28)}
+        #tab-mirrors .mirror-admin-action.is-unlocked:hover:not(:disabled) {background:rgba(245,158,11,.18)}
+        #tab-mirrors .mirror-admin-action:disabled {opacity:.55;cursor:wait}
+        #tab-mirrors .mirror-admin-badge, #tab-mirrors .mirror-admin-action {line-height:1.2}
     </style>
 </head>
 
@@ -304,9 +316,9 @@
             ⚙️ Settings
         </button>
 
-        <a href="/manage-sites#admin" class="block px-4 py-3 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/5">
-            🔐 Mirror Servers — Lock / Unlock
-        </a>
+        <button data-tab="mirrors" type="button" class="nav-item w-full text-left px-4 py-3 rounded-xl text-sm">
+            🔐 Mirror Servers
+        </button>
 
         <!-- Module Plugins intentionally disabled for now -->
 
@@ -406,7 +418,7 @@
         <button data-tab="users" class="nav-item">👥 Users</button>
         <button data-tab="payouts" class="nav-item">💸 Payouts</button>
         <button data-tab="settings" class="nav-item">⚙️ Settings</button>
-        <a href="/manage-sites#admin" style="text-decoration:none;display:inline-flex;align-items:center;padding:9px 12px;color:#b8c8dd;font-size:12px;white-space:nowrap">🔐 Mirror Servers</a>
+        <button data-tab="mirrors" type="button" class="nav-item">🔐 Mirror Servers</button>
     </nav>
 
     <div class="p-6 lg:p-8">
@@ -900,6 +912,22 @@
                 <button id="savePayoutMethodsButton" onclick="savePayoutMethodSettings()" class="w-full mt-5 py-3 rounded-xl bg-red-600 hover:bg-red-500 font-semibold transition">Save Payment Method Settings</button>
             </div>
 
+        </section>
+
+        <!-- =================================================
+             MIRROR SERVER CONTROLS (IN ADMIN PANEL)
+        ================================================== -->
+        <section id="tab-mirrors" class="hidden-tab">
+          <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div><h2 class="text-2xl font-semibold">Mirror Server Controls</h2><p class="text-sm text-gray-500 mt-1">Control which providers allow users to configure API keys.</p></div>
+            <button id="refreshMirrorServers" type="button" class="px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-medium self-start" onclick="loadMirrorServers()">↻ Refresh</button>
+          </div>
+          <div class="glass-card p-4 md:p-5 mb-5 flex items-start gap-3 border-l-2 border-red-500/50">
+            <span class="text-red-400">●</span>
+            <p class="text-sm text-gray-400 leading-relaxed">Locking a provider prevents users from saving or replacing its API key. Existing saved keys and download mirrors stay intact. Download visibility ON/OFF is a separate user preference.</p>
+          </div>
+          <p id="mirrorAdminStatus" class="text-sm text-gray-400 mb-4" role="status" aria-live="polite">Open this tab to load provider controls.</p>
+          <div id="mirrorAdminGrid" class="grid grid-cols-1 xl:grid-cols-2 gap-4"></div>
         </section>
 
     </div>
@@ -1788,6 +1816,63 @@ button.disabled = true;
     }
 
 
+
+    // =================================================
+    // MIRROR PROVIDERS - actual admin controls inside God Mode
+    // Uses existing V1.2 server-side admin API and D1 tables.
+    // =================================================
+    let mirrorAdminBusy=false;
+    async function loadMirrorServers(){
+        if(mirrorAdminBusy)return;
+        const container=document.getElementById('mirrorAdminGrid');
+        const status=document.getElementById('mirrorAdminStatus');
+        const refresh=document.getElementById('refreshMirrorServers');
+        if(!container||!status)return;
+        mirrorAdminBusy=true;if(refresh)refresh.disabled=true;
+        status.textContent='Loading provider controls…';
+        try{
+            const result=await api('/api/admin/mirror-sites');
+            if(!Array.isArray(result.providers))throw new Error('Unexpected provider response');
+            container.replaceChildren(...result.providers.map(renderAdminMirrorCard));
+            status.textContent=`${result.providers.length} mirror providers · Changes save immediately`;
+        }catch(error){status.textContent='Could not load mirror providers: '+error.message;toast(error.message)}
+        finally{mirrorAdminBusy=false;if(refresh)refresh.disabled=false}
+    }
+    function renderAdminMirrorCard(p){
+        const box=document.createElement('article');box.className='glass-card p-5 md:p-6';box.dataset.provider=p.id;
+        const upper=document.createElement('div');upper.className='flex items-start justify-between gap-3';
+        const left=document.createElement('div');left.className='min-w-0';
+        const name=document.createElement('h3');name.className='font-semibold text-white';name.textContent=p.name;
+        const help=document.createElement('p');help.className='text-xs text-gray-500 mt-1';help.textContent='User API key configuration';
+        left.append(name,help);
+        const badge=document.createElement('span');badge.className='text-xs px-2.5 py-1 rounded-full border whitespace-nowrap';
+        function syncBadge(){badge.textContent=p.locked?'Locked':'Unlocked';badge.className='mirror-admin-badge '+(p.locked?'is-locked':'is-unlocked')}
+        syncBadge();upper.append(left,badge);box.append(upper);
+        const row=document.createElement('div');row.className='flex items-center justify-between gap-3 border-t border-white/10 pt-4 mt-4';
+        const description=document.createElement('span');description.className='text-xs text-gray-400';
+        description.textContent=p.locked?'Users cannot add/change keys':'Users can add or change keys';
+        const button=document.createElement('button');button.type='button';
+        button.className='shrink-0 px-4 py-2.5 rounded-xl font-semibold text-sm transition border';
+        function syncButton(){button.textContent=p.locked?'Unlock API':'Lock API';button.className='mirror-admin-action shrink-0 px-4 py-2.5 rounded-xl font-semibold text-sm '+(p.locked?'is-locked':'is-unlocked')}
+        syncButton();row.append(description,button);box.append(row);
+        const hint=document.createElement('p');hint.className='text-xs text-gray-500 mt-3';
+        hint.textContent=p.upload_integration_ready?'API integration available':'Upload adapter not connected yet';
+        box.append(hint);
+        const feedback=document.createElement('p');feedback.className='text-xs mt-2 min-h-[16px]';feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');box.append(feedback);
+        button.addEventListener('click',async()=>{
+            const next=!p.locked;button.disabled=true;button.textContent='Saving…';
+            try{
+                const d=await api('/api/admin/mirror-sites',{method:'POST',body:JSON.stringify({provider:p.id,locked:next})});
+                if(d.status!=='success'||d.locked!==next)throw new Error(d.message||'Setting not confirmed');
+                p.locked=next;syncBadge();syncButton();description.textContent=p.locked?'Users cannot add/change keys':'Users can add or change keys';
+                feedback.textContent=p.name+' setting saved';feedback.className='text-xs text-emerald-400 mt-2 min-h-[16px]';
+                toast(p.name+' '+(p.locked?'locked':'unlocked'));
+            }catch(error){feedback.textContent=error.message;feedback.className='text-xs text-red-400 mt-2 min-h-[16px]';syncButton();toast(error.message)}
+            finally{button.disabled=false}
+        });
+        return box;
+    }
+
     // =================================================
     // TAB SYSTEM
     // =================================================
@@ -1834,18 +1919,9 @@ button.disabled = true;
         }
 
 
-        const button =
-            document.querySelector(
-                `[data-tab="${tab}"]`
-            );
-
-        if (button) {
-
-            button.classList.add(
-                'active'
-            );
-
-        }
+        document.querySelectorAll(`[data-tab="${tab}"]`).forEach(button => {
+            button.classList.add('active');
+        });
 
 
         const titles = {
@@ -1868,6 +1944,11 @@ button.disabled = true;
             settings: [
                 'Admin Settings',
                 'Manage S-Cloud exchange rate and payment methods'
+            ],
+
+            mirrors: [
+                'Mirror Servers',
+                'Provider API access and lock controls'
             ]
 
         };
@@ -1898,7 +1979,11 @@ button.disabled = true;
 
         if (tab === 'settings') {
             loadSettings();
-        loadPayoutMethodSettings();
+            loadPayoutMethodSettings();
+        }
+
+        if (tab === 'mirrors') {
+            loadMirrorServers();
         }
 
     }
@@ -1987,6 +2072,7 @@ button.disabled = true;
         }
 
         await loadOverview();
+        if (location.hash === '#mirrors') openTab('mirrors');
 
     }
 
