@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Manage Sites | S-Cloud</title>
+  <style>
+    :root {color-scheme:dark;--bg:#0a101c;--panel:#111c2d;--panel2:#0d1727;--line:#263750;--text:#edf5ff;--muted:#96a8be;--accent:#35c7ef;--ok:#44ceab;--err:#ff8c94}
+    * {box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 75% -10%,#132945 0%,#0a101c 55%);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+    .wrap{max-width:1040px;padding:24px 18px 80px;margin:auto}.top{display:flex;align-items:center;gap:14px;justify-content:space-between;margin-bottom:26px;flex-wrap:wrap}
+    a{color:#8edafa;text-decoration:none}.back{display:inline-flex;padding:10px 14px;border:1px solid var(--line);border-radius:11px;background:#122139}
+    h1{font-size:clamp(24px,5vw,36px);line-height:1.2;margin:0 0 8px}h2{font-size:20px;margin:0 0 8px}.desc{color:var(--muted);margin:0 0 20px}
+    .notice{color:#b7c8dd;background:#101f35;border:1px solid #2b425f;border-radius:14px;padding:13px 17px;margin:18px 0 24px;font-size:13px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:15px}.card{background:linear-gradient(160deg,#152338,#101b2d);border:1px solid var(--line);padding:20px;border-radius:17px;min-width:0}
+    .card-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:16px}.provider{font-weight:750;font-size:18px;margin:0}.sub{font-size:12px;color:var(--muted)}
+    .state{font-size:11px;border:1px solid #34516b;color:#a8c2d9;padding:4px 9px;border-radius:99px;white-space:nowrap}.state.locked{border-color:#6b5161;color:#d3b2c2}
+    .switch-line{display:flex;align-items:center;justify-content:space-between;gap:15px;border:1px solid var(--line);border-radius:12px;background:#0c1625;padding:12px 14px;margin:12px 0 14px}
+    .toggle{width:48px;height:27px;appearance:none;background:#38475d;border:1px solid #59697d;border-radius:999px;position:relative;cursor:pointer;flex:none;transition:.15s}.toggle:before{content:'';position:absolute;left:3px;top:3px;width:19px;height:19px;border-radius:50%;background:white;transition:.15s}.toggle:checked{background:#0ea7c7;border-color:#0ea7c7}.toggle:checked:before{left:24px}.toggle:disabled{opacity:.45;cursor:wait}
+    .key-row{display:flex;gap:8px;flex-wrap:wrap}.key{flex:1;min-width:145px;max-width:100%;background:#091423;border:1px solid #334b69;padding:11px 12px;border-radius:10px;color:#fff;font:inherit;outline:0}.key:focus{border-color:var(--accent)}
+    .btn{font:inherit;font-weight:650;font-size:13px;padding:10px 14px;color:#fff;border:1px solid #326fa0;border-radius:10px;background:#165b91;cursor:pointer}.btn:hover{background:#1b70ad}.btn:disabled{cursor:not-allowed;opacity:.45}.btn-secondary{background:#1d2b40;border-color:#39506b}.btn-secondary:hover{background:#2b3e5a}
+    .empty{color:var(--muted);font-size:13px}.status{font-size:13px;min-height:20px;color:var(--muted);margin-top:10px}.status.error{color:var(--err)}.status.ok{color:var(--ok)}
+    .admin{margin-top:34px}.admin-row{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--line);padding:13px 16px;border-radius:11px;margin-top:9px;flex-wrap:wrap}
+    @media(max-width:480px){.wrap{padding-top:16px}.card{padding:16px}.card-head{flex-direction:column;gap:7px}.key-row .btn{flex:1}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="top"><a class="back" href="/dashboard">‹ Dashboard</a><a href="/dashboard">S-CLOUD Dashboard</a></div>
+    <h1>Manage Sites</h1>
+    <p class="desc">Connect your own mirror accounts and choose which download options to show.</p>
+    <div class="notice">Show ON/OFF only controls the download-page visibility preference. It does not stop uploads. These settings are saved now, but the separate Download Worker and user-account upload adapters will be connected in a later update.</div>
+    <p id="pageStatus" class="status" role="status">Loading mirror server settings…</p>
+    <section class="grid" id="providers" aria-label="Storage providers"></section>
+    <section class="admin" id="adminSection" hidden>
+      <h2>Admin · Provider Lock / Unlock</h2>
+      <p class="desc">Global lock prevents users from adding or changing API keys. It does not hide existing download links or remove saved keys.</p>
+      <div id="adminProviders"></div><p id="adminStatus" class="status" role="status"></p>
+    </section>
+  </main>
+  <script>
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const jsonPost = async (url, body) => {
+    const r = await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),cache:'no-store'});
+    let data;try{data=await r.json()}catch(_){data={status:'error',message:'Unexpected server reply'}}
+    if(r.status===401){location.assign('/?redirect='+encodeURIComponent('/manage-sites'));throw Error('Session expired')}
+    if(!r.ok||data.status!=='success')throw Error(data.message||'Request failed');
+    return data;
+  };
+  const getJson = async url => {
+    const r=await fetch(url,{credentials:'same-origin',cache:'no-store'});
+    if(r.status===401){location.assign('/?redirect='+encodeURIComponent('/manage-sites'));throw Error('Session expired')}
+    const data=await r.json();if(!r.ok||data.status!=='success')throw Error(data.message||'Unable to load');return data;
+  };
+  function elem(tag,cls,text) {
+    const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;
+  }
+  function renderProvider(p){
+    const card=elem('article','card');
+    const head=elem('div','card-head'), titleBox=elem('div');
+    titleBox.append(elem('h2','provider',p.name),elem('div','sub',p.accepts_key?'Your account API configuration':'S-Cloud built-in download option'));
+    const badge=elem('span','state'+(p.locked&&p.accepts_key?' locked':''),!p.accepts_key?'System':p.locked?'API locked':'API settings allowed');
+    head.append(titleBox,badge);card.append(head);
+    const line=elem('div','switch-line');const label=elem('div');
+    label.append(elem('div','','Show on download page'),elem('div','sub','Visibility preference only'));
+    const check=elem('input','toggle');check.type='checkbox';check.checked=p.visible;check.setAttribute('aria-label','Show '+p.name+' on download page');
+    const msg=elem('p','status');msg.setAttribute('role','status');
+    check.addEventListener('change',async()=>{
+      check.disabled=true;const value=check.checked;
+      try{await jsonPost('/api/mirror-sites/visibility',{provider:p.id,visible:value});msg.className='status ok';msg.textContent='Visibility saved';}
+      catch(e){check.checked=!value;msg.className='status error';msg.textContent=e.message;}
+      finally{check.disabled=false}
+    });
+    line.append(label,check);card.append(line);
+    if(p.accepts_key){
+      const state=elem('p','empty',p.has_key?'API key: Saved securely':'API key: Not configured');card.append(state);
+      const row=elem('div','key-row');const input=elem('input','key');input.type='password';input.autocomplete='off';input.spellcheck=false;
+      input.placeholder=p.has_key?'Enter a new key to replace':'Enter your provider API key';input.maxLength=4096;input.disabled=p.locked;
+      const save=elem('button','btn','Save key');save.type='button';save.disabled=p.locked;
+      const remove=elem('button','btn btn-secondary','Remove');remove.type='button';remove.disabled=!p.has_key;
+      const working=active=>{input.disabled=active||p.locked;save.disabled=active||p.locked;remove.disabled=active||!p.has_key;};
+      save.addEventListener('click',async()=>{
+        working(true);
+        try{await jsonPost('/api/mirror-sites/key',{provider:p.id,api_key:input.value});p.has_key=true;state.textContent='API key: Saved securely';input.value='';input.placeholder='Enter a new key to replace';msg.className='status ok';msg.textContent='API key encrypted and saved';}
+        catch(e){msg.className='status error';msg.textContent=e.message}
+        finally{working(false)}
+      });
+      remove.addEventListener('click',async()=>{
+        if(!confirm('Remove saved '+p.name+' API key?'))return;
+        working(true);
+        try{await jsonPost('/api/mirror-sites/key/remove',{provider:p.id});p.has_key=false;state.textContent='API key: Not configured';input.value='';msg.className='status ok';msg.textContent='Key removed';}
+        catch(e){msg.className='status error';msg.textContent=e.message}
+        finally{working(false)}
+      });
+      row.append(input,save,remove);card.append(row);
+      if(p.locked)card.append(elem('div','sub','The admin has locked API configuration for this provider.'));
+      else card.append(elem('div','sub','Saving a key does not start uploads yet.'));
+    }
+    card.append(msg);return card;
+  }
+  function renderAdmin(list) {
+    const section=$('adminSection');section.hidden=false;
+    if(location.hash==='#admin')section.scrollIntoView({behavior:'auto'});
+    const host=$('adminProviders');host.replaceChildren();
+    list.forEach(p=>{
+      const row=elem('div','admin-row');const info=elem('div');info.append(elem('strong','',p.name),elem('div','sub',p.locked?'API configuration locked':'API configuration enabled'));
+      const button=elem('button','btn '+(p.locked?'':'btn-secondary'),p.locked?'Unlock API':'Lock API');
+      button.type='button';button.addEventListener('click',async()=>{
+        button.disabled=true;
+        try{await jsonPost('/api/admin/mirror-sites',{provider:p.id,locked:!p.locked});p.locked=!p.locked;info.querySelector('.sub').textContent=p.locked?'API configuration locked':'API configuration enabled';button.textContent=p.locked?'Unlock API':'Lock API';$('adminStatus').textContent='Saved. Reload the page to update the user cards.'}
+        catch(e){$('adminStatus').className='status error';$('adminStatus').textContent=e.message}
+        finally{button.disabled=false}
+      });row.append(info,button);host.append(row);
+    });
+  }
+  (async()=>{
+    try {
+      const settings=await getJson('/api/mirror-sites');$('providers').replaceChildren(...settings.providers.map(renderProvider));$('pageStatus').textContent='Settings loaded';
+      const admin=await fetch('/api/admin/mirror-sites',{credentials:'same-origin',cache:'no-store'});
+      if(admin.ok){const body=await admin.json();if(body.status==='success')renderAdmin(body.providers)}
+    } catch(e){$('pageStatus').className='status error';$('pageStatus').textContent=e.message}
+  })();
+  </script>
+</body>
+</html>

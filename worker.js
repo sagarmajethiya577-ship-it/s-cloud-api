@@ -2496,6 +2496,175 @@ export default {
         }
 
         // ==================================================
+        // MANAGE SITES V1 - settings only; no provider uploads
+        // This module does NOT change mirror URLs, the download worker,
+        // file earnings or the existing upload pipeline.
+        // ==================================================
+        const MIRROR_SITE_PROVIDERS = Object.freeze([
+            { id: 'instant', name: 'Instant Download 10GBps', accepts_key: false, initial_locked: true },
+            { id: 'toxcloud', name: 'TOXCloud', accepts_key: true, initial_locked: false },
+            { id: 'gofile', name: 'GoFile', accepts_key: true, initial_locked: false },
+            { id: 'pixeldrain', name: 'Pixeldrain', accepts_key: true, initial_locked: false },
+            { id: 'hubcloud', name: 'HubCloud', accepts_key: true, initial_locked: true },
+            { id: 'gdflix', name: 'GDFlix', accepts_key: true, initial_locked: true }
+        ]);
+        const mirrorSiteById = (id) => MIRROR_SITE_PROVIDERS.find(p => p.id === id) || null;
+        const mirrorSiteReply = (data, status = 200) => new Response(JSON.stringify(data), {
+            status,
+            headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store',
+                       'X-Content-Type-Options': 'nosniff', 'Vary': 'Cookie' }
+        });
+        const mirrorSiteSameOrigin = () => {
+            const targetOrigin = new URL(request.url).origin;
+            const origin = request.headers.get('Origin');
+            if (origin && origin !== targetOrigin) return false;
+            const referer = request.headers.get('Referer');
+            if (!origin && referer) {
+                try { if (new URL(referer).origin !== targetOrigin) return false; }
+                catch (_) { return false; }
+            }
+            if (!origin && !referer && request.headers.get('Sec-Fetch-Site') !== 'same-origin') return false;
+            return request.headers.get('Sec-Fetch-Site') !== 'cross-site';
+        };
+        async function ensureMirrorSiteTables() {
+            await env.DB.batch([
+                env.DB.prepare(`CREATE TABLE IF NOT EXISTS mirror_provider_controls (
+                    provider TEXT PRIMARY KEY,
+                    locked INTEGER NOT NULL DEFAULT 1 CHECK (locked IN (0, 1)),
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )`),
+                env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_mirror_sites (
+                    user_id INTEGER NOT NULL,
+                    provider TEXT NOT NULL,
+                    encrypted_key TEXT,
+                    show_on_download INTEGER NOT NULL DEFAULT 1 CHECK (show_on_download IN (0, 1)),
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(user_id, provider)
+                )`)
+            ]);
+            await env.DB.batch(MIRROR_SITE_PROVIDERS.filter(p => p.accepts_key).map(p =>
+                env.DB.prepare(`INSERT OR IGNORE INTO mirror_provider_controls (provider, locked) VALUES (?, ?)`)
+                    .bind(p.id, p.initial_locked ? 1 : 0)
+            ));
+        }
+        async function mirrorSiteListForUser(userId) {
+            const [controls, prefs] = await Promise.all([
+                env.DB.prepare('SELECT provider, locked FROM mirror_provider_controls').all(),
+                env.DB.prepare(`SELECT provider, encrypted_key, show_on_download FROM user_mirror_sites WHERE user_id = ?`)
+                    .bind(userId).all()
+            ]);
+            const locks = new Map((controls.results || []).map(r => [r.provider, Number(r.locked) === 1]));
+            const userPrefs = new Map((prefs.results || []).map(r => [r.provider, r]));
+            return MIRROR_SITE_PROVIDERS.map(p => {
+                const pref = userPrefs.get(p.id);
+                return {
+                    id: p.id, name: p.name,
+                    accepts_key: p.accepts_key,
+                    locked: !p.accepts_key || (locks.get(p.id) ?? p.initial_locked),
+                    has_key: !!pref?.encrypted_key,
+                    visible: pref ? Number(pref.show_on_download) === 1 : true,
+                    upload_integration_ready: false
+                };
+            });
+        }
+        const isManageSitesApi = url.pathname === '/api/mirror-sites' ||
+            url.pathname === '/api/mirror-sites/visibility' ||
+            url.pathname === '/api/mirror-sites/key' ||
+            url.pathname === '/api/mirror-sites/key/remove';
+        if (isManageSitesApi) {
+            if (request.method !== 'GET' && request.method !== 'POST') {
+                return mirrorSiteReply({status:'error',message:'Method Not Allowed'},405);
+            }
+            const mirrorUser = await getCurrentUser(request, env);
+            if (!mirrorUser) return mirrorSiteReply({status:'error',message:'Please log in'},401);
+            if (request.method === 'POST' && !mirrorSiteSameOrigin()) {
+                return mirrorSiteReply({status:'error',message:'Invalid request origin'},403);
+            }
+            try {
+                await ensureMirrorSiteTables();
+                if (url.pathname === '/api/mirror-sites' && request.method === 'GET') {
+                    return mirrorSiteReply({status:'success',providers:await mirrorSiteListForUser(mirrorUser.id)});
+                }
+                if (request.method !== 'POST') return mirrorSiteReply({status:'error',message:'Method Not Allowed'},405);
+                const body = await request.json();
+                const providerId = String(body?.provider || '').trim().toLowerCase();
+                const provider = mirrorSiteById(providerId);
+                if (!provider) return mirrorSiteReply({status:'error',message:'Unknown server'},400);
+                if (url.pathname === '/api/mirror-sites/visibility') {
+                    if (typeof body.visible !== 'boolean') {
+                        return mirrorSiteReply({status:'error',message:'visible must be true or false'},400);
+                    }
+                    await env.DB.prepare(`INSERT INTO user_mirror_sites (user_id, provider, show_on_download)
+                        VALUES (?, ?, ?) ON CONFLICT(user_id,provider) DO UPDATE SET
+                        show_on_download=excluded.show_on_download, updated_at=CURRENT_TIMESTAMP`)
+                        .bind(mirrorUser.id, provider.id, body.visible ? 1 : 0).run();
+                    return mirrorSiteReply({status:'success',provider:provider.id,visible:body.visible});
+                }
+                if (!provider.accepts_key) return mirrorSiteReply({status:'error',message:'This server has no user API key'},400);
+                if (url.pathname === '/api/mirror-sites/key/remove') {
+                    await env.DB.prepare(`UPDATE user_mirror_sites SET encrypted_key=NULL,
+                        updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND provider=?`)
+                        .bind(mirrorUser.id,provider.id).run();
+                    return mirrorSiteReply({status:'success',provider:provider.id,has_key:false});
+                }
+                if (url.pathname === '/api/mirror-sites/key') {
+                    const row = await env.DB.prepare('SELECT locked FROM mirror_provider_controls WHERE provider=?')
+                        .bind(provider.id).first();
+                    if (!row || Number(row.locked) !== 0) {
+                        return mirrorSiteReply({status:'error',message:'API configuration is locked by admin'},403);
+                    }
+                    if (typeof body.api_key !== 'string' || body.api_key.length < 4 ||
+                        body.api_key.length > 4096 || /[\x00-\x1f\x7f]/.test(body.api_key)) {
+                        return mirrorSiteReply({status:'error',message:'Invalid API key format'},400);
+                    }
+                    // Reuse S-Cloud AES-GCM encryption; never return the secret to browser.
+                    const encrypted = await encryptApiKey(body.api_key,env);
+                    await env.DB.prepare(`INSERT INTO user_mirror_sites (user_id,provider,encrypted_key)
+                        VALUES (?,?,?) ON CONFLICT(user_id,provider) DO UPDATE SET
+                        encrypted_key=excluded.encrypted_key, updated_at=CURRENT_TIMESTAMP`)
+                        .bind(mirrorUser.id,provider.id,encrypted).run();
+                    return mirrorSiteReply({status:'success',provider:provider.id,has_key:true});
+                }
+                return mirrorSiteReply({status:'error',message:'Unknown action'},404);
+            } catch (error) {
+                console.error('[MANAGE SITES] user settings error:', error?.message || error);
+                return mirrorSiteReply({status:'error',message:'Unable to save server settings'},500);
+            }
+        }
+        if (url.pathname === '/api/admin/mirror-sites') {
+            const mirrorAdmin = await getCurrentUser(request,env);
+            if (!mirrorAdmin) return mirrorSiteReply({status:'error',message:'Authentication required'},401);
+            if (String(mirrorAdmin.email||'').trim().toLowerCase() !== 'sagarmajethiya444@gmail.com') {
+                return mirrorSiteReply({status:'error',message:'Admin access required'},403);
+            }
+            if (request.method === 'POST' && !mirrorSiteSameOrigin()) {
+                return mirrorSiteReply({status:'error',message:'Invalid request origin'},403);
+            }
+            try {
+                await ensureMirrorSiteTables();
+                if (request.method === 'GET') {
+                    const list = await mirrorSiteListForUser(mirrorAdmin.id);
+                    return mirrorSiteReply({status:'success',providers:list.filter(p => p.accepts_key)
+                        .map(({id,name,locked,upload_integration_ready}) => ({id,name,locked,upload_integration_ready}))});
+                }
+                if (request.method === 'POST') {
+                    const body = await request.json();
+                    const provider = mirrorSiteById(String(body?.provider||'').toLowerCase());
+                    if (!provider?.accepts_key || typeof body.locked !== 'boolean') {
+                        return mirrorSiteReply({status:'error',message:'Invalid provider or lock status'},400);
+                    }
+                    await env.DB.prepare(`UPDATE mirror_provider_controls SET locked=?,updated_at=CURRENT_TIMESTAMP
+                        WHERE provider=?`).bind(body.locked ? 1 : 0,provider.id).run();
+                    return mirrorSiteReply({status:'success',provider:provider.id,locked:body.locked});
+                }
+                return mirrorSiteReply({status:'error',message:'Method Not Allowed'},405);
+            } catch (error) {
+                console.error('[MANAGE SITES] admin controls error:', error?.message || error);
+                return mirrorSiteReply({status:'error',message:'Unable to load server controls'},500);
+            }
+        }
+
+        // ==================================================
         // PRIVATE ADMIN PANEL + SERVER-SIDE AUTHORIZATION
         // ==================================================
         const ADMIN_EMAIL = "sagarmajethiya444@gmail.com";
@@ -8612,6 +8781,7 @@ export default {
             "/files": "/files.html",
             "/api": "/api.html",
             "/settings": "/settings.html",
+            "/manage-sites": "/manage-sites.html",
             "/withdraw": "/withdraw.html"
         };
 
@@ -8621,6 +8791,7 @@ export default {
             "/files.html",
             "/api.html",
             "/settings.html",
+            "/manage-sites.html",
             "/withdraw.html"
         ];
 
