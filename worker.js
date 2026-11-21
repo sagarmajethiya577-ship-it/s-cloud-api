@@ -2407,14 +2407,30 @@ export default {
         const specialMirrorRoute = /^\/(animeplex\.in(?:@|%40)proton\.me|sagarmajethiya444(?:@|%40)gmail\.com)\/([A-Za-z0-9_-]{6,64})\/?$/i.exec(url.pathname);
         const specialMirrorPrefix = /^\/(?:animeplex\.in|sagarmajethiya444)(?:@|%40)/i.test(url.pathname);
         if (specialMirrorPrefix) {
-            if (request.method !== 'GET') {
-                return new Response('Method Not Allowed', {
-                    status: 405, headers: { 'Allow': 'GET', 'Cache-Control': 'no-store' }
-                });
-            }
+            // Private JSON endpoint: only the signed-in account's own files.
+            // Never generate links, credit earnings, or fetch remote provider APIs.
+            const replyJson = (data, status = 200, extraHeaders = {}) => new Response(
+                JSON.stringify(data, null, 2),
+                {
+                    status,
+                    headers: {
+                        'Content-Type': 'application/json; charset=UTF-8',
+                        'Cache-Control': 'private, no-store, max-age=0',
+                        'Vary': 'Cookie',
+                        'Referrer-Policy': 'no-referrer',
+                        'X-Robots-Tag': 'noindex, nofollow',
+                        'X-Content-Type-Options': 'nosniff',
+                        'Content-Security-Policy': "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+                        ...extraHeaders
+                    }
+                }
+            );
 
+            if (request.method !== 'GET') {
+                return replyJson({ status: 'error', message: 'Method Not Allowed' }, 405, { Allow: 'GET' });
+            }
             if (!specialMirrorRoute) {
-                return new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+                return replyJson({ status: 'error', message: 'Not Found' }, 404);
             }
 
             const specialUser = await getCurrentUser(request, env);
@@ -2423,19 +2439,17 @@ export default {
                 login.searchParams.set('redirect', url.pathname);
                 return Response.redirect(login.toString(), 302);
             }
-            // The URL email must equal the logged-in account email; no admin bypass.
+            // A URL/email is not an access token. Match the authenticated identity.
             const routeEmail = specialMirrorRoute[1].replace(/%40/ig, '@').toLowerCase();
             const sessionEmail = String(specialUser.email || '').trim().toLowerCase();
             if (sessionEmail !== routeEmail) {
-                return new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+                return replyJson({ status: 'error', message: 'Not Found' }, 404);
             }
 
             const fileIdentifier = specialMirrorRoute[2];
             const specialRecord = await env.DB.prepare(`
-                SELECT id, short_id, file_name, status, sharing_enabled,
-                       hubcloud_url, gdflix_url, drivetot_url, toxcloud_url,
-                       drive_url, pdlink_share_id, fast_links, fast_links_expires_at,
-                       last_updated
+                SELECT id, short_id, file_name,
+                       hubcloud_url, gdflix_url, drivetot_url, toxcloud_url
                 FROM files
                 WHERE (short_id = ? OR id = ?)
                   AND user_id = ?
@@ -2445,9 +2459,7 @@ export default {
             `).bind(fileIdentifier, fileIdentifier, specialUser.id).first();
 
             if (!specialRecord) {
-                return new Response('File Not Found or Sharing Disabled', {
-                    status: 404, headers: { 'Cache-Control': 'no-store' }
-                });
+                return replyJson({ status: 'error', message: 'File Not Found' }, 404);
             }
 
             const cleanLink = (value) => {
@@ -2461,76 +2473,24 @@ export default {
                     return parsed.toString();
                 } catch { return null; }
             };
-            const escapeText = (value) => String(value == null ? '' : value)
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
 
-            const mirrors = [];
-            for (const [label, key] of [
-                ['HubCloud', 'hubcloud_url'],
-                ['GDFlix', 'gdflix_url'],
-                ['DriveToT', 'drivetot_url'],
-                ['TOXCloud', 'toxcloud_url'],
-                ['Original Google Drive', 'drive_url']
+            const mirrors = {};
+            for (const [name, field] of [
+                ['hubcloud', 'hubcloud_url'],
+                ['gdflix', 'gdflix_url'],
+                ['drivetot', 'drivetot_url'],
+                ['toxcloud', 'toxcloud_url']
             ]) {
-                const directUrl = cleanLink(specialRecord[key]);
-                if (directUrl) mirrors.push({ label, url: directUrl });
+                const savedUrl = cleanLink(specialRecord[field]);
+                if (savedUrl) mirrors[name] = savedUrl;
             }
 
-            // Fast links are cached D1 values and may be expiring URLs.
-            // Never scrape or refresh in this endpoint.
-            if (hasValidFastLinks(specialRecord, Date.now())) {
-                try {
-                    const fast = JSON.parse(specialRecord.fast_links);
-                    const candidates = Array.isArray(fast) ? fast :
-                        (fast && typeof fast === 'object' ? Object.values(fast) : []);
-                    let index = 0;
-                    for (const candidate of candidates) {
-                        if (index >= 20) break;
-                        const candidateUrl = cleanLink(
-                            typeof candidate === 'string' ? candidate :
-                            candidate && typeof candidate === 'object' ? (candidate.url || candidate.link) : null
-                        );
-                        if (candidateUrl && !mirrors.some(item => item.url === candidateUrl)) {
-                            index++;
-                            mirrors.push({ label: `Cached Fast Link ${index}`, url: candidateUrl });
-                        }
-                    }
-                } catch (_) { /* invalid cache is just unavailable */ }
-            }
-
-            const pageTitle = escapeText(specialRecord.file_name || fileIdentifier);
-            const rows = mirrors.map(item => `<li><span>${escapeText(item.label)}</span>` +
-                `<a href="${escapeText(item.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open mirror</a>` +
-                `<code>${escapeText(item.url)}</code></li>`).join('');
-            const pdlinkNotice = specialRecord.pdlink_share_id
-                ? '<p class="note">Gofile / Pixeldrain: D1 mein sirf PDLink share ID hai, direct URLs saved nahi hain. Is endpoint se PDLink API call nahi hoti.</p>'
-                : '';
-            const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>S-Cloud | Private Mirror Links</title>
-<style>
-:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0c1220;color:#e6edf8;font-family:system-ui,-apple-system,sans-serif}
-main{max-width:860px;margin:40px auto;padding:24px}.tag{color:#92a4bc;font-size:13px;letter-spacing:.09em;text-transform:uppercase}
-h1{font-size:24px;overflow-wrap:anywhere}ul{list-style:none;padding:0}li{border:1px solid #2b394f;border-radius:12px;padding:14px 16px;margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#121c2b}
-li span{font-weight:650;flex:1;min-width:120px}a{color:#dcecff;text-decoration:none;background:#1555a1;border-radius:8px;padding:9px 13px}a:focus,a:hover{background:#2673cc}
-code{flex-basis:100%;color:#9bb6d0;overflow-wrap:anywhere;font-size:12px}.note{color:#a9bad1;font-size:14px}.empty{padding:20px;border:1px solid #34445e;border-radius:10px}
-</style></head><body><main><div class="tag">Private mirror access · Signed-in only</div>
-<h1>${pageTitle}</h1><p>File ID: ${escapeText(fileIdentifier)}</p>
-${rows ? `<ul>${rows}</ul>` : '<p class="empty">No direct mirror URLs saved in D1 for this file.</p>'}
-${pdlinkNotice}<p class="note">Read-only: no earnings, view credit, mirror generation, or PDLink upload.</p>
-</main></body></html>`;
-            return new Response(html, {
-                status: 200,
-                headers: {
-                    'Content-Type': 'text/html; charset=UTF-8',
-                    'Cache-Control': 'private, no-store, max-age=0',
-                    'Vary': 'Cookie',
-                    'Referrer-Policy': 'no-referrer',
-                    'X-Robots-Tag': 'noindex, nofollow',
-                    'X-Content-Type-Options': 'nosniff',
-                    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+            return replyJson({
+                status: 'success',
+                data: {
+                    file_id: specialRecord.short_id || fileIdentifier,
+                    file_name: specialRecord.file_name || '',
+                    mirrors
                 }
             });
         }
