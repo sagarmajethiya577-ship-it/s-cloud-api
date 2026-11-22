@@ -70,6 +70,49 @@ async function syncDownloadMetadata(record, env) {
             ? "private"
             : "active";
 
+
+    // User-specific Manage Sites visibility.
+    // Default ON for settings not explicitly changed.
+    const mirrorVisibility = {
+        instant: true,
+        toxcloud: true,
+        gofile: true,
+        pixeldrain: true,
+        hubcloud: true,
+        gdflix: true
+    };
+
+    if (record.user_id != null) {
+        try {
+            const visibilityRows = await env.DB.prepare(
+                `SELECT provider, show_on_download
+                 FROM user_mirror_sites
+                 WHERE user_id = ?`
+            ).bind(record.user_id).all();
+
+            for (const item of visibilityRows.results || []) {
+                if (
+                    Object.prototype.hasOwnProperty.call(
+                        mirrorVisibility,
+                        item.provider
+                    )
+                ) {
+                    mirrorVisibility[item.provider] =
+                        Number(item.show_on_download) !== 0;
+                }
+            }
+        } catch (error) {
+            // Older databases may not have Manage Sites yet.
+            // Existing download behaviour remains unchanged.
+            if (!/no such table/i.test(String(error?.message || ""))) {
+                console.error(
+                    "[DOWNLOAD SYNC] Visibility lookup failed:",
+                    error?.message || error
+                );
+            }
+        }
+    }
+
     const metadata = {
         short_id: String(record.short_id || record.id),
         file_name: String(record.file_name || "Download"),
@@ -79,6 +122,7 @@ async function syncDownloadMetadata(record, env) {
         shared_by_enabled: Number(sharedByEnabled ?? 0),
         shared_by: sharedByName || null,
         shared_by_url: sharedByUrl || null,
+        mirror_visibility: mirrorVisibility,
         drive_url: record.drive_url || null,
         hubcloud_url: record.hubcloud_url || null,
         gdflix_url: record.gdflix_url || null,
