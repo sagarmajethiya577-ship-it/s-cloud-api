@@ -2399,100 +2399,227 @@ export default {
 
 
         // ==================================================
-        // ANIMEPLEX: SESSION-GATED, READ-ONLY MIRROR DIRECTORY
-        // Only saved D1 URLs. No PDLink call, /go/, credit, or scraper.
+        // S-CLOUD FILEVIEW V7 - PRIVATE API KEY MIRROR ACCESS
+        // Authorized accounts only. Saved D1 links only.
         // ==================================================
-        // Both allowlisted accounts can see ONLY their own file records.
-        // Browsers may encode '@' as '%40' in the URL path.
-        const specialMirrorRoute = /^\/(animeplex\.in(?:@|%40)proton\.me|sagarmajethiya444(?:@|%40)gmail\.com)\/([A-Za-z0-9_-]{6,64})\/?$/i.exec(url.pathname);
-        const specialMirrorPrefix = /^\/(?:animeplex\.in|sagarmajethiya444)(?:@|%40)/i.test(url.pathname);
-        if (specialMirrorPrefix) {
-            // Private JSON endpoint: only the signed-in account's own files.
-            // Never generate links, credit earnings, or fetch remote provider APIs.
-            const replyJson = (data, status = 200, extraHeaders = {}) => new Response(
-                JSON.stringify(data, null, 2),
-                {
-                    status,
-                    headers: {
-                        'Content-Type': 'application/json; charset=UTF-8',
-                        'Cache-Control': 'private, no-store, max-age=0',
-                        'Vary': 'Cookie',
-                        'Referrer-Policy': 'no-referrer',
-                        'X-Robots-Tag': 'noindex, nofollow',
-                        'X-Content-Type-Options': 'nosniff',
-                        'Content-Security-Policy': "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
-                        ...extraHeaders
+
+        const fileviewHeaderPrefix =
+            url.pathname === "/api/fileview" ||
+            url.pathname.startsWith("/api/fileview/");
+
+        const fileviewKeyPrefix =
+            /^\/sc_[^/]+\/fileview(?:\/|$)/.test(url.pathname);
+
+        if (fileviewHeaderPrefix || fileviewKeyPrefix) {
+
+            const fileviewReply = (data, status = 200, extra = {}) =>
+                new Response(
+                    JSON.stringify(data, null, 2),
+                    {
+                        status,
+                        headers: {
+                            "Content-Type": "application/json; charset=UTF-8",
+                            "Cache-Control": "private, no-store, max-age=0",
+                            "Vary": "Authorization, X-API-Key",
+                            "Referrer-Policy": "no-referrer",
+                            "X-Robots-Tag": "noindex, nofollow",
+                            "X-Content-Type-Options": "nosniff",
+                            "Content-Security-Policy":
+                                "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+                            ...extra
+                        }
+                    }
+                );
+
+            if (request.method !== "GET") {
+                return fileviewReply(
+                    { status: "error", message: "Method Not Allowed" },
+                    405,
+                    { Allow: "GET" }
+                );
+            }
+
+            const headerRoute =
+                /^\/api\/fileview\/([A-Za-z0-9_-]{6,64})\/?$/
+                    .exec(url.pathname);
+
+            const keyRoute =
+                /^\/(sc_[A-Za-z0-9_-]{20,128})\/fileview\/([A-Za-z0-9_-]{6,64})\/?$/
+                    .exec(url.pathname);
+
+            if (
+                (fileviewHeaderPrefix && !headerRoute) ||
+                (fileviewKeyPrefix && !keyRoute)
+            ) {
+                return fileviewReply(
+                    { status: "error", message: "Not Found" },
+                    404
+                );
+            }
+
+            const fileIdentifier =
+                headerRoute ? headerRoute[1] : keyRoute[2];
+
+            const authorization =
+                (request.headers.get("Authorization") || "").trim();
+
+            const bearerMatch =
+                /^Bearer\s+(sc_[A-Za-z0-9_-]{20,128})$/i
+                    .exec(authorization);
+
+            const headerApiKey =
+                bearerMatch
+                    ? bearerMatch[1]
+                    : (request.headers.get("X-API-Key") || "").trim();
+
+            const apiKey =
+                keyRoute ? keyRoute[1] : headerApiKey;
+
+            if (!/^sc_[A-Za-z0-9_-]{20,128}$/.test(apiKey)) {
+                return fileviewReply(
+                    { status: "error", message: "Invalid API key" },
+                    401
+                );
+            }
+
+            try {
+                // Existing S-Cloud API keys are stored as SHA-256 hashes.
+                // This query does not create a session or write to D1.
+
+                const keyHash = await sha256Hex(apiKey);
+
+                const fileviewAccount = await env.DB.prepare(`
+                    SELECT u.id, u.email
+                    FROM api_keys k
+                    INNER JOIN users u ON u.id = k.user_id
+                    WHERE k.key_hash = ?
+                      AND k.status = 'active'
+                      AND u.status = 'active'
+                    LIMIT 1
+                `).bind(keyHash).first();
+
+                if (!fileviewAccount) {
+                    return fileviewReply(
+                        { status: "error", message: "Invalid API key" },
+                        401
+                    );
+                }
+
+                const accountEmail =
+                    String(fileviewAccount.email || "")
+                        .trim()
+                        .toLowerCase();
+
+                const allowedAccounts = [
+                    "animeplex.in@proton.me",
+                    "sagarmajethiya444@gmail.com"
+                ];
+
+                if (!allowedAccounts.includes(accountEmail)) {
+                    return fileviewReply(
+                        { status: "error", message: "Access Denied" },
+                        403
+                    );
+                }
+
+                // Ownership is checked using authenticated user ID.
+                // A valid key cannot read another account's files.
+
+                const fileRecord = await env.DB.prepare(`
+                    SELECT
+                        id,
+                        short_id,
+                        file_name,
+                        hubcloud_url,
+                        gdflix_url,
+                        drivetot_url,
+                        toxcloud_url
+                    FROM files
+                    WHERE (short_id = ? OR id = ?)
+                      AND user_id = ?
+                      AND COALESCE(status, '') != 'deleted'
+                      AND COALESCE(sharing_enabled, 1) != 0
+                    LIMIT 1
+                `).bind(
+                    fileIdentifier,
+                    fileIdentifier,
+                    fileviewAccount.id
+                ).first();
+
+                if (!fileRecord) {
+                    return fileviewReply(
+                        { status: "error", message: "File Not Found" },
+                        404
+                    );
+                }
+
+                const cleanMirrorUrl = (value) => {
+                    if (typeof value !== "string") return null;
+
+                    const raw = value.trim();
+
+                    if (
+                        !raw ||
+                        /^(not found|null|undefined|none|n\/a)$/i.test(raw)
+                    ) {
+                        return null;
+                    }
+
+                    try {
+                        const parsed = new URL(raw);
+
+                        if (
+                            parsed.protocol !== "https:" &&
+                            parsed.protocol !== "http:"
+                        ) {
+                            return null;
+                        }
+
+                        if (parsed.username || parsed.password) {
+                            return null;
+                        }
+
+                        return parsed.toString();
+                    } catch {
+                        return null;
+                    }
+                };
+
+                const mirrors = {};
+
+                for (const [name, field] of [
+                    ["hubcloud", "hubcloud_url"],
+                    ["gdflix", "gdflix_url"],
+                    ["drivetot", "drivetot_url"],
+                    ["toxcloud", "toxcloud_url"]
+                ]) {
+                    const savedUrl =
+                        cleanMirrorUrl(fileRecord[field]);
+
+                    if (savedUrl) {
+                        mirrors[name] = savedUrl;
                     }
                 }
-            );
 
-            if (request.method !== 'GET') {
-                return replyJson({ status: 'error', message: 'Method Not Allowed' }, 405, { Allow: 'GET' });
+                return fileviewReply({
+                    status: "success",
+                    data: {
+                        file_id:
+                            fileRecord.short_id || fileIdentifier,
+                        file_name:
+                            fileRecord.file_name || "",
+                        mirrors
+                    }
+                });
+
+            } catch (error) {
+                console.error("[FILEVIEW] Private lookup failed");
+
+                return fileviewReply(
+                    { status: "error", message: "Server Error" },
+                    500
+                );
             }
-            if (!specialMirrorRoute) {
-                return replyJson({ status: 'error', message: 'Not Found' }, 404);
-            }
-
-            const specialUser = await getCurrentUser(request, env);
-            if (!specialUser) {
-                const login = new URL('/', request.url);
-                login.searchParams.set('redirect', url.pathname);
-                return Response.redirect(login.toString(), 302);
-            }
-            // A URL/email is not an access token. Match the authenticated identity.
-            const routeEmail = specialMirrorRoute[1].replace(/%40/ig, '@').toLowerCase();
-            const sessionEmail = String(specialUser.email || '').trim().toLowerCase();
-            if (sessionEmail !== routeEmail) {
-                return replyJson({ status: 'error', message: 'Not Found' }, 404);
-            }
-
-            const fileIdentifier = specialMirrorRoute[2];
-            const specialRecord = await env.DB.prepare(`
-                SELECT id, short_id, file_name,
-                       hubcloud_url, gdflix_url, drivetot_url, toxcloud_url
-                FROM files
-                WHERE (short_id = ? OR id = ?)
-                  AND user_id = ?
-                  AND COALESCE(status, '') != 'deleted'
-                  AND COALESCE(sharing_enabled, 1) != 0
-                LIMIT 1
-            `).bind(fileIdentifier, fileIdentifier, specialUser.id).first();
-
-            if (!specialRecord) {
-                return replyJson({ status: 'error', message: 'File Not Found' }, 404);
-            }
-
-            const cleanLink = (value) => {
-                if (typeof value !== 'string') return null;
-                const raw = value.trim();
-                if (!raw || /^(not found|null|undefined|none|n\/a)$/i.test(raw)) return null;
-                try {
-                    const parsed = new URL(raw);
-                    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
-                    if (parsed.username || parsed.password) return null;
-                    return parsed.toString();
-                } catch { return null; }
-            };
-
-            const mirrors = {};
-            for (const [name, field] of [
-                ['hubcloud', 'hubcloud_url'],
-                ['gdflix', 'gdflix_url'],
-                ['drivetot', 'drivetot_url'],
-                ['toxcloud', 'toxcloud_url']
-            ]) {
-                const savedUrl = cleanLink(specialRecord[field]);
-                if (savedUrl) mirrors[name] = savedUrl;
-            }
-
-            return replyJson({
-                status: 'success',
-                data: {
-                    file_id: specialRecord.short_id || fileIdentifier,
-                    file_name: specialRecord.file_name || '',
-                    mirrors
-                }
-            });
         }
 
         // ==================================================
