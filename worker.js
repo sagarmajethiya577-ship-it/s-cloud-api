@@ -8680,10 +8680,43 @@ export default {
                             error?.message || "Unknown error"
                         );
 
+                        const reason =
+                            String(error?.message || "");
+
+                        let errorCode = "UNKNOWN_ERROR";
+
+                        const httpMatch = reason.match(
+                            /^Hub Auto HTTP ([0-9]{3})$/
+                        );
+
+                        if (httpMatch) {
+                            errorCode = "API_HTTP_" + httpMatch[1];
+                        } else if (error?.name === "AbortError") {
+                            errorCode = "API_TIMEOUT";
+                        } else if (reason === "Unsupported HubCloud URL") {
+                            errorCode = "INVALID_HUBCLOUD_URL";
+                        } else if (reason === "Response too large") {
+                            errorCode = "API_RESPONSE_TOO_LARGE";
+                        } else if (error instanceof SyntaxError) {
+                            errorCode = "INVALID_API_JSON";
+                        } else if (reason === "10Gbps direct URL unavailable") {
+                            errorCode = "DIRECT_LINK_MISSING";
+                        } else if (reason === "Invalid direct URL host") {
+                            errorCode = "INVALID_DIRECT_HOST";
+                        } else if (error instanceof TypeError) {
+                            errorCode = "FETCH_OR_URL_ERROR";
+                        }
+
+                        console.error(
+                            "[INSTANT AUTO] Diagnostic:",
+                            errorCode
+                        );
+
                         return jsonResponse({
                             status: "error",
                             message:
-                                "Instant download link could not be resolved."
+                                "Instant download link could not be resolved.",
+                            error_code: errorCode
                         }, 502);
                     }
                 }
