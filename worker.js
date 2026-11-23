@@ -8560,6 +8560,12 @@ export default {
                             "https://opx.toxcloud.shop/hub/auto"
                         );
 
+                        // Normalize old domain for the resolver only.
+                        // Do not change the database or mirror URL.
+                        if (hub.hostname === "hubcloud.one") {
+                            hub.hostname = "hubcloud.mov";
+                        }
+
                         api.searchParams.set("url", hub.href);
 
                         const controller = new AbortController();
@@ -8577,7 +8583,8 @@ export default {
                                 {
                                     method: "GET",
                                     headers: {
-                                        "Accept": "application/json"
+                                        "Accept": "application/json",
+                                        "User-Agent": "Mozilla/5.0"
                                     },
                                     redirect: "error",
                                     signal: controller.signal
