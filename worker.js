@@ -8586,7 +8586,7 @@ export default {
                                         "Accept": "application/json",
                                         "User-Agent": "Mozilla/5.0"
                                     },
-                                    redirect: "error",
+                                    redirect: "follow",
                                     signal: controller.signal
                                 }
                             );
