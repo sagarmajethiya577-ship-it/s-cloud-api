@@ -1884,6 +1884,8 @@ async function creditDownloadEarning(
 // BACKGROUND FAST-LINK PREPARATION
 // ============================================================
 
+const ENABLE_GDFLIX_FASTLINK_SCRAPING = false;
+
 const fastLinkJobs = new Map();
 
 // ==================================================
@@ -2301,6 +2303,15 @@ async function prepareFastLinks(shortId, env) {
             console.log(
                 `[FAST] bypassGDFlix START ${shortId} | elapsed=${elapsed()}`
             );
+
+            // Preserve the scraper but pause execution.
+            // Mirror recovery above remains active.
+            if (!ENABLE_GDFLIX_FASTLINK_SCRAPING) {
+                console.log(
+                    `[FAST] GDFlix scraping paused ${shortId}`
+                );
+                return;
+            }
 
             const freshFastLinks =
                 await bypassGDFlix(
@@ -8508,264 +8519,129 @@ export default {
 
 
                 // ------------------------------------------
-                // INSTANT DOWNLOAD - FRESH MG DIRECT
+                // INSTANT DOWNLOAD - HUBCLOUD AUTO
                 // ------------------------------------------
 
-                if (
-                    action ===
-                    "instant"
-                ) {
-                    /*
-                     * TOXcloud is only used as the source
-                     * for resolving a fresh MG/MEGA direct URL.
-                     *
-                     * Nothing is cached or stored.
-                     * File bytes never pass through this Worker.
-                     */
+                if (action === "instant") {
 
-                    const toxcloudUrl =
-                        typeof record.toxcloud_url === "string"
-                            ? record.toxcloud_url.trim()
-                            : "";
+                    const source =
+                        String(record.hubcloud_url || "").trim();
 
-                    if (!toxcloudUrl) {
-                        return new Response(
-                            JSON.stringify({
-                                status: "error",
-                                message: "Instant download is not available yet."
-                            }),
-                            {
-                                status: 404,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
-                    }
-
-                    let toxParsed;
-
-                    try {
-                        toxParsed =
-                            new URL(toxcloudUrl);
-                    } catch {
-                        return new Response(
-                            JSON.stringify({
-                                status: "error",
-                                message: "Invalid TOXcloud source URL."
-                            }),
-                            {
-                                status: 502,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
-                    }
-
-                    const toxHost =
-                        toxParsed.hostname.toLowerCase();
-
-                    if (
-                        toxParsed.protocol !== "https:" ||
-                        (
-                            toxHost !== "toxcloud.info" &&
-                            !toxHost.endsWith(".toxcloud.info")
-                        )
-                    ) {
-                        return new Response(
-                            JSON.stringify({
-                                status: "error",
-                                message: "Unexpected TOXcloud source."
-                            }),
-                            {
-                                status: 502,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
+                    if (!source || source === "Not Found") {
+                        return jsonResponse({
+                            status: "error",
+                            message: "HubCloud mirror unavailable."
+                        }, 404);
                     }
 
                     try {
-                        console.log(
-                            `[INSTANT MG] Resolve START | file=${shortId}`
-                        );
+                        const hub = new URL(source);
 
-                        const browserHeaders = {
-                            "User-Agent":
-                                "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/140.0.0.0 Mobile Safari/537.36",
-                            "Accept":
-                                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-                        };
-
-                        const toxResponse =
-                            await fetch(
-                                toxcloudUrl,
-                                {
-                                    method: "GET",
-                                    headers:
-                                        browserHeaders,
-                                    redirect:
-                                        "follow"
-                                }
-                            );
-
-                        const toxHtml =
-                            await toxResponse.text();
-
-                        if (!toxResponse.ok) {
-                            throw new Error(
-                                `TOXcloud fetch failed (${toxResponse.status})`
-                            );
-                        }
-
-                        const buttonMatch =
-                            toxHtml.match(
-                                /<button[^>]*id=["']cloud-dl-btn["'][^>]*>/i
-                            );
-
-                        if (!buttonMatch) {
-                            throw new Error(
-                                "MGCloud download button not found"
-                            );
-                        }
-
-                        const button =
-                            buttonMatch[0];
-
-                        const megaMatch =
-                            button.match(
-                                /data-megaid=["']([^"']+)["']/i
-                            );
-
-                        const tempMatch =
-                            button.match(
-                                /data-tempid=["']([^"']+)["']/i
-                            );
-
-                        const megaId =
-                            megaMatch?.[1]?.trim() ||
-                            "";
-
-                        const tempId =
-                            tempMatch?.[1]?.trim() ||
-                            "";
-
-                        if (!megaId || !tempId) {
-                            throw new Error(
-                                "MGCloud IDs not found"
-                            );
-                        }
-
-                        /*
-                         * IMPORTANT:
-                         * Use data-tempid from the actual button.
-                         * Do not use the TOXcloud URL slug.
-                         */
-                        const payload =
-                            JSON.stringify({
-                                id: megaId,
-                                temp_id: tempId,
-                                expires:
-                                    Date.now() +
-                                    (3600 * 1000)
-                            });
-
-                        const cloudToken =
-                            btoa(
-                                encodeURIComponent(
-                                    payload
-                                )
-                            );
-
-                        const cloudUrl =
-                            "https://fast.toxcloud.shop/cloud?token=" +
-                            encodeURIComponent(
-                                cloudToken
-                            );
-
-                        const cloudResponse =
-                            await fetch(
-                                cloudUrl,
-                                {
-                                    method: "GET",
-                                    headers:
-                                        browserHeaders,
-                                    redirect:
-                                        "follow"
-                                }
-                            );
-
-                        const cloudHtml =
-                            await cloudResponse.text();
-
-                        if (!cloudResponse.ok) {
-                            throw new Error(
-                                `MGCloud resolver failed (${cloudResponse.status})`
-                            );
-                        }
-
-                        const directMatch =
-                            cloudHtml.match(
-                                /https:\/\/[^"'<> ]+\.userstorage\.mega\.co\.nz\/dl\/[^"'<> ]+/i
-                            );
-
-                        if (!directMatch) {
-                            throw new Error(
-                                "Fresh MG direct URL not found"
-                            );
-                        }
-
-                        const instantUrl =
-                            directMatch[0]
-                                .replaceAll(
-                                    "&amp;",
-                                    "&"
-                                )
-                                .replaceAll(
-                                    "&#39;",
-                                    "'"
-                                );
-
-                        let directParsed;
-
-                        try {
-                            directParsed =
-                                new URL(
-                                    instantUrl
-                                );
-                        } catch {
-                            throw new Error(
-                                "Invalid MG direct URL"
-                            );
-                        }
-
-                        const directHost =
-                            directParsed.hostname.toLowerCase();
+                        const allowedHosts = new Set([
+                            "hubcloud.pw",
+                            "hubcloud.mov",
+                            "hubcloud.cx",
+                            "hubcloud.ist",
+                            "hubcloud.one"
+                        ]);
 
                         if (
-                            directParsed.protocol !== "https:" ||
-                            !directHost.endsWith(
-                                ".userstorage.mega.co.nz"
+                            hub.protocol !== "https:" ||
+                            !allowedHosts.has(hub.hostname) ||
+                            hub.username ||
+                            hub.password ||
+                            hub.port ||
+                            !/^\/video\/[A-Za-z0-9_-]+\/?$/.test(hub.pathname)
+                        ) {
+                            throw new Error("Unsupported HubCloud URL");
+                        }
+
+                        const api = new URL(
+                            "https://opx.toxcloud.shop/hub/auto"
+                        );
+
+                        api.searchParams.set("url", hub.href);
+
+                        const controller = new AbortController();
+
+                        const timeout = setTimeout(
+                            () => controller.abort(),
+                            30000
+                        );
+
+                        let response;
+
+                        try {
+                            response = await fetch(
+                                api.href,
+                                {
+                                    method: "GET",
+                                    headers: {
+                                        "Accept": "application/json"
+                                    },
+                                    redirect: "error",
+                                    signal: controller.signal
+                                }
+                            );
+                        } finally {
+                            clearTimeout(timeout);
+                        }
+
+                        if (!response.ok) {
+                            throw new Error(
+                                `Hub Auto HTTP ${response.status}`
+                            );
+                        }
+
+                        const length = Number(
+                            response.headers.get("content-length") || 0
+                        );
+
+                        if (length > 131072) {
+                            throw new Error("Response too large");
+                        }
+
+                        const responseText = await response.text();
+
+                        if (responseText.length > 131072) {
+                            throw new Error("Response too large");
+                        }
+
+                        const result = JSON.parse(responseText);
+
+                        if (
+                            result?.success !== true ||
+                            typeof result.download_url !== "string" ||
+                            !/10\s*gbps/i.test(
+                                String(result.selected_server || "")
                             )
                         ) {
                             throw new Error(
-                                "Unexpected MG direct host"
+                                "10Gbps direct URL unavailable"
                             );
                         }
 
+                        const direct = new URL(result.download_url);
+
+                        if (
+                            direct.protocol !== "https:" ||
+                            direct.hostname !==
+                                "video-downloads.googleusercontent.com" ||
+                            direct.username ||
+                            direct.password ||
+                            direct.port
+                        ) {
+                            throw new Error("Invalid direct URL host");
+                        }
+
+                        const instantUrl = direct.href;
+
                         console.log(
-                            `[INSTANT MG] Resolve SUCCESS | file=${shortId} | host=${directHost}`
+                            `[INSTANT AUTO] Resolved | file=${shortId}`
                         );
 
-                        /*
-                         * Preserve the existing Instant Download
-                         * earning behavior.
-                         */
+                        // Existing earning system remains on Main Worker.
+                        // Its rolling 24-hour guard is unchanged.
                         await creditDownloadEarning(
                             record,
                             request,
@@ -8773,8 +8649,7 @@ export default {
                         );
 
                         if (
-                            url.searchParams.get("mode") ===
-                            "json"
+                            url.searchParams.get("mode") === "json"
                         ) {
                             return jsonResponse({
                                 status: "success",
@@ -8782,44 +8657,27 @@ export default {
                             });
                         }
 
-                        return new Response(
-                            null,
-                            {
-                                status: 302,
-                                headers: {
-                                    "Location":
-                                        instantUrl,
-                                    "Cache-Control":
-                                        "no-store, no-cache, must-revalidate",
-                                    "Pragma":
-                                        "no-cache",
-                                    "Referrer-Policy":
-                                        "no-referrer"
-                                }
+                        // Redirect only; never proxy file bytes.
+                        return new Response(null, {
+                            status: 302,
+                            headers: {
+                                "Location": instantUrl,
+                                "Cache-Control": "no-store",
+                                "Referrer-Policy": "no-referrer"
                             }
-                        );
+                        });
 
                     } catch (error) {
                         console.error(
-                            `[INSTANT MG] Resolve ERROR | file=${shortId}:`,
-                            error?.message ||
-                            error
+                            `[INSTANT AUTO] Failed | file=${shortId}`,
+                            error?.message || "Unknown error"
                         );
 
-                        return new Response(
-                            JSON.stringify({
-                                status: "error",
-                                message:
-                                    "Instant download link could not be resolved."
-                            }),
-                            {
-                                status: 502,
-                                headers: {
-                                    ...corsHeaders,
-                                    ...jsonHeaders()
-                                }
-                            }
-                        );
+                        return jsonResponse({
+                            status: "error",
+                            message:
+                                "Instant download link could not be resolved."
+                        }, 502);
                     }
                 }
 
