@@ -858,6 +858,13 @@
                     return false;
                 }
 
+                if (response.status === 409 && data?.code === "UPLOAD_IN_PROGRESS") {
+                    const status = row.querySelector("[data-status]");
+                    status.innerHTML = `<span class="text-amber-400">Already processing</span>`;
+                    status.classList.remove("text-cyan-400");
+                    return false;
+                }
+
                 if (!response.ok || !data || data.status !== "success") {
                     const status = row.querySelector("[data-status]");
                     status.innerHTML = `<span class="text-red-400">Failed</span>`;
@@ -890,7 +897,13 @@
                 const result = row.querySelector("[data-result]");
                 const linkInput = row.querySelector("[data-link]");
 
-                status.classList.add("hidden");
+                if (uploadData.already_uploaded || data.already_uploaded) {
+                    status.innerHTML = `<span class="text-amber-400">Already uploaded</span>`;
+                    status.classList.remove("text-cyan-400");
+                    status.classList.remove("hidden");
+                } else {
+                    status.classList.add("hidden");
+                }
                 linkInput.value = shortLink;
                 result.classList.remove("hidden");
                 result.classList.add("flex");

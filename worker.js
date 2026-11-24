@@ -1,4 +1,4 @@
-import { copyFileToSCloud } from "./drive-handler.js";
+import { copyFileToSCloud, selectDriveCopyAccount } from "./drive-handler.js";
 import {
     uploadToDrivetot,
     extractLinksFromDrivetot
@@ -6517,6 +6517,22 @@ export default {
                         WHERE record_id = ? AND changes() > 0
                     `).bind(file.id));
                 }
+                const hasSourceTracking = await env.DB.prepare(`
+                    SELECT name FROM sqlite_master
+                    WHERE type = 'table' AND name = 'scloud_upload_sources'
+                    LIMIT 1
+                `).first();
+                if (hasSourceTracking) {
+                    statements.push(env.DB.prepare(`
+                        DELETE FROM scloud_upload_sources
+                        WHERE user_id = ? AND file_short_id = ?
+                          AND NOT EXISTS (
+                              SELECT 1 FROM files
+                              WHERE id = ? AND user_id = ?
+                          )
+                    `).bind(currentUser.id, file.short_id || file.id,
+                           file.id, currentUser.id));
+                }
                 // D1 batches run transactionally. No earnings, balance,
                 // withdrawals, or visitor accounting rows are modified.
                 const results = await env.DB.batch(statements);
@@ -6570,11 +6586,7 @@ export default {
                     }), { status: 400, headers: { ...corsHeaders, ...jsonHeaders() } });
                 }
 
-                const token = await getAccessToken(
-                    env.OAUTH_CLIENT_ID,
-                    env.OAUTH_CLIENT_SECRET,
-                    env.OAUTH_REFRESH_TOKEN
-                );
+                const token = (await selectDriveCopyAccount(folderId, env)).token;
 
                 const listRes = await fetch(
                     `https://www.googleapis.com/drive/v3/files?q='${encodeURIComponent(folderId)}'+in+parents&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=100&fields=nextPageToken,files(id,name,size,mimeType)`,
@@ -6633,6 +6645,9 @@ export default {
             )
         ) {
             let uploadReservation = false;
+            let sourceUploadClaimed = false;
+            let sourceCopyStarted = false;
+            let sourceUploadHash = null;
             const uploadUsageDate = new Date().toISOString().slice(0, 10);
             try {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
@@ -6729,12 +6744,7 @@ export default {
 
                     try {
 
-                        const token =
-                            await getAccessToken(
-                                env.OAUTH_CLIENT_ID,
-                                env.OAUTH_CLIENT_SECRET,
-                                env.OAUTH_REFRESH_TOKEN
-                            );
+                        const token = (await selectDriveCopyAccount(folderId, env)).token;
 
 
                         const listRes =
@@ -6854,6 +6864,119 @@ export default {
                 const sourceFileId =
                     match[0];
 
+                // ====================================================
+                // PER-USER SOURCE DRIVE DEDUPLICATION
+                // One original Drive ID per uploader, regardless of
+                // URL format. Never persist the original URL/ID.
+                // A D1 unique claim prevents parallel files.copy calls.
+                // ====================================================
+                sourceUploadHash = await sha256Hex(sourceFileId);
+
+                await env.DB.prepare(`
+                    CREATE TABLE IF NOT EXISTS scloud_upload_sources (
+                        user_id INTEGER NOT NULL,
+                        source_hash TEXT NOT NULL,
+                        state TEXT NOT NULL DEFAULT 'processing',
+                        file_short_id TEXT,
+                        copied_drive_id TEXT,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, source_hash)
+                    )
+                `).run();
+
+                // Each completed copy remembers its owning account and folder.
+                // This will support safe retention/cleanup and per-account recovery.
+                await env.DB.prepare(`
+                    CREATE TABLE IF NOT EXISTS scloud_drive_copy_registry (
+                        user_id INTEGER NOT NULL,
+                        source_hash TEXT NOT NULL,
+                        copied_drive_id TEXT NOT NULL,
+                        account_number INTEGER NOT NULL,
+                        folder_id TEXT NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, source_hash)
+                    )
+                `).run();
+
+                const existingSourceReply = async () => {
+                    const previous = await env.DB.prepare(`
+                        SELECT s.state AS source_state,
+                               s.file_short_id, s.copied_drive_id,
+                               f.short_id AS existing_short_id,
+                               f.file_name, f.file_size,
+                               f.status AS file_status,
+                               f.sharing_enabled
+                        FROM scloud_upload_sources AS s
+                        LEFT JOIN files AS f
+                          ON f.short_id = s.file_short_id
+                         AND f.user_id = s.user_id
+                        WHERE s.user_id = ? AND s.source_hash = ?
+                        LIMIT 1
+                    `).bind(currentUser.id, sourceUploadHash).first();
+
+                    if (!previous) return null;
+
+                    if (previous.existing_short_id &&
+                        previous.file_status !== "deleted") {
+                        const existingShortId = previous.existing_short_id;
+                        const alreadyHidden =
+                            Number(previous.sharing_enabled ?? 1) === 0;
+                        const existingLink =
+                            `https://${url.hostname}/d/${existingShortId}`;
+                        return jsonResponse({
+                            status: "success",
+                            already_uploaded: true,
+                            message: alreadyHidden
+                                ? "Already uploaded. Sharing is OFF for this file."
+                                : "This Google Drive file was already uploaded.",
+                            data: {
+                                file_name: previous.file_name || "Unknown File",
+                                file_size: previous.file_size || "Unknown",
+                                short_id: existingShortId,
+                                short_link: existingLink,
+                                already_uploaded: true,
+                                sharing_enabled: !alreadyHidden
+                            }
+                        });
+                    }
+
+                    // If a user permanently deleted the original file,
+                    // allow fresh upload. No S-Cloud copy is performed here.
+                    if (previous.file_short_id &&
+                        previous.file_status === "deleted") {
+                        await env.DB.prepare(`
+                            DELETE FROM scloud_upload_sources
+                            WHERE user_id = ? AND source_hash = ?
+                              AND file_short_id = ?
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM files
+                                  WHERE short_id = ? AND user_id = ?
+                                    AND COALESCE(status, '') != 'deleted'
+                              )
+                        `).bind(
+                            currentUser.id, sourceUploadHash,
+                            previous.file_short_id,
+                            previous.file_short_id, currentUser.id
+                        ).run();
+                        return null;
+                    }
+
+                    return jsonResponse({
+                        status: "processing",
+                        code: "UPLOAD_IN_PROGRESS",
+                        message: previous.copied_drive_id
+                            ? "This Drive file was already copied; its upload needs completion or review."
+                            : "This Drive file is already being processed. Try again once its upload finishes."
+                    }, 409);
+                };
+
+                const existingBeforeMetadata = await existingSourceReply();
+                if (existingBeforeMetadata) return existingBeforeMetadata;
+
+                // Use the same numbered OAuth account for source metadata
+                // AND the eventual files.copy request; no cross-account mix.
+                const selectedCopyAccount = await selectDriveCopyAccount(sourceFileId, env);
 
                 // --------------------------------------
                 // GET SOURCE FILE METADATA
@@ -6871,13 +6994,7 @@ export default {
 
                 try {
 
-                    const token =
-                        await getAccessToken(
-                            env.OAUTH_CLIENT_ID,
-                            env.OAUTH_CLIENT_SECRET,
-                            env.OAUTH_REFRESH_TOKEN
-                        );
-
+                    const token = selectedCopyAccount.token;
 
                     const metaRes =
                         await fetch(
@@ -7012,6 +7129,28 @@ export default {
                 }
 
 
+                // Atomically claim (user, original Drive file) BEFORE
+                // daily quota or the external Google files.copy call.
+                // Simultaneous requests cannot both acquire the claim.
+                const sourceClaim = await env.DB.prepare(`
+                    INSERT OR IGNORE INTO scloud_upload_sources
+                        (user_id, source_hash, state)
+                    VALUES (?, ?, 'processing')
+                `).bind(currentUser.id, sourceUploadHash).run();
+
+                if (Number(sourceClaim.meta?.changes || 0) !== 1) {
+                    const racedReply = await existingSourceReply();
+                    if (racedReply) return racedReply;
+                    // A concurrent delete/retry removed the claim; never
+                    // risk starting a second copy in this same request.
+                    return jsonResponse({
+                        status: "processing",
+                        code: "UPLOAD_IN_PROGRESS",
+                        message: "Upload state changed. Please retry."
+                    }, 409);
+                }
+                sourceUploadClaimed = true;
+
                 // --------------------------------------
                 // ENFORCE DAILY UPLOAD LIMIT (WEB + API)
                 // Atomically reserve one slot before copying.
@@ -7028,6 +7167,16 @@ export default {
                 `).bind(currentUser.id, currentUser.id, currentUser.id, currentUser.id, currentUser.id).run();
 
                 if (!reserveResult.meta?.changes) {
+                    // No copy attempted: release the unique claim so a
+                    // later date can retry without a stuck reservation.
+                    await env.DB.prepare(`
+                        DELETE FROM scloud_upload_sources
+                        WHERE user_id = ? AND source_hash = ?
+                          AND state = 'processing'
+                          AND copied_drive_id IS NULL
+                          AND file_short_id IS NULL
+                    `).bind(currentUser.id, sourceUploadHash).run();
+                    sourceUploadClaimed = false;
                     const [limitRow, usageRow] = await Promise.all([
                         env.DB.prepare(`SELECT daily_limit FROM user_upload_limits WHERE user_id = ?`).bind(currentUser.id).first(),
                         env.DB.prepare(`SELECT uploads_count FROM user_daily_upload_usage WHERE user_id = ? AND usage_date = date('now')`).bind(currentUser.id).first()
@@ -7046,12 +7195,51 @@ export default {
                 // temporarily and is NEVER saved to DB.
                 // --------------------------------------
 
-                console.log("[UPLOAD DEBUG] S-Cloud me copy start ho raha hai URL:", cleanUrl);
+                console.log("[UPLOAD] S-Cloud Drive copy START | user=", currentUser.id);
 
+                // Persist copied ID immediately after Google's files.copy
+                // returns, BEFORE permission/metadata calls. If a later
+                // step fails, retry must not silently copy the same source.
                 const scloudResult =
                     await copyFileToSCloud(
                         cleanUrl,
-                        env
+                        env,
+                        async (copiedId, accountInfo) => {
+                            // Both writes succeed or neither does: no mismatched
+                            // account vs file ID in the cleanup/recovery registry.
+                            const results = await env.DB.batch([
+                                env.DB.prepare(`
+                                    UPDATE scloud_upload_sources
+                                    SET copied_drive_id = ?,
+                                        updated_at = CURRENT_TIMESTAMP
+                                    WHERE user_id = ? AND source_hash = ?
+                                      AND state = 'processing'
+                                      AND copied_drive_id IS NULL
+                                `).bind(copiedId, currentUser.id, sourceUploadHash),
+                                env.DB.prepare(`
+                                    INSERT INTO scloud_drive_copy_registry
+                                        (user_id, source_hash, copied_drive_id,
+                                         account_number, folder_id)
+                                    SELECT ?, ?, ?, ?, ?
+                                    WHERE EXISTS (
+                                        SELECT 1 FROM scloud_upload_sources
+                                        WHERE user_id = ? AND source_hash = ?
+                                          AND copied_drive_id = ?
+                                          AND state = 'processing'
+                                    )
+                                `).bind(
+                                    currentUser.id, sourceUploadHash, copiedId,
+                                    accountInfo.accountNumber, accountInfo.folderId,
+                                    currentUser.id, sourceUploadHash, copiedId
+                                )
+                            ]);
+                            if (Number(results?.[0]?.meta?.changes || 0) !== 1 ||
+                                Number(results?.[1]?.meta?.changes || 0) !== 1) {
+                                throw new Error("S-Cloud copy/account tracking failed; manual review required.");
+                            }
+                        },
+                        () => { sourceCopyStarted = true; },
+                        selectedCopyAccount
                     );
                 
                 console.log("[UPLOAD DEBUG] S-Cloud Copy ka result:", JSON.stringify(scloudResult));
@@ -7104,6 +7292,22 @@ export default {
                 const currentTime =
                     Date.now();
 
+                // Save the planned S-Cloud record key before INSERT.
+                // If the record insert succeeds but acknowledgement fails,
+                // a future request can still find the original file row.
+                const recordClaim = await env.DB.prepare(`
+                    UPDATE scloud_upload_sources
+                    SET file_short_id = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ? AND source_hash = ?
+                      AND state = 'processing'
+                      AND copied_drive_id = ?
+                `).bind(
+                    shortId, currentUser.id, sourceUploadHash,
+                    scloudFileId
+                ).run();
+                if (Number(recordClaim.meta?.changes || 0) !== 1) {
+                    throw new Error("S-Cloud record reservation failed; manual review required.");
+                }
 
                 const short_link =
                     `https://${url.hostname}/d/${shortId}`;
@@ -7149,6 +7353,20 @@ export default {
 
                 // Upload has succeeded once its file record is committed.
                 uploadReservation = false;
+
+                try {
+                    await env.DB.prepare(`
+                        UPDATE scloud_upload_sources
+                        SET state = 'ready', updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = ? AND source_hash = ?
+                          AND file_short_id = ?
+                    `).bind(currentUser.id, sourceUploadHash, shortId).run();
+                } catch (claimFinishError) {
+                    // A later duplicate lookup will still find the saved
+                    // files row via file_short_id; do not recopy the file.
+                    console.error("[UPLOAD] Dedupe finalization failed:",
+                        claimFinishError?.message || claimFinishError);
+                }
 
                 // --------------------------------------
                 // INITIAL DOWNLOAD WORKER SYNC
@@ -7522,6 +7740,24 @@ export default {
                         await env.DB.prepare(`UPDATE user_daily_upload_usage SET uploads_count = CASE WHEN uploads_count > 0 THEN uploads_count - 1 ELSE 0 END WHERE user_id = ? AND usage_date = ?`).bind(currentUser.id, uploadUsageDate).run();
                     } catch (releaseError) {
                         console.error("Could not release failed upload reservation:", releaseError);
+                    }
+                }
+
+                if (sourceUploadClaimed && !sourceCopyStarted) {
+                    // Only release if files.copy was definitely NOT called.
+                    // Once called, an unknown Google response must NEVER
+                    // trigger an automatic duplicate copy on retry.
+                    try {
+                        await env.DB.prepare(`
+                            DELETE FROM scloud_upload_sources
+                            WHERE user_id = ? AND source_hash = ?
+                              AND state = 'processing'
+                              AND copied_drive_id IS NULL
+                              AND file_short_id IS NULL
+                        `).bind(currentUser.id, sourceUploadHash).run();
+                    } catch (dedupeReleaseError) {
+                        console.error("[UPLOAD] Could not release pre-copy claim:",
+                            dedupeReleaseError?.message || dedupeReleaseError);
                     }
                 }
 
