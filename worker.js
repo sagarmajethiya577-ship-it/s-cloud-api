@@ -164,6 +164,42 @@ async function syncDownloadMetadata(record, env) {
 }
 
 // ==================================================
+// PER-USER UPLOAD POLICY (Manage Sites visibility)
+// GoFile + Pixeldrain are a single shared PDLink upload:
+//   either visible => PDLink runs; both hidden => skip.
+// TOXCloud runs only while visible. Drivetot is independent.
+// ==================================================
+async function getMirrorUploadPolicy(userId, env) {
+    const settings = {gofile:true, pixeldrain:true, toxcloud:true};
+    if (userId == null) {
+        // Missing owner should not initiate paid provider uploads.
+        return {pdlink:false, toxcloud:false};
+    }
+    try {
+        const rows = await env.DB.prepare(
+            `SELECT provider, show_on_download FROM user_mirror_sites
+             WHERE user_id = ? AND provider IN ('gofile','pixeldrain','toxcloud')`
+        ).bind(userId).all();
+        for (const row of rows.results || []) {
+            if (Object.prototype.hasOwnProperty.call(settings, row.provider)) {
+                settings[row.provider] = Number(row.show_on_download) !== 0;
+            }
+        }
+    } catch (error) {
+        // Existing installations without Manage Sites default to all ON.
+        if (!/no such table/i.test(String(error?.message || ''))) {
+            console.error('[UPLOAD POLICY] DB lookup failed. Provider uploads skipped:',
+                error?.message || 'unknown');
+            return {pdlink:false, toxcloud:false};
+        }
+    }
+    return {
+        pdlink: settings.gofile || settings.pixeldrain,
+        toxcloud: settings.toxcloud
+    };
+}
+
+// ==================================================
 // RANDOM SHORT ID GENERATOR
 // ==================================================
 
@@ -2749,6 +2785,114 @@ export default {
                 };
             });
         }
+
+        // Verify user keys only with official provider APIs.
+        // TOXCloud handling and upload pipeline are unchanged.
+        async function verifyMirrorProviderKey(providerId, apiKey) {
+            if (providerId !== "gofile" &&
+                providerId !== "pixeldrain") {
+                return null;
+            }
+
+            const endpoint = providerId === "gofile"
+                ? "https://api.gofile.io/accounts/getid"
+                : "https://pixeldrain.com/api/user";
+
+            const authorization = providerId === "gofile"
+                ? "Bearer " + apiKey
+                : "Basic " + btoa(":" + apiKey);
+
+            const controller = new AbortController();
+            const timer = setTimeout(
+                () => controller.abort(),
+                12000
+            );
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: "GET",
+                    headers: {
+                        "Accept": "application/json",
+                        "Authorization": authorization
+                    },
+                    redirect: "manual",
+                    signal: controller.signal
+                });
+
+                if (response.status === 401 ||
+                    response.status === 403) {
+                    return {
+                        status: 400,
+                        message: "Provider rejected this API key"
+                    };
+                }
+
+                if (response.status === 429) {
+                    return {
+                        status: 503,
+                        message: "Provider rate limit. Try later."
+                    };
+                }
+
+                if (!response.ok) {
+                    return {
+                        status: 502,
+                        message: "Provider API unavailable"
+                    };
+                }
+
+                const length = Number(
+                    response.headers.get("content-length") || 0
+                );
+
+                if (length > 65536) {
+                    return {
+                        status: 502,
+                        message: "Unexpected provider response"
+                    };
+                }
+
+                const raw = await response.text();
+
+                if (raw.length > 65536) {
+                    return {
+                        status: 502,
+                        message: "Unexpected provider response"
+                    };
+                }
+
+                const data = JSON.parse(raw);
+
+                const valid = providerId === "gofile"
+                    ? data?.status === "ok" &&
+                      !!data?.data?.id
+                    : typeof data?.id === "string" &&
+                      data.id.length > 0;
+
+                return valid
+                    ? null
+                    : {
+                        status: 400,
+                        message: "Provider API key verification failed"
+                    };
+
+            } catch (error) {
+                console.error(
+                    "[MANAGE SITES] Provider verification failed:",
+                    providerId,
+                    error?.name || "Unknown"
+                );
+
+                return {
+                    status: 503,
+                    message: "Could not verify key with provider"
+                };
+
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
         const isManageSitesApi = url.pathname === '/api/mirror-sites' ||
             url.pathname === '/api/mirror-sites/visibility' ||
             url.pathname === '/api/mirror-sites/key' ||
@@ -2799,6 +2943,19 @@ export default {
                         body.api_key.length > 4096 || /[\x00-\x1f\x7f]/.test(body.api_key)) {
                         return mirrorSiteReply({status:'error',message:'Invalid API key format'},400);
                     }
+                    const keyCheck =
+                        await verifyMirrorProviderKey(
+                            provider.id,
+                            body.api_key
+                        );
+
+                    if (keyCheck) {
+                        return mirrorSiteReply({
+                            status: "error",
+                            message: keyCheck.message
+                        }, keyCheck.status);
+                    }
+
                     // Reuse S-Cloud AES-GCM encryption; never return the secret to browser.
                     const encrypted = await encryptApiKey(body.api_key,env);
                     await env.DB.prepare(`INSERT INTO user_mirror_sites (user_id,provider,encrypted_key)
@@ -7047,67 +7204,79 @@ export default {
                             //
                             // PDLink upload starts first.
                             // Share ID is saved immediately.
-                            // Only after PDLink succeeds, Drivetot
-                            // upload starts.
+                            // Drivetot runs independently even if PDLink is skipped/failed.
                             // =================================
 
-                            console.log(
-                                `[PDLINK] Upload START | file=${shortId} | drive=${scloudFileId}`
-                            );
+                            // Use one PDLink job when EITHER GoFile or Pixeldrain is ON.
+                            // If BOTH are OFF, never send the file to PDLink.
+                            const pdlinkPolicy = await getMirrorUploadPolicy(currentUser.id, env);
+                            if (pdlinkPolicy.pdlink) {
+                                try {
+                                    console.log(
+                                        `[PDLINK] Upload START | file=${shortId} | drive=${scloudFileId}`
+                                    );
 
-                            const pdlinkResult =
-                                await queuePDLinkFile(
-                                    scloudFileId,
-                                    env
-                                );
+                                    const pdlinkResult =
+                                        await queuePDLinkFile(
+                                            scloudFileId,
+                                            env
+                                        );
 
-                            if (
-                                !pdlinkResult ||
-                                !pdlinkResult.share_id
-                            ) {
-                                throw new Error(
-                                    "PDLink Upload Failed: share_id missing."
-                                );
-                            }
-
-                            // =================================
-                            // SAVE PDLINK SHARE ID IMMEDIATELY
-                            // =================================
-
-                            await env.DB
-                                .prepare(
-                                    `UPDATE files
-                                     SET pdlink_share_id = ?
-                                     WHERE id = ?`
-                                )
-                                .bind(
-                                    pdlinkResult.share_id,
-                                    shortId
-                                )
-                                .run();
-                                    {
-                                        const downloadSyncRecord =
-                                            await env.DB
-                                                .prepare(
-                                                    "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
-                                                )
-                                                .bind(
-                                                    shortId,
-                                                    shortId
-                                                )
-                                                .first();
-    
-                                        if (downloadSyncRecord) {
-                                            await syncDownloadMetadata(
-                                                downloadSyncRecord,
-                                                env
-                                            );
-                                        }
+                                    if (
+                                        !pdlinkResult ||
+                                        !pdlinkResult.share_id
+                                    ) {
+                                        throw new Error(
+                                            "PDLink Upload Failed: share_id missing."
+                                        );
                                     }
 
-                            console.log(
-                                `[PDLINK] Share ID saved | file=${shortId} | share=${pdlinkResult.share_id}`
-                            );
+                                    // =================================
+                                    // SAVE PDLINK SHARE ID IMMEDIATELY
+                                    // =================================
+
+                                    await env.DB
+                                        .prepare(
+                                            `UPDATE files
+                                             SET pdlink_share_id = ?
+                                             WHERE id = ?`
+                                        )
+                                        .bind(
+                                            pdlinkResult.share_id,
+                                            shortId
+                                        )
+                                        .run();
+                                            {
+                                                const downloadSyncRecord =
+                                                    await env.DB
+                                                        .prepare(
+                                                            "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                                                        )
+                                                        .bind(
+                                                            shortId,
+                                                            shortId
+                                                        )
+                                                        .first();
+    
+                                                if (downloadSyncRecord) {
+                                                    await syncDownloadMetadata(
+                                                        downloadSyncRecord,
+                                                        env
+                                                    );
+                                                }
+                                            }
+
+                                    console.log(
+                                        `[PDLINK] Share ID saved | file=${shortId} | share=${pdlinkResult.share_id}`
+                                    );
+                                } catch (pdlinkError) {
+                                    // Drivetot/TOXCloud still run if PDLink fails.
+                                    console.error(`[PDLINK] Upload FAILED | file=${shortId}:`,
+                                        pdlinkError?.message || 'unknown');
+                                }
+                            } else {
+                                console.log(`[PDLINK] SKIPPED | file=${shortId} | gofile_and_pixeldrain_off`);
+                            }
 
                             // =================================
                             // STEP 3 - TOXCLOUD
@@ -7121,69 +7290,73 @@ export default {
                             // existing Drivetot flow continues normally.
                             // =================================
 
-                            console.log(
-                                `[TOXCLOUD] Upload START | file=${shortId} | drive=${scloudFileId}`
-                            );
+                            const toxcloudPolicy = await getMirrorUploadPolicy(currentUser.id, env);
+                            if (toxcloudPolicy.toxcloud) {
+                                console.log(
+                                    `[TOXCLOUD] Upload START | file=${shortId} | drive=${scloudFileId}`
+                                );
 
-                            try {
-                                const toxcloudResult =
-                                    await uploadToToxCloud(
-                                        scloudFileId,
-                                        env
-                                    );
+                                try {
+                                    const toxcloudResult =
+                                        await uploadToToxCloud(
+                                            scloudFileId,
+                                            env
+                                        );
 
-                                if (
-                                    toxcloudResult &&
-                                    toxcloudResult.ready &&
-                                    toxcloudResult.download_url
-                                ) {
-                                    await env.DB
-                                        .prepare(
-                                            `UPDATE files
-                                             SET toxcloud_url = ?
-                                             WHERE id = ?`
-                                        )
-                                        .bind(
-                                            toxcloudResult.download_url,
-                                            shortId
-                                        )
-                                        .run();
-                                    {
-                                        const downloadSyncRecord =
-                                            await env.DB
-                                                .prepare(
-                                                    "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
-                                                )
-                                                .bind(
-                                                    shortId,
-                                                    shortId
-                                                )
-                                                .first();
+                                    if (
+                                        toxcloudResult &&
+                                        toxcloudResult.ready &&
+                                        toxcloudResult.download_url
+                                    ) {
+                                        await env.DB
+                                            .prepare(
+                                                `UPDATE files
+                                                 SET toxcloud_url = ?
+                                                 WHERE id = ?`
+                                            )
+                                            .bind(
+                                                toxcloudResult.download_url,
+                                                shortId
+                                            )
+                                            .run();
+                                        {
+                                            const downloadSyncRecord =
+                                                await env.DB
+                                                    .prepare(
+                                                        "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                                                    )
+                                                    .bind(
+                                                        shortId,
+                                                        shortId
+                                                    )
+                                                    .first();
     
-                                        if (downloadSyncRecord) {
-                                            await syncDownloadMetadata(
-                                                downloadSyncRecord,
-                                                env
-                                            );
+                                            if (downloadSyncRecord) {
+                                                await syncDownloadMetadata(
+                                                    downloadSyncRecord,
+                                                    env
+                                                );
+                                            }
                                         }
+
+                                        console.log(
+                                            `[TOXCLOUD] Download URL saved | file=${shortId}`
+                                        );
+                                    } else {
+                                        console.log(
+                                            `[TOXCLOUD] Download URL not ready | file=${shortId} | status=${toxcloudResult?.status || "unknown"}`
+                                        );
                                     }
 
-                                    console.log(
-                                        `[TOXCLOUD] Download URL saved | file=${shortId}`
-                                    );
-                                } else {
-                                    console.log(
-                                        `[TOXCLOUD] Download URL not ready | file=${shortId} | status=${toxcloudResult?.status || "unknown"}`
+                                } catch (toxcloudError) {
+                                    console.error(
+                                        `[TOXCLOUD] Upload FAILED | file=${shortId}:`,
+                                        toxcloudError.message
                                     );
                                 }
-
-                            } catch (toxcloudError) {
-                                console.error(
-                                    `[TOXCLOUD] Upload FAILED | file=${shortId}:`,
-                                    toxcloudError.message
-                                );
+                            } else {
+                                console.log(`[TOXCLOUD] SKIPPED | file=${shortId} | user_off`);
                             }
-
 
                             // =================================
                             // STEP 4 - DRIVETOT
@@ -7511,7 +7684,8 @@ export default {
                 if (
                     !record.pdlink_share_id &&
                     record.drive_url &&
-                    !pdlinkJobs.has(shortId)
+                    !pdlinkJobs.has(shortId) &&
+                    (await getMirrorUploadPolicy(record.user_id, env)).pdlink
                 ) {
 
                     const driveMatch =
@@ -7533,6 +7707,11 @@ export default {
                                     console.log(
                                         `[PDLINK] Self-healing START | file=${shortId} | drive=${driveFileId}`
                                     );
+
+                                    if (!(await getMirrorUploadPolicy(record.user_id, env)).pdlink) {
+                                        console.log(`[PDLINK] Self-healing CANCELLED | file=${shortId} | both_off`);
+                                        return;
+                                    }
 
                                     const pdlinkResult =
                                         await queuePDLinkFile(
@@ -7613,7 +7792,8 @@ export default {
                         if (
                             !record.toxcloud_url &&
                             record.drive_url &&
-                            !toxcloudJobs.has(shortId)
+                            !toxcloudJobs.has(shortId) &&
+                            (await getMirrorUploadPolicy(record.user_id, env)).toxcloud
                         ) {
 
                             const toxDriveMatch =
@@ -7635,6 +7815,11 @@ export default {
                                             console.log(
                                                 `[TOXCLOUD] Self-healing START | file=${shortId} | drive=${toxDriveFileId}`
                                             );
+
+                                            if (!(await getMirrorUploadPolicy(record.user_id, env)).toxcloud) {
+                                                console.log(`[TOXCLOUD] Self-healing CANCELLED | file=${shortId} | user_off`);
+                                                return;
+                                            }
 
                                             const toxcloudResult =
                                                 await uploadToToxCloud(

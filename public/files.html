@@ -459,6 +459,25 @@
                 padding-bottom: 2px;
             }
         }
+
+/* S-Cloud share-code dialog (isolated from existing modals) */
+.scloud-share-overlay{position:fixed;inset:0;z-index:250;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.74);backdrop-filter:blur(5px)}
+.scloud-share-overlay.show{display:flex}
+.scloud-share-dialog{width:100%;max-width:520px;background:#151c2b;color:#fff;border:1px solid rgba(148,163,184,.18);border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.65);max-height:85vh;overflow:auto}
+.scloud-share-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 18px 14px;border-bottom:1px solid rgba(148,163,184,.15)}
+.scloud-share-heading{font-weight:700;font-size:15px}
+.scloud-share-name{color:#94a3b8;font-size:11px;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:5px}
+.scloud-share-close{border:0;background:transparent;color:#94a3b8;font-size:22px;line-height:1;cursor:pointer;padding:2px 6px}
+.scloud-share-tabs{display:flex;flex-wrap:wrap;gap:7px;padding:15px 18px 12px}
+.scloud-share-tab{border:1px solid rgba(148,163,184,.2);color:#cbd5e1;background:#1d283b;padding:8px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer}
+.scloud-share-tab[aria-selected="true"]{background:#2563eb;color:#fff;border-color:#3b82f6}
+.scloud-share-body{padding:0 18px 18px}
+.scloud-share-preview{display:block;box-sizing:border-box;width:100%;min-height:115px;max-height:200px;resize:vertical;border-radius:10px;padding:12px;font-family:monospace;font-size:12px;color:#a5f3fc;background:#0b1020;border:1px solid #334155;overflow-wrap:anywhere;outline:none}
+.scloud-share-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap}
+.scloud-share-help{color:#94a3b8;font-size:11px;flex:1}
+.scloud-share-copy{background:#2563eb;border:0;color:white;padding:10px 18px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer}
+.scloud-share-copy:hover{background:#1d4ed8}
+
     </style>
 </head>
 
@@ -1391,6 +1410,33 @@
 
         </div>
     </div>
+
+
+<!-- Share link/code modal (Download Link, DL HTML, Button HTML, BBCode) -->
+<div id="scShareModal" class="scloud-share-overlay" role="dialog" aria-modal="true" aria-labelledby="scShareTitle" aria-hidden="true">
+  <div class="scloud-share-dialog">
+    <div class="scloud-share-header">
+      <div style="min-width:0">
+        <div id="scShareTitle" class="scloud-share-heading">Share File</div>
+        <div id="scShareFilename" class="scloud-share-name"></div>
+      </div>
+      <button type="button" id="scShareClose" class="scloud-share-close" aria-label="Close share dialog">×</button>
+    </div>
+    <div class="scloud-share-tabs" role="tablist" aria-label="Copy format">
+      <button type="button" class="scloud-share-tab" role="tab" data-sc-mode="link" aria-selected="true">Download Link</button>
+      <button type="button" class="scloud-share-tab" role="tab" data-sc-mode="dl_html" aria-selected="false">DL HTML</button>
+      <button type="button" class="scloud-share-tab" role="tab" data-sc-mode="button_html" aria-selected="false">Button HTML</button>
+      <button type="button" class="scloud-share-tab" role="tab" data-sc-mode="bbcode" aria-selected="false">BBCode</button>
+    </div>
+    <div class="scloud-share-body">
+      <textarea id="scShareValue" class="scloud-share-preview" readonly aria-label="Download code"></textarea>
+      <div class="scloud-share-actions">
+        <span id="scShareHelp" class="scloud-share-help">Permanent S-Cloud download link</span>
+        <button type="button" id="scShareCopy" class="scloud-share-copy">Copy</button>
+      </div>
+    </div>
+  </div>
+</div>
 
     <script>
         /* ============================================================
@@ -2980,88 +3026,19 @@
            COPY LINK
            ============================================================ */
 
-        async function copyFileLinkById(fileId, button = null) {
-
-            const file =
-                findFileById(fileId);
-
-            if (!file) {
+        function copyFileLinkById(fileId, button = null) {
+            const file = findFileById(fileId);
+            if (!file) return;
+            if (!isSharingEnabled(file) || isDeleted(file)) {
+                showToast("error", "Sharing Is Off", "Turn sharing on before sharing this link.");
                 return;
             }
-
-            if (!isSharingEnabled(file)) {
-                showToast("error", "Sharing Is Off", "Turn sharing on before copying this link.");
-                return;
-            }
-
-            const link =
-                getFileLink(file);
-
+            const link = getFileLink(file);
             if (!link) {
-                showToast(
-                    "error",
-                    "Copy Failed",
-                    "This file does not have an active link."
-                );
-
+                showToast("error", "Link Missing", "This file does not have an active link.");
                 return;
             }
-
-            const success =
-                await copyText(link);
-
-            if (!success) {
-                showToast(
-                    "error",
-                    "Copy Failed",
-                    "Unable to copy the link."
-                );
-
-                return;
-            }
-
-            if (button) {
-
-                const original =
-                    button.innerHTML;
-
-                button.innerHTML = `
-                    <svg
-                        class="w-4 h-4 text-emerald-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M5 13l4 4L19 7"
-                        ></path>
-                    </svg>
-                `;
-
-                button.classList.add(
-                    "bg-emerald-500/10"
-                );
-
-                setTimeout(() => {
-
-                    button.innerHTML =
-                        original;
-
-                    button.classList.remove(
-                        "bg-emerald-500/10"
-                    );
-
-                }, 1500);
-            }
-
-            showToast(
-                "success",
-                "Link Copied",
-                "Short file link copied to clipboard."
-            );
+            scOpenShareModal(link, getFileName(file));
         }
 
 
@@ -4088,6 +4065,122 @@
                 await loadFiles();
             }
         );
+
+/* ============================================================
+   SCLOUD SHARE POPUP - same permanent /d link in all formats
+   ============================================================ */
+let scShareData = null;
+let scShareMode = "link";
+let scShareReturnFocus = null;
+
+function scShareCode(mode, data) {
+    if (!data) return "";
+    const link = data.link;
+    const title = data.title || "File";
+    const safeLink = escapeHtml(link);
+    const safeName = escapeHtml(title);
+    if (mode === "dl_html") {
+        return `<a href="${safeLink}" target="_blank" rel="noopener noreferrer">Download ${safeName}</a>`;
+    }
+    if (mode === "button_html") {
+        return `<a href="${safeLink}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 22px;background:#2563eb;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">Download Now</a>`;
+    }
+    if (mode === "bbcode") {
+        const name = title.replace(/\[/g,"(").replace(/\]/g,")").replace(/[\r\n]/g," ");
+        return `[url=${link}]Download ${name}[/url]`;
+    }
+    return link;
+}
+
+function scShareSelectMode(mode) {
+    if (!scShareData || !["link","dl_html","button_html","bbcode"].includes(mode)) return;
+    scShareMode = mode;
+    document.querySelectorAll("#scShareModal [data-sc-mode]").forEach(button => {
+        button.setAttribute("aria-selected", String(button.dataset.scMode === mode));
+    });
+    const value = document.getElementById("scShareValue");
+    if (value) value.value = scShareCode(mode, scShareData);
+    const help = document.getElementById("scShareHelp");
+    if (help) help.textContent = mode === "link"
+        ? "Permanent S-Cloud download link"
+        : mode === "bbcode" ? "For forums supporting BBCode" : "HTML code for your website or blog";
+}
+
+function scOpenShareModal(link, title) {
+    if (!link || !/^https:\/\//i.test(link)) return;
+    scShareData = {link: String(link), title: String(title || "File")};
+    scShareReturnFocus = document.activeElement;
+    const modal = document.getElementById("scShareModal");
+    if (!modal) return;
+    const heading = document.getElementById("scShareFilename");
+    if (heading) heading.textContent = scShareData.title;
+    modal.classList.add("show");
+    modal.setAttribute("aria-hidden","false");
+    document.body.classList.add("modal-open");
+    scShareSelectMode("link");
+    document.getElementById("scShareCopy")?.focus();
+}
+
+function scCloseShareModal() {
+    const modal = document.getElementById("scShareModal");
+    if (!modal) return;
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden","true");
+    scShareData = null;
+    if (!document.querySelector(".modal-backdrop.show")) {
+        document.body.classList.remove("modal-open");
+    }
+    scShareReturnFocus?.focus?.();
+    scShareReturnFocus = null;
+}
+
+async function scCopyShareValue() {
+    if (!scShareData) return;
+    const text = scShareCode(scShareMode, scShareData);
+    let success = false;
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            success = true;
+        } else {
+            const input = document.createElement("textarea");
+            input.value = text;
+            input.style.cssText = "position:fixed;opacity:0;pointer-events:none";
+            document.body.appendChild(input);
+            input.focus();input.select();
+            success = document.execCommand("copy");
+            input.remove();
+        }
+    } catch(error) {
+        console.error("Share code copy failed:", error);
+    }
+    if (success) {
+        const button = document.getElementById("scShareCopy");
+        if (button) {
+            button.textContent = "Copied!";
+            setTimeout(() => { if (button.isConnected) button.textContent = "Copy"; }, 1400);
+        }
+        if (typeof showToast === "function") showToast("success", "Copied", "Share code copied to clipboard.");
+    } else if (typeof showToast === "function") {
+        showToast("error", "Copy Failed", "Unable to copy share code.");
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const modal = document.getElementById("scShareModal");
+    modal?.addEventListener("click", event => { if (event.target === modal) scCloseShareModal(); });
+    document.getElementById("scShareClose")?.addEventListener("click",scCloseShareModal);
+    document.getElementById("scShareCopy")?.addEventListener("click",scCopyShareValue);
+    document.querySelectorAll("#scShareModal [data-sc-mode]").forEach(button => {
+        button.addEventListener("click", () => scShareSelectMode(button.dataset.scMode));
+    });
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && modal?.classList.contains("show")) {
+            event.stopPropagation();scCloseShareModal();
+        }
+    }, true);
+});
+
     </script>
 
 </body>
