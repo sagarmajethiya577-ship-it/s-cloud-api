@@ -1746,6 +1746,14 @@
                     data.user ||
                     data;
 
+
+                if(user.support_read_only && !document.getElementById('v4SupportBanner')) {
+                    const banner=document.createElement('div');banner.id='v4SupportBanner';banner.className='sticky top-0 z-[100] bg-[#0a0e17] border-b border-amber-500/50 p-3 flex flex-wrap gap-3 items-center justify-center text-sm text-amber-300';
+                    const label=document.createElement('span');label.textContent='Admin view (read-only) • '+(user.email||user.name);banner.appendChild(label);
+                    const exit=document.createElement('button');exit.textContent='Return to Admin';exit.className='px-3 py-1 rounded-lg border border-amber-500/50';exit.onclick=async()=>{const res=await fetch('/api/admin/support/exit',{method:'POST',credentials:'include'});if(res.ok)location.href='/admin';else alert('Could not exit support mode.');};banner.appendChild(exit);document.body.prepend(banner);
+                    document.querySelectorAll('a[href]').forEach(a=>{const href=a.getAttribute('href');if(['/upload','/api','/settings','/manage-sites','/withdraw'].includes(href)) {a.setAttribute('aria-disabled','true');a.classList.add('opacity-50');a.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();},true);}});
+                }
+
                 const name =
                     user.name ||
                     user.email ||

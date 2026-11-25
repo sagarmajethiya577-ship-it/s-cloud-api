@@ -37,7 +37,7 @@ function parseDriveFolderId(value, number) {
     return folder;
 }
 
-function getDrivePoolConfigurations(env) {
+function getDrivePoolConfigurations(env, metadataOnly = false) {
     const numbers = configuredAccountNumbers(env);
     const accounts = [];
     for (const number of numbers) {
@@ -48,12 +48,12 @@ function getDrivePoolConfigurations(env) {
         const folderRaw = number === 1
             ? (env.DRIVE_FOLDER_ID || LEGACY_ACCOUNT_ONE_FOLDER)
             : env[`DRIVE_FOLDER_ID_${number}`];
-        if (!clientId || !clientSecret || !refreshToken || !String(folderRaw || "").trim()) {
+        if (!clientId || !clientSecret || !refreshToken || (!metadataOnly && !String(folderRaw || "").trim())) {
             console.warn(`[DRIVE POOL] Account ${number} skipped: incomplete OAuth/folder configuration`);
             continue;
         }
         let folderId;
-        try { folderId = parseDriveFolderId(folderRaw, number); }
+        try { folderId = metadataOnly ? null : parseDriveFolderId(folderRaw, number); }
         catch (_) {
             console.warn(`[DRIVE POOL] Account ${number} skipped: invalid folder`);
             continue;
@@ -87,8 +87,8 @@ async function getAccessToken(clientId, clientSecret, refreshToken) {
     return data.access_token;
 }
 
-async function chooseDriveAccount(env, sourceFileId, requiredAccountNumber = null) {
-    const configured = getDrivePoolConfigurations(env);
+async function chooseDriveAccount(env, sourceFileId, requiredAccountNumber = null, metadataOnly = false) {
+    const configured = getDrivePoolConfigurations(env, metadataOnly);
     const accounts = requiredAccountNumber == null
         ? configured
         : configured.filter(account => account.number === requiredAccountNumber);
@@ -134,6 +134,7 @@ async function chooseDriveAccount(env, sourceFileId, requiredAccountNumber = nul
                 console.warn(`[DRIVE POOL] Account ${account.number} cannot access source (HTTP ${sourceCheck.status})`);
                 continue;
             }
+            if (metadataOnly) return { account, token };
             // Check the destination folder with the SAME identity before
             // performing any irreversible files.copy operation.
             const folderCheck = await fetch(
@@ -167,6 +168,11 @@ function formatFileSize(bytes) {
         return (size / (1024 * 1024 * 1024)).toFixed(2) + " GB";
     }
     return (size / (1024 * 1024)).toFixed(2) + " MB";
+}
+
+export async function selectDriveMetadataAccount(sourceFileId, env) {
+    if (!/^[A-Za-z0-9_-]{10,200}$/.test(String(sourceFileId))) throw new Error("Invalid Drive ID");
+    return chooseDriveAccount(env, sourceFileId, null, true);
 }
 
 export async function selectDriveCopyAccount(sourceFileId, env, options = {}) {

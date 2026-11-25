@@ -1343,6 +1343,7 @@ document.getElementById(
                                 >Save</button>
                             </div>
                             <div class="text-[10px] text-gray-500 mt-1">Blank = unlimited; 0 = blocked</div>
+                            <div class="text-xs text-gray-400 mt-3 mb-1">Files per folder</div><div class="flex items-center gap-2"><input id="folder-limit-${user.id}" type="number" min="0" max="1000" step="1" value="${Number(user.folder_upload_limit ?? 20)}" class="w-24 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs outline-none"><button onclick="saveFolderLimit('${user.id}')" class="text-xs text-red-400">Save</button></div><div class="text-[10px] text-gray-500 mt-1">0 = disabled; default 20</div>
                         </td>
 
                         <td class="p-4">
@@ -1380,7 +1381,7 @@ document.getElementById(
                                     : 'Ban'
                                 }
                             </button>
-
+                            <button onclick="openUserAccount('${user.id}')" class="mt-2 block px-3 py-1.5 rounded-lg text-xs bg-cyan-500/10 text-cyan-400">Open account</button>
                         </td>
 
                     </tr>
@@ -1489,6 +1490,15 @@ document.getElementById(
     }
 
 
+    async function saveFolderLimit(userId) {
+        const raw=document.getElementById('folder-limit-'+userId).value.trim(), limit=Number(raw);
+        if(!raw||!Number.isInteger(limit)||limit<0||limit>1000){toast('Enter a folder limit from 0 to 1000');return;}
+        try{await api('/api/admin/user/folder-limit',{method:'POST',body:JSON.stringify({user_id:userId,folder_limit:limit})});toast('Folder upload limit updated');loadUsers();}catch(e){toast(e.message);}
+    }
+    async function openUserAccount(userId){
+        if(!confirm('Open this user dashboard in read-only support mode?'))return;
+        try{await api('/api/admin/support/start',{method:'POST',body:JSON.stringify({user_id:userId})});location.href='/dashboard';}catch(e){toast(e.message);}
+    }
     async function saveUploadLimit(userId) {
         const input = document.getElementById('upload-limit-' + userId);
         const raw = input.value.trim();

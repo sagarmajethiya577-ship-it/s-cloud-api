@@ -1082,6 +1082,7 @@
             class="hidden"
         >
 
+<div class="glass-card p-3 mb-3 flex flex-wrap gap-2 items-center"><span id="v4SelectedCount" class="text-xs text-cyan-400 font-semibold mr-2" aria-live="polite">0 selected</span><button data-v4-select class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4Select('page')">Select page</button><button data-v4-select class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4Select('all')">Select all matching</button><button data-v4-select class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4Select('clear')">Clear</button><button data-v4-action disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-cyan-400" onclick="v4ShowLinks()">Bulk links</button><button data-v4-action disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-emerald-400" onclick="v4ConfirmAction('on')">Sharing ON</button><button data-v4-action disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4ConfirmAction('off')">Sharing OFF</button><button data-v4-action disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-red-400" onclick="v4ConfirmAction('delete')">Bulk delete</button></div>
             <!-- Desktop Table -->
             <div
                 id="desktopFiles"
@@ -1516,6 +1517,38 @@
            ============================================================ */
 
         let allFiles = [];
+
+        const v4Selected=new Set(); let v4BulkBusy=false; let v4SupportReadOnly=false;
+        function v4Id(f){return String(f.short_id||f.id||'');}
+        function v4SelectedFiles(){return allFiles.filter(f=>v4Selected.has(v4Id(f))&&!isDeleted(f));}
+        function v4UpdateSelection(){
+            const existing=new Set(allFiles.filter(f=>!isDeleted(f)).map(v4Id)); for(const id of v4Selected) if(!existing.has(id)) v4Selected.delete(id);
+            document.querySelectorAll('.v4-file-check').forEach(c=>c.checked=v4Selected.has(c.dataset.selectId));
+            const box=$('v4SelectedCount'); if(box) box.textContent=v4Selected.size+' selected';
+            document.querySelectorAll('[data-v4-action]').forEach(b=>b.disabled=v4SupportReadOnly||v4BulkBusy||!v4Selected.size);
+            document.querySelectorAll('[data-v4-select],.v4-file-check').forEach(b=>b.disabled=v4BulkBusy || (b.classList.contains('v4-file-check') && !existing.has(b.dataset.selectId)));
+        }
+        function v4ToggleFile(c){if(v4BulkBusy)return; if(c.checked)v4Selected.add(c.dataset.selectId);else v4Selected.delete(c.dataset.selectId);v4UpdateSelection();}
+        function v4Select(mode){if(v4BulkBusy)return; if(mode==='clear')v4Selected.clear();else {const rows=mode==='page'?filteredFiles.slice((currentPage-1)*FILES_PER_PAGE,currentPage*FILES_PER_PAGE):filteredFiles;rows.filter(f=>!isDeleted(f)).forEach(f=>v4Selected.add(v4Id(f)));}v4UpdateSelection();}
+        function v4ShowLinks(){const files=v4SelectedFiles().filter(f=>isSharingEnabled(f)&&getFileLink(f)); if(!files.length){showToast('error','No Active Links','Turn sharing on for selected files first.');return;} $('v4BulkLinks').value=files.map(getFileLink).join('\n');$('v4BulkLinksTitle').textContent=files.length+' active links • '+(v4Selected.size-files.length)+' skipped';$('v4BulkModal').classList.remove('hidden');$('v4BulkModal').classList.add('flex');}
+        function v4CloseLinks(){$('v4BulkModal').classList.add('hidden');$('v4BulkModal').classList.remove('flex');}
+        async function v4CopyLinks(){const ok=await copyText($('v4BulkLinks').value);showToast(ok?'success':'error',ok?'Links Copied':'Copy Failed',ok?'Selected links copied.':'Select and copy the text manually.');}
+        function v4ConfirmAction(action){if(v4SupportReadOnly||v4BulkBusy||!v4Selected.size)return;const modal=$('v4ConfirmModal'); $('v4ConfirmText').textContent=action==='delete'?`Permanently delete ${v4Selected.size} selected S-Cloud files? This cannot be undone.`:`Turn sharing ${action==='on'?'ON':'OFF'} for ${v4Selected.size} selected files?`; $('v4ConfirmButton').onclick=()=>{v4CloseConfirm();v4BulkAction(action);};modal.classList.remove('hidden');modal.classList.add('flex');}
+        function v4CloseConfirm(){$('v4ConfirmModal').classList.add('hidden');$('v4ConfirmModal').classList.remove('flex');}
+        async function v4BulkAction(action){
+            if(v4SupportReadOnly||v4BulkBusy)return;const files=v4SelectedFiles();if(!files.length)return;
+            v4BulkBusy=true;v4UpdateSelection();let done=0,failed=0;
+            try {
+                // Sequential owner-checked calls preserve existing D1/download sync behavior.
+                for(const file of files){const id=v4Id(file);try{
+                    const res=await fetch(action==='delete'?'/api/delete':'/api/sharing',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(action==='delete'?{id,file_id:id}:{file_id:id,enabled:action==='on'})});
+                    const data=await res.json();if(!res.ok||data.status!=='success')throw new Error(data.message||'Failed');
+                    done++;v4Selected.delete(id);if(action==='delete')allFiles=allFiles.filter(f=>v4Id(f)!==id);else file.sharing_enabled=action==='on'?1:0;
+                }catch(e){failed++;} $('v4SelectedCount').textContent=`Processed ${done+failed}/${files.length}`;}
+                showToast(failed?'error':'success','Bulk Action Complete',`${done} successful, ${failed} failed. Failed files remain selected.`);
+            } finally {v4BulkBusy=false;applyFilters();v4UpdateSelection();}
+        }
+
         let filteredFiles = [];
 
         let currentPage = 1;
@@ -1778,9 +1811,19 @@
                 }
 
                 const user =
+                    data.userData ||
                     data.user ||
                     data.data ||
                     data;
+
+
+                if(user.support_read_only && !document.getElementById('v4SupportBanner')) {
+                    v4SupportReadOnly=true;v4UpdateSelection();
+                    const banner=document.createElement('div');banner.id='v4SupportBanner';banner.className='sticky top-0 z-[100] bg-[#0a0e17] border-b border-amber-500/50 p-3 flex flex-wrap gap-3 items-center justify-center text-sm text-amber-300';
+                    const label=document.createElement('span');label.textContent='Admin view (read-only) • '+(user.email||user.name);banner.appendChild(label);
+                    const exit=document.createElement('button');exit.textContent='Return to Admin';exit.className='px-3 py-1 rounded-lg border border-amber-500/50';exit.onclick=async()=>{const res=await fetch('/api/admin/support/exit',{method:'POST',credentials:'include'});if(res.ok)location.href='/admin';else alert('Could not exit support mode.');};banner.appendChild(exit);document.body.prepend(banner);
+                    document.querySelectorAll('a[href]').forEach(a=>{const href=a.getAttribute('href');if(['/upload','/api','/settings','/manage-sites','/withdraw'].includes(href)) {a.setAttribute('aria-disabled','true');a.classList.add('opacity-50');a.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();},true);}});
+                }
 
                 const name =
                     user.name ||
@@ -1822,7 +1865,7 @@
 
         async function loadFiles(showRefresh = false) {
 
-            if (isLoadingFiles) {
+            if (isLoadingFiles || v4BulkBusy) {
                 return;
             }
 
@@ -2423,6 +2466,7 @@
            ============================================================ */
 
         function renderFiles() {
+            v4UpdateSelection();
 
             const content = $("filesContent");
             const empty = $("emptyState");
@@ -2464,6 +2508,7 @@
             renderDesktop();
             renderMobile();
             renderPagination();
+            v4UpdateSelection();
         }
 
 
@@ -2662,6 +2707,7 @@
                     <td class="px-6 py-4">
                         <div class="flex items-center gap-3">
 
+<input type="checkbox" class="v4-file-check w-4 h-4 accent-cyan-500 shrink-0" aria-label="Select file" data-select-id="${safeId}" ${v4Selected.has(String(shortId))?'checked':''} ${deleted?'disabled':''} onchange="v4ToggleFile(this)">
                             <div class="${iconClass}">
                                 ${icon.icon}
                             </div>
@@ -2870,6 +2916,7 @@
 
                     <div class="flex items-start gap-3">
 
+<input type="checkbox" class="v4-file-check w-4 h-4 accent-cyan-500 shrink-0" aria-label="Select file" data-select-id="${safeId}" ${v4Selected.has(String(shortId))?'checked':''} ${deleted?'disabled':''} onchange="v4ToggleFile(this)">
                         <div class="file-icon ${icon.type}">
                             ${icon.icon}
                         </div>
@@ -2969,6 +3016,7 @@
            ============================================================ */
 
         function openActionMenu(fileId, button, event) {
+            if(v4SupportReadOnly){showToast("error","Read-only admin view","Return to Admin before changing files.");return;}
 
             if (event) {
                 event.preventDefault();
@@ -4250,5 +4298,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     </script>
 
+<div id="v4BulkModal" class="hidden fixed inset-0 z-[100] bg-black/70 items-center justify-center p-4" role="dialog" aria-modal="true"><div class="glass-card p-5 rounded-2xl w-full max-w-lg bg-[#0a0e17]"><h3 class="text-lg font-semibold mb-2">Bulk Share Links</h3><p id="v4BulkLinksTitle" class="text-xs text-gray-400 mb-3"></p><textarea id="v4BulkLinks" readonly class="search-input w-full h-48 rounded-xl p-3 text-xs text-cyan-400"></textarea><div class="flex justify-end gap-2 mt-3"><button class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4CloseLinks()">Close</button><button class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-cyan-400" onclick="v4CopyLinks()">Copy all links</button></div></div></div>
+<div id="v4ConfirmModal" class="hidden fixed inset-0 z-[100] bg-black/70 items-center justify-center p-4" role="dialog" aria-modal="true"><div class="glass-card p-5 rounded-2xl w-full max-w-sm bg-[#0a0e17]"><h3 class="text-lg font-semibold mb-2">Confirm bulk action</h3><p id="v4ConfirmText" class="text-sm text-gray-300"></p><div class="flex justify-end gap-2 mt-4"><button class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4CloseConfirm()">Cancel</button><button id="v4ConfirmButton" class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-red-400">Confirm</button></div></div></div>
 </body>
 </html>

@@ -1,8 +1,9 @@
-import { copyFileToSCloud, selectDriveCopyAccount } from "./drive-handler.js";
+import { copyFileToSCloud, selectDriveCopyAccount, selectDriveMetadataAccount } from "./drive-handler.js";
 import {
     ensureScloudJobTables,
     newMirrorJobStatements,
     hasCronMirrorJobs,
+    healScloudMirrorJobs,
     executeScloudMirrorJob,
     reconcileScloudJobs,
     executeScloudCleanupJob
@@ -992,11 +993,57 @@ async function createSession(
 }
 
 
+// V4 folder settings: separate per-user cap, existing daily quota remains authoritative.
+async function ensureV4Limits(env) {
+    await env.DB.batch([
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_folder_upload_limits (user_id INTEGER PRIMARY KEY, folder_limit INTEGER NOT NULL CHECK(folder_limit BETWEEN 0 AND 1000))`),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_daily_upload_usage (user_id INTEGER NOT NULL, usage_date TEXT NOT NULL, uploads_count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(user_id,usage_date))`)
+    ]);
+}
+async function v4UploadLimits(env, userId) {
+    await ensureV4Limits(env);
+    const row = await env.DB.prepare(`SELECT (SELECT daily_limit FROM user_upload_limits WHERE user_id=?) AS daily_limit, COALESCE((SELECT uploads_count FROM user_daily_upload_usage WHERE user_id=? AND usage_date=date('now')),0) AS uploads_today, COALESCE((SELECT folder_limit FROM user_folder_upload_limits WHERE user_id=?),20) AS folder_limit`).bind(userId,userId,userId).first();
+    return {...row, remaining: row.daily_limit == null ? null : Math.max(0,Number(row.daily_limit)-Number(row.uploads_today))};
+}
+function v4DriveId(value, folder=false) {
+    try {
+        const u=new URL(String(value));
+        if (u.protocol!=="https:" || u.hostname!=="drive.google.com" || u.username || u.password || u.port) return null;
+        const id=folder ? u.pathname.match(/\/folders\/([A-Za-z0-9_-]{10,200})(?:\/|$)/)?.[1] : (u.pathname.match(/\/file\/d\/([A-Za-z0-9_-]{10,200})(?:\/|$)/)?.[1] || (['/open','/uc'].includes(u.pathname) ? u.searchParams.get('id') : null));
+        return /^[A-Za-z0-9_-]{10,200}$/.test(id||'') ? id : null;
+    } catch { return null; }
+}
+async function v4ListFolder(folderId, env, limit) {
+    const {token}=await selectDriveMetadataAccount(folderId,env);
+    const files=[]; let pageToken; let pages=0;
+    do {
+        const params=new URLSearchParams({q:`'${folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,supportsAllDrives:'true',includeItemsFromAllDrives:'true',pageSize:'100',fields:'nextPageToken,files(id,name,mimeType)',orderBy:'name'});
+        if(pageToken) params.set('pageToken',pageToken);
+        const res=await fetch('https://www.googleapis.com/drive/v3/files?'+params,{headers:{Authorization:`Bearer ${token}`}});
+        const data=await res.json(); if(!res.ok) throw new Error('Google Drive folder listing failed');
+        for(const f of data.files||[]) if(f.id && f.mimeType!=='application/vnd.google-apps.folder') files.push({id:f.id,name:f.name||'Unnamed file'});
+        pageToken=data.nextPageToken;
+        if(++pages>=20) break;
+    } while(pageToken && files.length<=limit);
+    return {files:files.slice(0,limit),truncated:files.length>limit||!!pageToken};
+}
+const V4_SUPPORT_COOKIE='scloud_support';
+const V4_OWNER_EMAIL="sagarmajethiya444@gmail.com";
+const v4SupportClear=()=>`${V4_SUPPORT_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+async function v4SupportUser(request,env,admin) {
+    const token=getCookie(request,V4_SUPPORT_COOKIE);
+    if(!token || !admin || String(admin.email).toLowerCase()!==V4_OWNER_EMAIL) return null;
+    const tokenHash=await sha256Hex(token), adminHash=await sha256Hex(getCookie(request,'scloud_session')||'');
+    const row=await env.DB.prepare(`SELECT u.id,u.name,u.email,u.shared_by,u.shared_by_enabled,u.shared_by_url,u.role,u.balance,u.custom_cpm,u.status,u.last_login_ip,u.created_at FROM scloud_admin_support s JOIN users u ON u.id=s.target_id WHERE s.token_hash=? AND s.admin_id=? AND s.admin_session_hash=? AND s.expires_at>? AND s.ended_at IS NULL`).bind(tokenHash,admin.id,adminHash,Date.now()).first();
+    return row ? {...row,support_read_only:true} : null;
+}
+
 // ==================================================
 // GET CURRENT USER
 // ==================================================
 
-async function getCurrentUser(
+async function getActualSessionUser(
     request,
     env
 ) {
@@ -1109,6 +1156,11 @@ async function getCurrentUser(
 }
 
 
+async function getCurrentUser(request,env) {
+    const admin=await getActualSessionUser(request,env);
+    if(!getCookie(request,V4_SUPPORT_COOKIE)) return admin;
+    return v4SupportUser(request,env,admin);
+}
 // ==================================================
 // DELETE CURRENT SESSION
 // ==================================================
@@ -2025,7 +2077,11 @@ async function prepareFastLinks(shortId, env) {
 
             // Cron-managed uploads must not start the legacy Drivetot/fast-link
             // process from /d/:id; that would duplicate submissions.
-            if (await hasCronMirrorJobs(shortId, env)) return;
+            const canonicalId = String(record.short_id || shortId);
+            if (await hasCronMirrorJobs(canonicalId, env)) {
+                await healScloudMirrorJobs(canonicalId, env, getMirrorUploadPolicy, syncDownloadMetadata);
+                return;
+            }
 
             console.log(
                 `[FAST] Record loaded ${shortId} | ` +
@@ -2500,6 +2556,26 @@ export default {
                 request.url
             );
 
+
+        // V4 support mode never grants a target session or write privileges.
+        if (getCookie(request,V4_SUPPORT_COOKIE)) {
+            if (url.pathname==='/api/admin/support/exit' && request.method==='POST') {
+                if (request.headers.get('Origin')!==url.origin) return jsonResponse({status:'error',message:'Invalid origin'},403);
+                const actual=await getActualSessionUser(request,env);
+                if(actual && String(actual.email).toLowerCase()===V4_OWNER_EMAIL) {
+                    try { await env.DB.prepare(`UPDATE scloud_admin_support SET ended_at=? WHERE token_hash=? AND admin_id=? AND admin_session_hash=?`).bind(Date.now(),await sha256Hex(getCookie(request,V4_SUPPORT_COOKIE)),actual.id,await sha256Hex(getCookie(request,'scloud_session')||'')).run(); } catch(e) { console.error('[SUPPORT] exit audit failed'); }
+                }
+                return new Response(JSON.stringify({status:'success'}),{headers:{...jsonHeaders(),'Set-Cookie':v4SupportClear(),'Cache-Control':'no-store'}});
+            }
+            const path=url.pathname, method=request.method;
+            const allowed=(method==='GET' && ['/dashboard','/dashboard.html','/files','/files.html','/api/me','/api/dashboard'].includes(path)) || (method==='POST' && path==='/api/files');
+            const asset=method==='GET' && /^\/(css|js|images|assets)\//.test(path) && !path.endsWith('.html');
+            if(!allowed && !asset) return jsonResponse({status:'error',code:'SUPPORT_READ_ONLY',message:'Read-only admin view. Return to Admin before changing anything.'},403);
+            if(allowed && !await getCurrentUser(request,env)) {
+                if(path.startsWith('/api/')) return jsonResponse({status:'error',code:'SUPPORT_EXPIRED',message:'Support session expired. Return to Admin.'},403);
+                return new Response(null,{status:302,headers:{Location:'/admin','Set-Cookie':v4SupportClear()}});
+            }
+        }
 
         // ==================================================
         // SCLOUD CRON JOB SERVICE BINDING (SECRET REQUIRED)
@@ -3116,6 +3192,7 @@ export default {
 
                 const sendAdminJson = (payload, status = 200) => new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, ...jsonHeaders() } });
                 const path = url.pathname;
+                await ensureV4Limits(env);
 
                 if (path === "/api/admin/overview" && request.method === "GET") {
                     const [users, files, paid, pending] = await Promise.all([
@@ -3129,8 +3206,26 @@ export default {
                 }
 
                 if (path === "/api/admin/users" && request.method === "GET") {
-                    const result = await env.DB.prepare(`SELECT u.id, u.name, u.email, u.balance, u.custom_cpm, u.status, (SELECT COUNT(*) FROM files f WHERE f.user_id = u.id) AS file_count, ul.daily_limit AS daily_upload_limit, COALESCE(du.uploads_count, 0) AS uploads_today FROM users u LEFT JOIN user_upload_limits ul ON ul.user_id = u.id LEFT JOIN user_daily_upload_usage du ON du.user_id = u.id AND du.usage_date = date('now') ORDER BY u.id DESC LIMIT 500`).all();
+                    const result = await env.DB.prepare(`SELECT u.id, u.name, u.email, u.balance, u.custom_cpm, u.status, (SELECT COUNT(*) FROM files f WHERE f.user_id = u.id) AS file_count, ul.daily_limit AS daily_upload_limit, COALESCE((SELECT folder_limit FROM user_folder_upload_limits WHERE user_id=u.id),20) AS folder_upload_limit, COALESCE(du.uploads_count, 0) AS uploads_today FROM users u LEFT JOIN user_upload_limits ul ON ul.user_id = u.id LEFT JOIN user_daily_upload_usage du ON du.user_id = u.id AND du.usage_date = date('now') ORDER BY u.id DESC LIMIT 500`).all();
                     return sendAdminJson({ status: "success", data: result.results || [] });
+                }
+
+                if(path==='/api/admin/user/folder-limit' && request.method==='POST') {
+                    const body=await request.json(), id=Number(body.user_id), limit=Number(body.folder_limit);
+                    if(!Number.isSafeInteger(id)||id<1||body.folder_limit==null||body.folder_limit===''||!Number.isInteger(limit)||limit<0||limit>1000) return sendAdminJson({status:'error',message:'Folder limit must be 0–1000'},400);
+                    if(!await env.DB.prepare('SELECT id FROM users WHERE id=?').bind(id).first()) return sendAdminJson({status:'error',message:'User not found'},404);
+                    await env.DB.prepare(`INSERT INTO user_folder_upload_limits(user_id,folder_limit) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET folder_limit=excluded.folder_limit`).bind(id,limit).run();
+                    return sendAdminJson({status:'success'});
+                }
+                if(path==='/api/admin/support/start' && request.method==='POST') {
+                    if(request.headers.get('Origin')!==url.origin) return sendAdminJson({status:'error',message:'Invalid origin'},403);
+                    const body=await request.json(), targetId=Number(body.user_id);
+                    if(!Number.isSafeInteger(targetId)||targetId<1||targetId===adminUser.id) return sendAdminJson({status:'error',message:'Select another user'},400);
+                    if(!await env.DB.prepare('SELECT id FROM users WHERE id=?').bind(targetId).first()) return sendAdminJson({status:'error',message:'User not found'},404);
+                    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_admin_support(token_hash TEXT PRIMARY KEY, admin_id INTEGER NOT NULL, admin_session_hash TEXT NOT NULL, target_id INTEGER NOT NULL, expires_at INTEGER NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER)`).run();
+                    const token=generateSessionToken(), hash=await sha256Hex(token), now=Date.now();
+                    await env.DB.prepare(`INSERT INTO scloud_admin_support(token_hash,admin_id,admin_session_hash,target_id,expires_at,started_at) VALUES(?,?,?,?,?,?)`).bind(hash,adminUser.id,await sha256Hex(getCookie(request,'scloud_session')||''),targetId,now+900000,now).run();
+                    return new Response(JSON.stringify({status:'success'}),{headers:{...jsonHeaders(),'Set-Cookie':`${V4_SUPPORT_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=86400`,'Cache-Control':'no-store'}});
                 }
 
                 if (path === "/api/admin/user/upload-limit" && request.method === "POST") {
@@ -6656,8 +6751,14 @@ export default {
 
 
         // ==================================================
-        // GOOGLE DRIVE FOLDER FILE LIST (max 20)
+        // GOOGLE DRIVE FOLDER FILE LIST (per-user cap)
         // ==================================================
+
+        if(url.pathname==='/api/upload-limits' && request.method==='GET') {
+            const user=await getCurrentUser(request,env);
+            if(!user) return jsonResponse({status:'error',message:'Authentication required'},401);
+            return jsonResponse({status:'success',data:await v4UploadLimits(env,user.id)});
+        }
 
         if (
             url.pathname === "/api/folder-files" &&
@@ -6666,46 +6767,15 @@ export default {
             try {
                 const body = await request.json();
                 const folderUrl = String(body?.folder_url || "").trim();
-                const folderId = extractFolderId(folderUrl);
-
-                if (!folderId || !folderUrl.includes("drive.google.com")) {
-                    return new Response(JSON.stringify({
-                        status: "error",
-                        message: "Please enter a valid Google Drive folder link."
-                    }), { status: 400, headers: { ...corsHeaders, ...jsonHeaders() } });
-                }
-
-                const token = (await selectDriveCopyAccount(folderId, env)).token;
-
-                const listRes = await fetch(
-                    `https://www.googleapis.com/drive/v3/files?q='${encodeURIComponent(folderId)}'+in+parents&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=100&fields=nextPageToken,files(id,name,size,mimeType)`,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-                const listData = await listRes.json();
-
-                if (!listRes.ok) {
-                    throw new Error(listData.error?.message || "Google Drive folder API error");
-                }
-
-                const files = (listData.files || [])
-                    .filter(file => file.id && file.mimeType !== "application/vnd.google-apps.folder")
-                    .slice(0, 20)
-                    .map(file => ({ id: file.id, name: file.name || "Unnamed file" }));
-
-                if (!files.length) {
-                    return new Response(JSON.stringify({
-                        status: "error",
-                        message: "No files found inside this folder."
-                    }), { status: 400, headers: { ...corsHeaders, ...jsonHeaders() } });
-                }
-
-                return new Response(JSON.stringify({
-                    status: "success",
-                    files,
-                    total: files.length,
-                    limit: 20,
-                    truncated: files.length === 20
-                }), { status: 200, headers: { ...corsHeaders, ...jsonHeaders() } });
+                const folderId=v4DriveId(folderUrl,true);
+                if(!folderId) return jsonResponse({status:'error',message:'Please enter a valid Google Drive folder link.'},400);
+                const limits=await v4UploadLimits(env,currentUser.id);
+                if(!limits.folder_limit) return jsonResponse({status:'error',code:'FOLDER_UPLOAD_LIMIT',message:'Folder upload is disabled for your account.'},429);
+                if(limits.remaining===0) return jsonResponse({status:'error',code:'DAILY_UPLOAD_LIMIT',message:`Daily upload limit reached (${limits.uploads_today}/${limits.daily_limit}). Try again after the daily reset.`,...limits},429);
+                const cap=Math.min(limits.folder_limit,limits.remaining??limits.folder_limit);
+                const listed=await v4ListFolder(folderId,env,cap);
+                if(!listed.files.length) return jsonResponse({status:'error',message:'No files found inside this folder.'},400);
+                return jsonResponse({status:'success',...listed,total:listed.files.length,limit:cap,folder_limit:limits.folder_limit,remaining:limits.remaining});
             } catch (err) {
                 console.error("Folder list error:", err);
                 return new Response(JSON.stringify({
@@ -6845,60 +6915,13 @@ export default {
 
                     try {
 
-                        const token = (await selectDriveCopyAccount(folderId, env)).token;
-
-
-                        const listRes =
-                            await fetch(
-                                `https://www.googleapis.com/drive/v3/files?q='${encodeURIComponent(folderId)}'+in+parents&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,size,mimeType)`,
-                                {
-                                    headers: {
-                                        "Authorization":
-                                            `Bearer ${token}`
-                                    }
-                                }
-                            );
-
-
-                        const listData =
-                            await listRes.json();
-
-
-                        if (
-                            !listRes.ok
-                        ) {
-                            throw new Error(
-                                listData.error?.message ||
-                                "Google Drive folder API error"
-                            );
-                        }
-
-
-                        if (
-                            !listData.files ||
-                            listData.files.length ===
-                                0
-                        ) {
-                            return new Response(
-                                JSON.stringify({
-                                    status:
-                                        "error",
-                                    message:
-                                        "No files found inside this folder."
-                                }),
-                                {
-                                    status: 400,
-                                    headers: {
-                                        ...corsHeaders,
-                                        ...jsonHeaders()
-                                    }
-                                }
-                            );
-                        }
-
-
-                        cleanUrl =
-                            `https://drive.google.com/file/d/${listData.files[0].id}/view`;
+                        if(!v4DriveId(cleanUrl,true)) return jsonResponse({status:'error',message:'Invalid Google Drive folder URL'},400);
+                        const limits=await v4UploadLimits(env,currentUser.id);
+                        if(!limits.folder_limit) return jsonResponse({status:'error',code:'FOLDER_UPLOAD_LIMIT',message:'Folder upload is disabled for your account.'},429);
+                        if(limits.remaining===0) return jsonResponse({status:'error',code:'DAILY_UPLOAD_LIMIT',message:'Daily upload limit reached.',...limits},429);
+                        const listed=await v4ListFolder(folderId,env,1);
+                        if(!listed.files.length) return jsonResponse({status:'error',message:'No files found inside this folder.'},400);
+                        cleanUrl=`https://drive.google.com/file/d/${listed.files[0].id}/view`;
 
                     } catch (
                         err
@@ -6932,38 +6955,10 @@ export default {
                 // VALIDATE GOOGLE DRIVE LINK
                 // --------------------------------------
 
-                const match =
-                    cleanUrl.match(
-                        /[-\w]{25,}/
-                    );
-
-
-                if (
-                    !cleanUrl.includes(
-                        "drive.google.com"
-                    ) ||
-                    !match
-                ) {
-                    return new Response(
-                        JSON.stringify({
-                            status:
-                                "error",
-                            message:
-                                "Invalid Google Drive Link format!"
-                        }),
-                        {
-                            status: 400,
-                            headers: {
-                                ...corsHeaders,
-                                ...jsonHeaders()
-                            }
-                        }
-                    );
-                }
-
-
-                const sourceFileId =
-                    match[0];
+                const sourceFileId=v4DriveId(cleanUrl);
+                if(!sourceFileId) return jsonResponse({status:'error',message:'Invalid Google Drive Link format!'},400);
+                // Normalize for the legacy copy helper; direct source uses the parsed ID.
+                cleanUrl=`https://drive.google.com/file/d/${sourceFileId}/view`;
 
                 // ====================================================
                 // PER-USER SOURCE DRIVE DEDUPLICATION
@@ -7078,10 +7073,14 @@ export default {
 
                 const existingBeforeMetadata = await existingSourceReply();
                 if (existingBeforeMetadata) return existingBeforeMetadata;
+                // Quick quota check before the Drive API call. The atomic reservation below remains authoritative.
+                const earlyLimit=await env.DB.prepare(`SELECT (SELECT daily_limit FROM user_upload_limits WHERE user_id=?) AS daily_limit, COALESCE((SELECT uploads_count FROM user_daily_upload_usage WHERE user_id=? AND usage_date=?),0) AS uploads_today`).bind(currentUser.id,currentUser.id,uploadUsageDate).first();
+                if(earlyLimit?.daily_limit!=null && Number(earlyLimit.uploads_today)>=Number(earlyLimit.daily_limit)) return jsonResponse({status:'error',code:'DAILY_UPLOAD_LIMIT',message:`Daily upload limit reached (${earlyLimit.uploads_today}/${earlyLimit.daily_limit}). Try again after the daily reset.`,daily_limit:Number(earlyLimit.daily_limit),uploads_today:Number(earlyLimit.uploads_today)},429);
+
 
                 // Use the same numbered OAuth account for source metadata
                 // AND the eventual files.copy request; no cross-account mix.
-                let selectedCopyAccount = await selectDriveCopyAccount(sourceFileId, env);
+                let selectedCopyAccount = directSourceMode ? await selectDriveMetadataAccount(sourceFileId,env) : await selectDriveCopyAccount(sourceFileId,env);
 
                 // --------------------------------------
                 // GET SOURCE FILE METADATA
@@ -7131,7 +7130,7 @@ export default {
                     if (!String(metaData?.mimeType || "").startsWith("application/vnd.google-apps.") &&
                         (metaData?.size == null || !Number.isFinite(Number(metaData.size)) ||
                          Number(metaData.size) < 0)) {
-                        throw new Error("Google Drive file size is unavailable; cannot apply 12 GiB routing policy");
+                        throw new Error("Google Drive file size is unavailable");
                     }
 
                     // Strict size policy: anything above 12 GiB MUST use Account 1.
@@ -7165,7 +7164,7 @@ export default {
 
 
                         if (
-                            metaData.size
+                            metaData.size != null
                         ) {
 
                             const bytes =
@@ -7285,13 +7284,13 @@ export default {
                 // --------------------------------------
                 const reserveResult = await env.DB.prepare(`
                     INSERT INTO user_daily_upload_usage (user_id, usage_date, uploads_count)
-                    SELECT ?, date('now'), 1
+                    SELECT ?, ?, 1
                     WHERE COALESCE((SELECT daily_limit FROM user_upload_limits WHERE user_id = ?), -1) = -1
                        OR COALESCE((SELECT daily_limit FROM user_upload_limits WHERE user_id = ?), -1) >= 1
                     ON CONFLICT(user_id, usage_date) DO UPDATE SET uploads_count = uploads_count + 1
                     WHERE (SELECT daily_limit FROM user_upload_limits WHERE user_id = ?) IS NULL
                        OR user_daily_upload_usage.uploads_count < (SELECT daily_limit FROM user_upload_limits WHERE user_id = ?)
-                `).bind(currentUser.id, currentUser.id, currentUser.id, currentUser.id, currentUser.id).run();
+                `).bind(currentUser.id, uploadUsageDate, currentUser.id, currentUser.id, currentUser.id, currentUser.id).run();
 
                 if (!reserveResult.meta?.changes) {
                     // No copy attempted: release the unique claim so a
@@ -7916,8 +7915,8 @@ export default {
                             WHERE user_id = ? AND source_hash = ?
                               AND state = 'processing'
                               AND copied_drive_id IS NULL
-                              AND file_short_id IS NULL
-                        `).bind(currentUser.id, sourceUploadHash).run();
+                              AND (file_short_id IS NULL OR (? = 1 AND NOT EXISTS (SELECT 1 FROM files f WHERE f.id=scloud_upload_sources.file_short_id OR f.short_id=scloud_upload_sources.file_short_id)))
+                        `).bind(currentUser.id, sourceUploadHash,directSourceMode?1:0).run();
                     } catch (dedupeReleaseError) {
                         console.error("[UPLOAD] Could not release pre-copy claim:",
                             dedupeReleaseError?.message || dedupeReleaseError);
@@ -7935,8 +7934,7 @@ export default {
                         status:
                             "error",
                         message:
-                            error.message,
-                        stack_trace: error.stack
+                            "Upload could not be completed. Please try again or contact support."
                     }),
                     {
                         status: 500,
@@ -8083,7 +8081,7 @@ export default {
                 if (
                     !record.pdlink_share_id &&
                     record.drive_url &&
-                    !(await hasCronMirrorJobs(shortId, env)) &&
+                    !(await hasCronMirrorJobs(String(record.short_id || shortId), env)) &&
                     !pdlinkJobs.has(shortId) &&
                     (await getMirrorUploadPolicy(record.user_id, env)).pdlink
                 ) {
@@ -8192,7 +8190,7 @@ export default {
                         if (
                             !record.toxcloud_url &&
                             record.drive_url &&
-                            !(await hasCronMirrorJobs(shortId, env)) &&
+                            !(await hasCronMirrorJobs(String(record.short_id || shortId), env)) &&
                             !toxcloudJobs.has(shortId) &&
                             (await getMirrorUploadPolicy(record.user_id, env)).toxcloud
                         ) {
@@ -8450,12 +8448,7 @@ export default {
   // can continue preparing in the background without delaying
   // the signed redirect to the Download Worker.
   // ==================================================
-  ctx.waitUntil(
-    prepareFastLinks(
-      fileId,
-      env
-    )
-  );
+  // Dispatch after the initial Download Worker sync below.
 
   // ==================================================
   // UNIQUE VIEW AT THE REAL PUBLIC ENTRY POINT
@@ -8625,6 +8618,7 @@ export default {
   // Keep Download Worker metadata fresh before redirect.
   // This uses the ONE canonical sync format.
   await syncDownloadMetadata(row, env);
+  ctx.waitUntil(prepareFastLinks(fileId, env));
 
   const downloadWorkerBase =
     String(

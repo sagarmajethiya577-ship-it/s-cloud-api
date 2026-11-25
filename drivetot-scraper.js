@@ -25,7 +25,7 @@ function robustBase64Decode(str) {
 // UPLOAD FILE TO DRIVETOT
 // --------------------------------------------------
 
-export async function uploadToDrivetot(fileId, env) {
+export async function uploadToDrivetot(fileId, env, options = {}) {
     const apiKey = env.DRIVETOT_API_KEY;
 
     if (!apiKey) {
@@ -40,7 +40,7 @@ export async function uploadToDrivetot(fileId, env) {
         );
     }
 
-    const maxRetries = 4;
+    const maxRetries = options.singleAttempt ? 1 : 4;
 
     for (
         let attempt = 1;

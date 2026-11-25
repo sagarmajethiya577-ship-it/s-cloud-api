@@ -546,10 +546,11 @@
                         <circle cx="12" cy="12" r="9" stroke-width="1.8"></circle>
                         <path d="M12 11v5m0-8h.01" stroke-width="1.8" stroke-linecap="round"></path>
                     </svg>
-                    Up to <span class="font-semibold text-cyan-300">20 files</span> per folder.
+                    Up to <span id="folderLimitLabel" class="font-semibold text-cyan-300">20 files</span> per folder.
                 </p>
             </div>
 
+            <div id="v4Quota" class="hidden mb-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-gray-300" role="status"></div>
             <!-- Upload Button -->
             <button
                 id="uploadBtn"
@@ -837,6 +838,17 @@
            UPLOAD ONE FILE
         ====================================================== */
 
+        let v4QuotaReached=false;
+        let v4UploadBusy=false;
+        async function refreshV4Limits() {
+            try {
+                const res=await fetch('/api/upload-limits',{credentials:'include',cache:'no-store'}); const j=await res.json();
+                if(!res.ok||j.status!=='success') return;
+                const d=j.data, label=document.getElementById('folderLimitLabel'), box=document.getElementById('v4Quota');
+                if(label) label.textContent=d.folder_limit+' files';
+                if(box) {box.classList.remove('hidden'); box.textContent=d.daily_limit==null?'Daily uploads: '+d.uploads_today+' • Unlimited':d.remaining===0?'Daily upload limit reached ('+d.uploads_today+'/'+d.daily_limit+'). Resets at 00:00 UTC.':'Daily uploads: '+d.uploads_today+'/'+d.daily_limit+' • '+d.remaining+' remaining';}
+            } catch(e) { console.warn('Upload limits unavailable'); }
+        }
         async function uploadOne(driveUrl, row) {
             try {
                 const response = await fetch("/api/upload", {
@@ -858,6 +870,11 @@
                     return false;
                 }
 
+                if (data?.code==='DAILY_UPLOAD_LIMIT') {
+                    v4QuotaReached=true;
+                    const status=row.querySelector('[data-status]'); status.textContent='Daily upload limit reached'; status.classList.remove('text-cyan-400'); status.classList.add('text-amber-400');
+                    return false;
+                }
                 if (response.status === 409 && data?.code === "UPLOAD_IN_PROGRESS") {
                     const status = row.querySelector("[data-status]");
                     status.innerHTML = `<span class="text-amber-400">Already processing</span>`;
@@ -926,6 +943,13 @@
         ====================================================== */
 
         async function startUpload() {
+            if(v4UploadBusy) return;
+            v4UploadBusy=true; v4QuotaReached=false;
+            try { await runV4Upload(); }
+            catch(e) { showToast('error','Upload Failed','Could not complete upload. Please try again.'); }
+            finally { v4UploadBusy=false; const b=document.getElementById('uploadBtn'); b.disabled=false; b.classList.remove('opacity-80','cursor-wait'); refreshV4Limits(); }
+        }
+        async function runV4Upload() {
             const driveLinks = document.getElementById("driveLinks").value.trim();
             const folderLink = document.getElementById("folderLink").value.trim();
             const linksView = document.getElementById("view-links");
@@ -959,11 +983,12 @@
                     return;
                 }
                 if (!folderResponse.ok || folderData?.status !== "success" || !Array.isArray(folderData.files)) {
-                    showToast("error", "Folder Upload Failed", folderData?.message || "Could not read files from this folder.");
+                    showToast("error", ["DAILY_UPLOAD_LIMIT","FOLDER_UPLOAD_LIMIT"].includes(folderData?.code) ? "Upload Limit Reached" : "Folder Upload Failed", folderData?.message || "Could not read files from this folder.");
                     return;
                 }
 
-                folderFiles = folderData.files.slice(0, 20);
+                folderFiles = folderData.files;
+                if(folderData.truncated) showToast("success","Folder Limit",`Uploading up to ${folderData.limit} files from this folder.`);
                 uploadLinks = folderFiles.map(file => `https://drive.google.com/file/d/${encodeURIComponent(file.id)}/view`);
             }
 
@@ -1000,6 +1025,7 @@
             const uploadWorker = async () => {
                 while (nextIndex < uploadLinks.length) {
                     const index = nextIndex++;
+                    if(v4QuotaReached) { const status=rows[index].querySelector('[data-status]'); status.textContent='Daily upload limit reached'; status.classList.remove('text-cyan-400'); status.classList.add('text-amber-400'); continue; }
                     const success = await uploadOne(uploadLinks[index], rows[index]);
                     if (success) successCount++;
                 }
@@ -1008,6 +1034,7 @@
 
             button.disabled = false;
             button.classList.remove("opacity-80", "cursor-wait");
+            if(v4QuotaReached) showToast('error','Daily Upload Limit Reached','Your daily upload limit has been used. Try again after the daily reset.');
 
             if (successCount === uploadLinks.length) {
                 button.innerHTML = `
@@ -1071,7 +1098,7 @@
                     return;
                 }
 
-                const user = data.data || data.user || data;
+                const user = data.userData || data.data || data.user || data;
                 const name = user.name || user.full_name || user.username || "S-Cloud User";
                 const email = user.email || "";
 
@@ -1121,6 +1148,7 @@
 
         document.addEventListener("DOMContentLoaded", function() {
             loadUser();
+            refreshV4Limits();
         });
 
 
