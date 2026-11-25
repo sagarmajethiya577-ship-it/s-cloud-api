@@ -13,6 +13,8 @@
     >
 
     <style>
+        .v4-file-check[hidden] { display: none !important; }
+        [data-v4-select][aria-pressed="true"] { border-color: rgba(34,211,238,.65); color: #22d3ee; background: rgba(6,182,212,.10); }
         * {
             box-sizing: border-box;
         }
@@ -1082,7 +1084,16 @@
             class="hidden"
         >
 
-<div class="glass-card p-3 mb-3 flex flex-wrap gap-2 items-center"><span id="v4SelectedCount" class="text-xs text-cyan-400 font-semibold mr-2" aria-live="polite">0 selected</span><button data-v4-select class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4Select('page')">Select page</button><button data-v4-select class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4Select('all')">Select all matching</button><button data-v4-select class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4Select('clear')">Clear</button><button data-v4-action disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-cyan-400" onclick="v4ShowLinks()">Bulk links</button><button data-v4-action disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-emerald-400" onclick="v4ConfirmAction('on')">Sharing ON</button><button data-v4-action disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4ConfirmAction('off')">Sharing OFF</button><button data-v4-action disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-red-400" onclick="v4ConfirmAction('delete')">Bulk delete</button></div>
+<div class="glass-card p-3 mb-3 flex flex-wrap gap-2 items-center">
+    <button type="button" id="v4SelectMode" data-v4-select="manual" aria-pressed="false" aria-label="Select individual files" class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5" onclick="v4Select('manual')"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" stroke-width="1.7"/><path d="m7 12 3 3 7-7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Select files</span></button>
+    <button type="button" id="v4SelectPage" data-v4-select="page" aria-pressed="false" class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4Select('page')">Select page</button>
+    <button type="button" id="v4SelectAll" data-v4-select="all" aria-pressed="false" title="All your files, including other pages and files outside the current search" class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4Select('all')">Select all files</button>
+    <span id="v4SelectedCount" class="text-xs text-cyan-400 font-semibold mr-2" aria-live="polite">0 selected</span>
+    <button type="button" data-v4-action="links" disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-cyan-400" onclick="v4ShowLinks()">Bulk links</button>
+    <button type="button" data-v4-action="on" disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-emerald-400" onclick="v4ConfirmAction('on')">Sharing ON</button>
+    <button type="button" data-v4-action="off" disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed" onclick="v4ConfirmAction('off')">Sharing OFF</button>
+    <button type="button" data-v4-action="delete" disabled class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-700 bg-[#0a0e17] hover:border-cyan-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-red-400" onclick="v4ConfirmAction('delete')">Bulk delete</button>
+</div>
             <!-- Desktop Table -->
             <div
                 id="desktopFiles"
@@ -1518,22 +1529,55 @@
 
         let allFiles = [];
 
-        const v4Selected=new Set(); let v4BulkBusy=false; let v4SupportReadOnly=false;
+        const v4Selected=new Set(); let v4BulkBusy=false; let v4SupportReadOnly=false; let v4ManualSelection=false;
         function v4Id(f){return String(f.short_id||f.id||'');}
         function v4SelectedFiles(){return allFiles.filter(f=>v4Selected.has(v4Id(f))&&!isDeleted(f));}
-        function v4UpdateSelection(){
-            const existing=new Set(allFiles.filter(f=>!isDeleted(f)).map(v4Id)); for(const id of v4Selected) if(!existing.has(id)) v4Selected.delete(id);
-            document.querySelectorAll('.v4-file-check').forEach(c=>c.checked=v4Selected.has(c.dataset.selectId));
-            const box=$('v4SelectedCount'); if(box) box.textContent=v4Selected.size+' selected';
-            document.querySelectorAll('[data-v4-action]').forEach(b=>b.disabled=v4SupportReadOnly||v4BulkBusy||!v4Selected.size);
-            document.querySelectorAll('[data-v4-select],.v4-file-check').forEach(b=>b.disabled=v4BulkBusy || (b.classList.contains('v4-file-check') && !existing.has(b.dataset.selectId)));
+        function v4ScopeIds(mode){
+            const rows=mode==='page'?filteredFiles.slice((currentPage-1)*FILES_PER_PAGE,currentPage*FILES_PER_PAGE):allFiles;
+            return [...new Set(rows.filter(f=>!isDeleted(f)).map(v4Id).filter(Boolean))];
         }
-        function v4ToggleFile(c){if(v4BulkBusy)return; if(c.checked)v4Selected.add(c.dataset.selectId);else v4Selected.delete(c.dataset.selectId);v4UpdateSelection();}
-        function v4Select(mode){if(v4BulkBusy)return; if(mode==='clear')v4Selected.clear();else {const rows=mode==='page'?filteredFiles.slice((currentPage-1)*FILES_PER_PAGE,currentPage*FILES_PER_PAGE):filteredFiles;rows.filter(f=>!isDeleted(f)).forEach(f=>v4Selected.add(v4Id(f)));}v4UpdateSelection();}
+        function v4ScopeSelected(ids){return ids.length>0 && ids.every(id=>v4Selected.has(id));}
+        function v4SelectionVisible(){return v4ManualSelection||v4Selected.size>0;}
+        function v4UpdateSelection(){
+            const allIds=v4ScopeIds('all'), pageIds=v4ScopeIds('page'), existing=new Set(allIds);
+            for(const id of v4Selected) if(!existing.has(id)) v4Selected.delete(id);
+            const visible=v4SelectionVisible();
+            document.querySelectorAll('.v4-file-check').forEach(c=>{
+                c.checked=v4Selected.has(c.dataset.selectId);
+                c.hidden=!visible||!existing.has(c.dataset.selectId);
+                c.disabled=v4BulkBusy||!existing.has(c.dataset.selectId);
+            });
+            const matchingIds=new Set(filteredFiles.map(v4Id));
+            const outside=[...v4Selected].filter(id=>!matchingIds.has(id)).length;
+            const box=$('v4SelectedCount'); if(box) box.textContent=v4Selected.size+' selected'+(outside?' • '+outside+' outside search':'');
+            const mode=$('v4SelectMode'); if(mode){mode.setAttribute('aria-pressed',String(visible));mode.disabled=v4BulkBusy||!allIds.length;}
+            for(const [id,ids] of [['v4SelectPage',pageIds],['v4SelectAll',allIds]]){
+                const b=$(id);if(b){b.setAttribute('aria-pressed',String(v4ScopeSelected(ids)));b.disabled=v4BulkBusy||!ids.length;}
+            }
+            document.querySelectorAll('[data-v4-action]').forEach(b=>b.disabled=v4BulkBusy||!v4Selected.size||(v4SupportReadOnly&&b.dataset.v4Action!=='links'));
+        }
+        function v4ToggleFile(c){
+            if(v4BulkBusy||!v4SelectionVisible()||!v4ScopeIds('all').includes(c.dataset.selectId))return;
+            if(c.checked)v4Selected.add(c.dataset.selectId);else v4Selected.delete(c.dataset.selectId);
+            v4UpdateSelection();
+        }
+        function v4Select(mode){
+            if(v4BulkBusy)return;
+            if(mode==='manual'){
+                if(v4SelectionVisible()){v4Selected.clear();v4ManualSelection=false;}
+                else v4ManualSelection=true;
+            }else if(mode==='page'||mode==='all'){
+                const ids=v4ScopeIds(mode);if(!ids.length)return;
+                const remove=v4ScopeSelected(ids);
+                v4ManualSelection=false;
+                for(const id of ids){if(remove)v4Selected.delete(id);else v4Selected.add(id);}
+            }
+            v4UpdateSelection();
+        }
         function v4ShowLinks(){const files=v4SelectedFiles().filter(f=>isSharingEnabled(f)&&getFileLink(f)); if(!files.length){showToast('error','No Active Links','Turn sharing on for selected files first.');return;} $('v4BulkLinks').value=files.map(getFileLink).join('\n');$('v4BulkLinksTitle').textContent=files.length+' active links • '+(v4Selected.size-files.length)+' skipped';$('v4BulkModal').classList.remove('hidden');$('v4BulkModal').classList.add('flex');}
         function v4CloseLinks(){$('v4BulkModal').classList.add('hidden');$('v4BulkModal').classList.remove('flex');}
         async function v4CopyLinks(){const ok=await copyText($('v4BulkLinks').value);showToast(ok?'success':'error',ok?'Links Copied':'Copy Failed',ok?'Selected links copied.':'Select and copy the text manually.');}
-        function v4ConfirmAction(action){if(v4SupportReadOnly||v4BulkBusy||!v4Selected.size)return;const modal=$('v4ConfirmModal'); $('v4ConfirmText').textContent=action==='delete'?`Permanently delete ${v4Selected.size} selected S-Cloud files? This cannot be undone.`:`Turn sharing ${action==='on'?'ON':'OFF'} for ${v4Selected.size} selected files?`; $('v4ConfirmButton').onclick=()=>{v4CloseConfirm();v4BulkAction(action);};modal.classList.remove('hidden');modal.classList.add('flex');}
+        function v4ConfirmAction(action){if(v4SupportReadOnly||v4BulkBusy||!v4Selected.size)return;const modal=$('v4ConfirmModal'); $('v4ConfirmText').textContent=action==='delete'?`Permanently delete ${v4Selected.size} selected files?`:`Turn sharing ${action==='on'?'ON':'OFF'} for ${v4Selected.size} selected files?`; $('v4ConfirmButton').onclick=()=>{v4CloseConfirm();v4BulkAction(action);};modal.classList.remove('hidden');modal.classList.add('flex');}
         function v4CloseConfirm(){$('v4ConfirmModal').classList.add('hidden');$('v4ConfirmModal').classList.remove('flex');}
         async function v4BulkAction(action){
             if(v4SupportReadOnly||v4BulkBusy)return;const files=v4SelectedFiles();if(!files.length)return;
@@ -2707,7 +2751,7 @@
                     <td class="px-6 py-4">
                         <div class="flex items-center gap-3">
 
-<input type="checkbox" class="v4-file-check w-4 h-4 accent-cyan-500 shrink-0" aria-label="Select file" data-select-id="${safeId}" ${v4Selected.has(String(shortId))?'checked':''} ${deleted?'disabled':''} onchange="v4ToggleFile(this)">
+<input type="checkbox" hidden class="v4-file-check w-4 h-4 accent-cyan-500 shrink-0" aria-label="Select file" data-select-id="${safeId}" ${v4Selected.has(String(shortId))?'checked':''} ${deleted?'disabled':''} onchange="v4ToggleFile(this)">
                             <div class="${iconClass}">
                                 ${icon.icon}
                             </div>
@@ -2916,7 +2960,7 @@
 
                     <div class="flex items-start gap-3">
 
-<input type="checkbox" class="v4-file-check w-4 h-4 accent-cyan-500 shrink-0" aria-label="Select file" data-select-id="${safeId}" ${v4Selected.has(String(shortId))?'checked':''} ${deleted?'disabled':''} onchange="v4ToggleFile(this)">
+<input type="checkbox" hidden class="v4-file-check w-4 h-4 accent-cyan-500 shrink-0" aria-label="Select file" data-select-id="${safeId}" ${v4Selected.has(String(shortId))?'checked':''} ${deleted?'disabled':''} onchange="v4ToggleFile(this)">
                         <div class="file-icon ${icon.type}">
                             ${icon.icon}
                         </div>

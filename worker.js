@@ -2570,7 +2570,10 @@ export default {
             const path=url.pathname, method=request.method;
             const allowed=(method==='GET' && ['/dashboard','/dashboard.html','/files','/files.html','/api/me','/api/dashboard'].includes(path)) || (method==='POST' && path==='/api/files');
             const asset=method==='GET' && /^\/(css|js|images|assets)\//.test(path) && !path.endsWith('.html');
-            if(!allowed && !asset) return jsonResponse({status:'error',code:'SUPPORT_READ_ONLY',message:'Read-only admin view. Return to Admin before changing anything.'},403);
+            // Public download links are not account mutations. Keep the normal
+            // /d handler's active-file/sharing checks, signing and healing intact.
+            const publicDownload=method==='GET' && /^\/d\/[A-Za-z0-9_-]{1,100}$/.test(path);
+            if(!allowed && !asset && !publicDownload) return jsonResponse({status:'error',code:'SUPPORT_READ_ONLY',message:'Read-only admin view. Return to Admin before changing anything.'},403);
             if(allowed && !await getCurrentUser(request,env)) {
                 if(path.startsWith('/api/')) return jsonResponse({status:'error',code:'SUPPORT_EXPIRED',message:'Support session expired. Return to Admin.'},403);
                 return new Response(null,{status:302,headers:{Location:'/admin','Set-Cookie':v4SupportClear()}});
