@@ -36,19 +36,11 @@ async function tick(env) {
         if (result.status === "rejected") console.error("[SCLOUD CRON] Provider job:", result.reason?.message);
     }
 
-    // Deletion requires opt-in on the Main Worker. Don't perform any Drive
-    // deletion here: all OAuth credentials and folder validation remain there.
-    const queued = await env.DB.prepare(`SELECT copied_drive_id
-        FROM scloud_drive_cleanup_jobs WHERE state='queued' AND available_at <= ?
-        ORDER BY available_at ASC LIMIT 2`).bind(Date.now()).all();
-    const cleanupResults = await Promise.allSettled((queued.results || []).map(row =>
-        postMain(env, "/cleanup", { copied_drive_id:row.copied_drive_id })
-    ));
-    for (const result of cleanupResults) {
-        if (result.status === "rejected") console.error("[SCLOUD CRON] Cleanup job:", result.reason?.message);
-    }
+    // Direct-source mode must NEVER delete an original user's Drive file.
+    // Legacy cleanup records stay queued, but this scheduler never dispatches
+    // Drive deletion, including for old files copied before the switch.
     console.log("[SCLOUD CRON] cycle", {
-        providers:providerResults.length, cleanup:cleanupResults.length
+        providers: providerResults.length, cleanup: 0
     });
 }
 

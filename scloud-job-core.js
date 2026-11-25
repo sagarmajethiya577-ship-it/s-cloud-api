@@ -68,10 +68,10 @@ export async function hasCronMirrorJobs(fileId, env) {
   }
 }
 
-function parseCopiedDriveId(url) {
+function parseJobDriveId(url) {
   const text = String(url || "");
   const match = /^https:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,200})\/view(?:\?.*)?$/.exec(text);
-  if (!match) throw new Error("Invalid tracked S-Cloud copied file URL");
+  if (!match) throw new Error("Invalid tracked Google Drive source URL");
   return match[1];
 }
 
@@ -109,7 +109,7 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
       await markJob(env, fileId, provider, token, "paused");
       return { state: "paused" };
     }
-    const driveId = parseCopiedDriveId(record.drive_url);
+    const driveId = parseJobDriveId(record.drive_url);
     let didWrite = false;
     if (provider === "pdlink") {
       if (!record.pdlink_share_id) {

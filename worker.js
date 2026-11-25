@@ -6737,6 +6737,18 @@ export default {
             let sourceUploadClaimed = false;
             let sourceCopyStarted = false;
             let sourceUploadHash = null;
+            // Direct-source uploads require the durable Cron queue. Existing
+            // copied files keep their original behavior when this is disabled.
+            const directSourceMode =
+                String(env.SCLOUD_DIRECT_SOURCE_ENABLED || "false").toLowerCase() === "true";
+            if (directSourceMode &&
+                String(env.SCLOUD_JOBS_ENABLED || "false").toLowerCase() !== "true") {
+                return jsonResponse({
+                    status: "error",
+                    code: "DIRECT_SOURCE_REQUIRES_JOBS",
+                    message: "Background jobs must be enabled for direct-source uploads."
+                }, 503);
+            }
             const uploadUsageDate = new Date().toISOString().slice(0, 10);
             try {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
@@ -7128,7 +7140,8 @@ export default {
                     // its own folder; fail closed if unavailable. Never fall back.
                     const rawSize = metaData?.size;
                     const measuredSize = rawSize == null ? NaN : Number(rawSize);
-                    if (Number.isFinite(measuredSize) && measuredSize > 12 * 1024 ** 3 &&
+                    if (!directSourceMode && Number.isFinite(measuredSize) &&
+                        measuredSize > 12 * 1024 ** 3 &&
                         selectedCopyAccount.account.number !== 1) {
                         selectedCopyAccount = await selectDriveCopyAccount(
                             sourceFileId, env, { requiredAccountNumber: 1 }
@@ -7309,12 +7322,20 @@ export default {
                 // temporarily and is NEVER saved to DB.
                 // --------------------------------------
 
+                // Direct-source mode sends the ORIGINAL Google Drive ID to
+                // provider APIs. No Google files.copy and no S-Cloud Drive write.
+                // Providers may still fail if the file is private/inaccessible.
+                let scloudFileId = sourceFileId;
+                let scloudResult = null;
+                if (directSourceMode) {
+                    console.log("[UPLOAD] Direct source selected; files.copy skipped");
+                } else {
                 console.log("[UPLOAD] S-Cloud Drive copy START | user=", currentUser.id);
 
                 // Persist copied ID immediately after Google's files.copy
                 // returns, BEFORE permission/metadata calls. If a later
                 // step fails, retry must not silently copy the same source.
-                const scloudResult =
+                scloudResult =
                     await copyFileToSCloud(
                         cleanUrl,
                         env,
@@ -7368,9 +7389,11 @@ export default {
                 }
 
 
-                const scloudFileId =
+                scloudFileId =
                     scloudResult.fileId;
 
+
+                }
 
                 // --------------------------------------
                 // CREATE S-CLOUD DRIVE URL
@@ -7385,6 +7408,7 @@ export default {
                 // --------------------------------------
 
                 if (
+                    scloudResult &&
                     scloudResult.fileSize &&
                     scloudResult.fileSize !==
                         "Unknown"
@@ -7406,19 +7430,28 @@ export default {
                 const currentTime =
                     Date.now();
 
-                // Save the planned S-Cloud record key before INSERT.
-                // If the record insert succeeds but acknowledgement fails,
-                // a future request can still find the original file row.
-                const recordClaim = await env.DB.prepare(`
+                // Store the planned S-Cloud record before inserting it.
+                // Direct mode has no copied ID, so claim via source hash only;
+                // legacy copy mode still matches its tracked copied ID.
+                const reservationSql = directSourceMode ? `
+                    UPDATE scloud_upload_sources
+                    SET file_short_id = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ? AND source_hash = ?
+                      AND state = 'processing'
+                      AND copied_drive_id IS NULL
+                      AND file_short_id IS NULL
+                ` : `
                     UPDATE scloud_upload_sources
                     SET file_short_id = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE user_id = ? AND source_hash = ?
                       AND state = 'processing'
                       AND copied_drive_id = ?
-                `).bind(
-                    shortId, currentUser.id, sourceUploadHash,
-                    scloudFileId
-                ).run();
+                `;
+                const recordClaim = await env.DB.prepare(reservationSql)
+                    .bind(...(directSourceMode
+                        ? [shortId, currentUser.id, sourceUploadHash]
+                        : [shortId, currentUser.id, sourceUploadHash, scloudFileId]))
+                    .run();
                 if (Number(recordClaim.meta?.changes || 0) !== 1) {
                     throw new Error("S-Cloud record reservation failed; manual review required.");
                 }
@@ -7430,10 +7463,10 @@ export default {
                 // --------------------------------------
                 // INSERT FILE RECORD
                 //
-                // drive_url contains ONLY the
-                // S-CLOUD COPIED DRIVE URL.
-                //
-                // Original Google Drive URL is NOT saved.
+                // drive_url contains canonical Drive file reference:
+                // direct mode => original user's file ID;
+                // copy mode   => S-Cloud copied file ID.
+                // We never use the source reference for automatic deletion.
                 // --------------------------------------
 
                 await env.DB.batch([
@@ -7838,8 +7871,9 @@ export default {
                     JSON.stringify({
                         status:
                             "success",
-                        message:
-                            "File Uploaded Successfully!",
+                        message: directSourceMode
+                            ? "File registered; background mirror processing queued."
+                            : "File Uploaded Successfully!",
                         data: {
                             file_name:
                                 actualFileName,
