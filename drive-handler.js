@@ -87,24 +87,34 @@ async function getAccessToken(clientId, clientSecret, refreshToken) {
     return data.access_token;
 }
 
-async function chooseDriveAccount(env, sourceFileId) {
-    const accounts = getDrivePoolConfigurations(env);
-    if (!env.DB) throw new Error("D1 DB binding missing for Drive rotation");
-    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_drive_rotation (
-        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-        cursor INTEGER NOT NULL DEFAULT 0
-    )`).run();
-    await env.DB.prepare(`INSERT OR IGNORE INTO scloud_drive_rotation (singleton, cursor)
-        VALUES (1, 0)`).run();
-
-    // UPDATE ... RETURNING atomically reserves one selection slot across Workers.
-    const row = await env.DB.prepare(`UPDATE scloud_drive_rotation
-        SET cursor = cursor + 1 WHERE singleton = 1 RETURNING cursor`).first();
-    const cursor = Number(row?.cursor);
-    if (!Number.isSafeInteger(cursor) || cursor < 1) {
-        throw new Error("Drive account rotation state unavailable");
+async function chooseDriveAccount(env, sourceFileId, requiredAccountNumber = null) {
+    const configured = getDrivePoolConfigurations(env);
+    const accounts = requiredAccountNumber == null
+        ? configured
+        : configured.filter(account => account.number === requiredAccountNumber);
+    if (!accounts.length) {
+        throw new Error(`Required Google Drive account ${requiredAccountNumber} is not configured`);
     }
-    const start = (cursor - 1) % accounts.length;
+    if (!env.DB) throw new Error("D1 DB binding missing for Drive rotation");
+    let start = 0;
+    if (requiredAccountNumber == null) {
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_drive_rotation (
+            singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+            cursor INTEGER NOT NULL DEFAULT 0
+        )`).run();
+        await env.DB.prepare(`INSERT OR IGNORE INTO scloud_drive_rotation (singleton, cursor)
+            VALUES (1, 0)`).run();
+
+        // UPDATE ... RETURNING atomically reserves one slot across Workers.
+        const row = await env.DB.prepare(`UPDATE scloud_drive_rotation
+            SET cursor = cursor + 1 WHERE singleton = 1 RETURNING cursor`).first();
+        const cursor = Number(row?.cursor);
+        if (!Number.isSafeInteger(cursor) || cursor < 1) {
+            throw new Error("Drive account rotation state unavailable");
+        }
+        start = (cursor - 1) % accounts.length;
+    }
+    // Forced Account 1 for >12 GiB never advances round-robin cursor again.
 
     // A failed OAuth token refresh cannot have copied a file, so safely try
     // another configured account. DO NOT retry after starting files.copy.
@@ -159,11 +169,17 @@ function formatFileSize(bytes) {
     return (size / (1024 * 1024)).toFixed(2) + " MB";
 }
 
-export async function selectDriveCopyAccount(sourceFileId, env) {
+export async function selectDriveCopyAccount(sourceFileId, env, options = {}) {
     if (typeof sourceFileId !== "string" || !/^[A-Za-z0-9_-]{10,}$/.test(sourceFileId)) {
         throw new Error("Invalid original Drive file ID");
     }
-    return chooseDriveAccount(env, sourceFileId);
+    const requiredAccountNumber = options.requiredAccountNumber == null
+        ? null : Number(options.requiredAccountNumber);
+    if (requiredAccountNumber != null &&
+        (!Number.isSafeInteger(requiredAccountNumber) || requiredAccountNumber < 1)) {
+        throw new Error("Invalid required Drive account");
+    }
+    return chooseDriveAccount(env, sourceFileId, requiredAccountNumber);
 }
 
 export async function copyFileToSCloud(
@@ -254,4 +270,39 @@ export async function copyFileToSCloud(
         driveAccountNumber: account.number,
         targetFolderId: account.folderId
     };
+}
+
+
+// Delete ONLY a D1-tracked copy, not a user's original source.
+// Credentials and folder MUST match the account used at files.copy time.
+export async function deleteTrackedDriveCopy(copiedDriveId, accountNumber, folderId, env) {
+    const accountId = Number(accountNumber);
+    if (!/^[A-Za-z0-9_-]{10,200}$/.test(String(copiedDriveId || ""))) {
+        throw new Error("Invalid tracked copied Drive ID");
+    }
+    const account = getDrivePoolConfigurations(env).find(item => item.number === accountId);
+    if (!account || account.folderId !== folderId) {
+        throw new Error("Tracked account/folder does not match live configuration");
+    }
+    const token = await getAccessToken(account.clientId, account.clientSecret, account.refreshToken);
+    const filePath = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(copiedDriveId)}`;
+    const response = await fetch(
+        `${filePath}?fields=id,parents,mimeType,trashed&supportsAllDrives=true`,
+        { headers: { "Authorization": `Bearer ${token}` }, redirect: "manual" }
+    );
+    if (response.status === 404) return { alreadyMissing: true };
+    if (!response.ok) throw new Error(`Drive cleanup metadata HTTP ${response.status}`);
+    const meta = await response.json();
+    if (meta.id !== copiedDriveId ||
+        !Array.isArray(meta.parents) || !meta.parents.includes(folderId) ||
+        meta.mimeType === "application/vnd.google-apps.folder") {
+        throw new Error("Drive cleanup ownership/parent verification failed");
+    }
+    const removed = await fetch(`${filePath}?supportsAllDrives=true`, {
+        method: "DELETE", headers: { "Authorization": `Bearer ${token}` }, redirect: "manual"
+    });
+    if (removed.status === 204 || removed.status === 200 || removed.status === 404) {
+        return { deleted: true };
+    }
+    throw new Error(`Drive cleanup delete HTTP ${removed.status}`);
 }

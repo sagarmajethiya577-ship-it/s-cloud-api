@@ -1,0 +1,19 @@
+name = "scloud-jobs"
+main = "worker.js"
+compatibility_date = "2026-09-18"
+keep_vars = true
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "scloud_db"
+database_id = "46c54f0b-d47b-4906-94a2-bbd0cb0e82f1"
+
+[[services]]
+binding = "MAIN"
+service = "dashboard"
+
+[observability]
+enabled = true

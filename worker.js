@@ -1,5 +1,13 @@
 import { copyFileToSCloud, selectDriveCopyAccount } from "./drive-handler.js";
 import {
+    ensureScloudJobTables,
+    newMirrorJobStatements,
+    hasCronMirrorJobs,
+    executeScloudMirrorJob,
+    reconcileScloudJobs,
+    executeScloudCleanupJob
+} from "./scloud-job-core.js";
+import {
     uploadToDrivetot,
     extractLinksFromDrivetot
 } from "./drivetot-scraper.js";
@@ -2015,6 +2023,10 @@ async function prepareFastLinks(shortId, env) {
                 return;
             }
 
+            // Cron-managed uploads must not start the legacy Drivetot/fast-link
+            // process from /d/:id; that would duplicate submissions.
+            if (await hasCronMirrorJobs(shortId, env)) return;
+
             console.log(
                 `[FAST] Record loaded ${shortId} | ` +
                 `gdflix=${!!record.gdflix_url} | ` +
@@ -2488,6 +2500,51 @@ export default {
                 request.url
             );
 
+
+        // ==================================================
+        // SCLOUD CRON JOB SERVICE BINDING (SECRET REQUIRED)
+        // ==================================================
+        if (url.pathname.startsWith("/__scloud_jobs/")) {
+            if (request.method !== "POST" ||
+                typeof env.JOB_WORKER_SECRET !== "string" ||
+                env.JOB_WORKER_SECRET.length < 32 ||
+                !safeEqual(request.headers.get("X-SCloud-Job-Secret") || "",
+                           env.JOB_WORKER_SECRET)) {
+                return jsonResponse({ status: "error", message: "Not Found" }, 404);
+            }
+            try {
+                if (url.pathname === "/__scloud_jobs/reconcile") {
+                    const stats = await reconcileScloudJobs(env, getMirrorUploadPolicy);
+                    return jsonResponse({ status: "success", ...stats });
+                }
+                if (url.pathname === "/__scloud_jobs/run") {
+                    const body = await request.json();
+                    const fileId = String(body?.file_id || "");
+                    const provider = String(body?.provider || "");
+                    if (!/^[A-Za-z0-9_-]{6,128}$/.test(fileId) ||
+                        !["pdlink", "toxcloud", "drivetot", "extract"].includes(provider)) {
+                        return jsonResponse({status:"error",message:"Invalid job"},400);
+                    }
+                    const result = await executeScloudMirrorJob(
+                        fileId, provider, env, getMirrorUploadPolicy, syncDownloadMetadata
+                    );
+                    return jsonResponse({ status: "success", ...result });
+                }
+                if (url.pathname === "/__scloud_jobs/cleanup") {
+                    const body = await request.json();
+                    const copiedId = String(body?.copied_drive_id || "");
+                    if (!/^[A-Za-z0-9_-]{10,200}$/.test(copiedId)) {
+                        return jsonResponse({status:"error",message:"Invalid cleanup ID"},400);
+                    }
+                    const result = await executeScloudCleanupJob(copiedId, env);
+                    return jsonResponse({ status:"success", ...result });
+                }
+            } catch (error) {
+                console.error("[SCLOUD JOBS] Internal error:",error?.message || "unknown");
+                return jsonResponse({status:"error",message:"Job could not be completed"},500);
+            }
+            return jsonResponse({status:"error",message:"Not Found"},404);
+        }
 
         // ==================================================
         // S-CLOUD FILEVIEW V7 - PRIVATE API KEY MIRROR ACCESS
@@ -6504,6 +6561,7 @@ export default {
                     WHERE type = 'table' AND name = 'pdlink_rotation_jobs'
                     LIMIT 1
                 `).first();
+                await ensureScloudJobTables(env);
                 const statements = [
                     env.DB.prepare(`
                         DELETE FROM files
@@ -6511,6 +6569,20 @@ export default {
                           AND COALESCE(status, '') != 'deleted'
                     `).bind(file.id, currentUser.id)
                 ];
+                // Copy cleanup must be queued before dedupe/registry rows are removed.
+                // The Google Drive API is called later, NEVER inside D1 transaction.
+                statements.push(env.DB.prepare(`
+                    INSERT OR IGNORE INTO scloud_drive_cleanup_jobs
+                      (copied_drive_id, user_id, account_number, folder_id, state, available_at)
+                    SELECT r.copied_drive_id, r.user_id, r.account_number,
+                           r.folder_id, 'queued', ?
+                    FROM scloud_drive_copy_registry r
+                    JOIN scloud_upload_sources s
+                      ON s.user_id = r.user_id AND s.source_hash = r.source_hash
+                    WHERE s.user_id = ? AND s.file_short_id = ?
+                      AND changes() > 0
+                `).bind(Date.now(), currentUser.id, file.short_id || file.id));
+
                 if (hasTracking) {
                     statements.push(env.DB.prepare(`
                         DELETE FROM pdlink_rotation_jobs
@@ -6533,6 +6605,23 @@ export default {
                     `).bind(currentUser.id, file.short_id || file.id,
                            file.id, currentUser.id));
                 }
+                // A new upload of the same source after user deletion must not
+                // collide with the old registry; the cleanup queue owns it now.
+                statements.push(env.DB.prepare(`
+                    DELETE FROM scloud_drive_copy_registry
+                    WHERE user_id = ? AND copied_drive_id = ?
+                      AND EXISTS (
+                          SELECT 1 FROM scloud_drive_cleanup_jobs q
+                          WHERE q.copied_drive_id = scloud_drive_copy_registry.copied_drive_id
+                      ) AND NOT EXISTS (
+                          SELECT 1 FROM scloud_upload_sources s
+                          WHERE s.user_id = scloud_drive_copy_registry.user_id
+                            AND s.source_hash = scloud_drive_copy_registry.source_hash
+                      )
+                `).bind(currentUser.id, (String(file.drive_url || '').match(/\/file\/d\/([A-Za-z0-9_-]+)/) || [])[1] || ''));
+                statements.push(env.DB.prepare(`
+                    DELETE FROM scloud_mirror_jobs WHERE file_id = ?
+                `).bind(file.short_id || file.id));
                 // D1 batches run transactionally. No earnings, balance,
                 // withdrawals, or visitor accounting rows are modified.
                 const results = await env.DB.batch(statements);
@@ -6899,6 +6988,10 @@ export default {
                     )
                 `).run();
 
+
+                // Durable mirror and cleanup jobs live in this SAME D1 database.
+                await ensureScloudJobTables(env);
+
                 const existingSourceReply = async () => {
                     const previous = await env.DB.prepare(`
                         SELECT s.state AS source_state,
@@ -6976,7 +7069,7 @@ export default {
 
                 // Use the same numbered OAuth account for source metadata
                 // AND the eventual files.copy request; no cross-account mix.
-                const selectedCopyAccount = await selectDriveCopyAccount(sourceFileId, env);
+                let selectedCopyAccount = await selectDriveCopyAccount(sourceFileId, env);
 
                 // --------------------------------------
                 // GET SOURCE FILE METADATA
@@ -7021,6 +7114,27 @@ export default {
                         );
                     }
 
+
+                    // Unknown size on a binary source cannot be safely routed.
+                    if (!String(metaData?.mimeType || "").startsWith("application/vnd.google-apps.") &&
+                        (metaData?.size == null || !Number.isFinite(Number(metaData.size)) ||
+                         Number(metaData.size) < 0)) {
+                        throw new Error("Google Drive file size is unavailable; cannot apply 12 GiB routing policy");
+                    }
+
+                    // Strict size policy: anything above 12 GiB MUST use Account 1.
+                    // Check actual Google Drive metadata bytes (not rounded UI text).
+                    // Account 1 must have permission to read the source AND write
+                    // its own folder; fail closed if unavailable. Never fall back.
+                    const rawSize = metaData?.size;
+                    const measuredSize = rawSize == null ? NaN : Number(rawSize);
+                    if (Number.isFinite(measuredSize) && measuredSize > 12 * 1024 ** 3 &&
+                        selectedCopyAccount.account.number !== 1) {
+                        selectedCopyAccount = await selectDriveCopyAccount(
+                            sourceFileId, env, { requiredAccountNumber: 1 }
+                        );
+                        console.log("[DRIVE POOL] File over 12 GiB routed to Account 1");
+                    }
 
                     if (
                         metaData &&
@@ -7322,8 +7436,8 @@ export default {
                 // Original Google Drive URL is NOT saved.
                 // --------------------------------------
 
-                await env.DB
-                    .prepare(
+                await env.DB.batch([
+                    env.DB.prepare(
                         `INSERT INTO files
                         (
                             id,
@@ -7349,7 +7463,11 @@ export default {
                         currentTime,
                         "active"
                     )
-                    .run();
+                    ,
+                    ...(String(env.SCLOUD_JOBS_ENABLED || "false").toLowerCase() === "true"
+                        ? newMirrorJobStatements(shortId, env)
+                        : [])
+                ]);
 
                 // Upload has succeeded once its file record is committed.
                 uploadReservation = false;
@@ -7403,6 +7521,13 @@ export default {
                 );
 
 
+                // --------------------------------------
+                // STAGED JOB-WORKER ROLLOUT
+                // Existing uploads stay on the proven background chain until
+                // SCLOUD_JOBS_ENABLED=true is set after the Cron Worker works.
+                // Only one upload engine is active for each NEW file.
+                // --------------------------------------
+                if (String(env.SCLOUD_JOBS_ENABLED || "false").toLowerCase() !== "true") {
                 // --------------------------------------
                 // BACKGROUND PROCESSING
                 //
@@ -7701,6 +7826,10 @@ export default {
                 );
 
 
+                } else {
+                    console.log(`[SCLOUD JOBS] durable provider jobs queued for ${shortId}`);
+                }
+
                 // --------------------------------------
                 // RESPONSE
                 // --------------------------------------
@@ -7920,6 +8049,7 @@ export default {
                 if (
                     !record.pdlink_share_id &&
                     record.drive_url &&
+                    !(await hasCronMirrorJobs(shortId, env)) &&
                     !pdlinkJobs.has(shortId) &&
                     (await getMirrorUploadPolicy(record.user_id, env)).pdlink
                 ) {
@@ -8028,6 +8158,7 @@ export default {
                         if (
                             !record.toxcloud_url &&
                             record.drive_url &&
+                            !(await hasCronMirrorJobs(shortId, env)) &&
                             !toxcloudJobs.has(shortId) &&
                             (await getMirrorUploadPolicy(record.user_id, env)).toxcloud
                         ) {
