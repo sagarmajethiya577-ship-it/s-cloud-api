@@ -181,7 +181,7 @@ async function syncDownloadMetadata(record, env, selectedTargets = null) {
     const results = await Promise.all(targets.map(async target => {
         try {
             const response = await fetch(`${target.base}/internal/sync`, {
-                method: "POST", redirect: "error", signal: AbortSignal.timeout(4500),
+                method: "POST", redirect: "manual", signal: AbortSignal.timeout(4500),
                 headers: {"Content-Type": "application/json", "X-Sync-Secret": target.syncSecret},
                 body: payload
             });
