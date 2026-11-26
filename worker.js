@@ -2559,6 +2559,25 @@ export default {
 
         // V4 support mode never grants a target session or write privileges.
         if (getCookie(request,V4_SUPPORT_COOKIE)) {
+            // Visiting the login page explicitly leaves support mode. The cookie
+            // can outlive the 15-minute database session; never let it lock out login.
+            // Redirect before serving the page so /api/me sees the real session.
+            const leaveForLogin = request.method === 'GET' && (
+                url.pathname === '/login' || url.pathname === '/index.html' ||
+                (url.pathname === '/' && url.searchParams.has('redirect'))
+            );
+            if (leaveForLogin) {
+                try {
+                    const actual = await getActualSessionUser(request, env);
+                    if (actual && String(actual.email).toLowerCase() === V4_OWNER_EMAIL) {
+                        await env.DB.prepare(`UPDATE scloud_admin_support SET ended_at=? WHERE token_hash=? AND admin_id=? AND admin_session_hash=? AND ended_at IS NULL`).bind(Date.now(), await sha256Hex(getCookie(request,V4_SUPPORT_COOKIE)), actual.id, await sha256Hex(getCookie(request,'scloud_session')||'')).run();
+                    }
+                } catch (_) { console.error('[SUPPORT] login exit audit failed'); }
+                return new Response(null, {status:303, headers:{
+                    Location: '/login' + url.search,
+                    'Set-Cookie': v4SupportClear(), 'Cache-Control':'no-store'
+                }});
+            }
             if (url.pathname==='/api/admin/support/exit' && request.method==='POST') {
                 if (request.headers.get('Origin')!==url.origin) return jsonResponse({status:'error',message:'Invalid origin'},403);
                 const actual=await getActualSessionUser(request,env);
