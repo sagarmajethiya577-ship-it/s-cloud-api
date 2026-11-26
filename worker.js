@@ -23,14 +23,45 @@ import { uploadToToxCloud } from "./toxcloud.js";
 // ==================================================
 // DOWNLOAD WORKER METADATA SYNC
 // ==================================================
-async function syncDownloadMetadata(record, env) {
-    if (!record || !env.DOWNLOAD_WORKER_URL || !env.DOWNLOAD_SYNC_SECRET) {
-        console.error("[DOWNLOAD SYNC] Missing configuration", {
-            hasRecord: !!record,
-            hasDownloadWorkerUrl: !!env.DOWNLOAD_WORKER_URL,
-            hasDownloadSyncSecret: !!env.DOWNLOAD_SYNC_SECRET
-        });
+// Explicitly configured secondary; no new traffic until enabled.
+function getDownloadTargets(env, includeDisabled = false) {
+    const make = (id, url, syncSecret, signSecret) => {
+        try {
+            const parsed = new URL(String(url || ""));
+            if (parsed.protocol !== "https:" || parsed.username || parsed.password ||
+                parsed.pathname !== "/" || parsed.search || parsed.hash ||
+                !syncSecret || !signSecret) return null;
+            return { id, base: parsed.origin, syncSecret, signSecret };
+        } catch { return null; }
+    };
+    const first = make("1", env.DOWNLOAD_WORKER_URL ||
+        "https://scloud-download.scloud-download1.workers.dev", env.DOWNLOAD_SYNC_SECRET, env.SYNC_SECRET);
+    const second = make("2", env.DOWNLOAD_WORKER_URL_2, env.DOWNLOAD_SYNC_SECRET_2, env.DOWNLOAD_SYNC_SECRET_2);
+    const enabled = String(env.DOWNLOAD_WORKER_2_ENABLED || "false").toLowerCase() === "true";
+    const distinct = first && second && first.base !== second.base &&
+        first.syncSecret !== second.syncSecret && first.signSecret !== second.signSecret;
+    return [first, (enabled || includeDisabled) && distinct ? second : null].filter(Boolean);
+}
+
+async function syncDownloadMetadata(record, env, selectedTargets = null) {
+    const targets = selectedTargets || getDownloadTargets(env, record?.status === "deleted" || Number(record?.sharing_enabled ?? 1) === 0);
+    if (!record || !targets.length) {
+        console.error("[DOWNLOAD SYNC] Missing configuration");
         return false;
+    }
+    // For ordinary sync, refresh the authoritative row before building metadata.
+    // The deletion path intentionally sends a tombstone before removing the row.
+    const snapshotTime = Date.now();
+    if (record.status !== "deleted") {
+        try {
+            const fresh = await env.DB.prepare("SELECT * FROM files WHERE short_id = ? LIMIT 1")
+                .bind(String(record.short_id || record.id)).first();
+            if (!fresh) return false;
+            record = fresh;
+        } catch (error) {
+            console.error("[DOWNLOAD SYNC] Source refresh failed", error?.name || "Error");
+            return false;
+        }
     }
 
     // Shared By settings belong to the users table, not files.
@@ -143,33 +174,30 @@ async function syncDownloadMetadata(record, env) {
         updated_at: record.updated_at || record.last_updated || null
     };
 
-    // Timestamp-based monotonic version; stale versions are rejected by Download Worker D1.
-    const version = Math.max(Date.now(), Number(record.download_sync_version || 0) + 1);
-    const base = String(env.DOWNLOAD_WORKER_URL).replace(/\/+$/, "");
-
-    try {
-        const response = await fetch(`${base}/internal/sync`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-Sync-Secret": env.DOWNLOAD_SYNC_SECRET
-            },
-            body: JSON.stringify({
-                file_id: String(record.short_id || record.id),
-                metadata,
-                version,
-                status
-            })
-        });
-        if (!response.ok) {
-            console.error("[DOWNLOAD SYNC] Failed", record.short_id || record.id, response.status);
+    // Capture version before reading the snapshot, not after network/DB work.
+    const version = Math.max(snapshotTime, Number(record.download_sync_version || 0) + 1);
+    const fileId = String(record.short_id || record.id);
+    const payload = JSON.stringify({file_id: fileId, metadata: status === "active" ? metadata : {}, version, status});
+    const results = await Promise.all(targets.map(async target => {
+        try {
+            const response = await fetch(`${target.base}/internal/sync`, {
+                method: "POST", redirect: "error", signal: AbortSignal.timeout(4500),
+                headers: {"Content-Type": "application/json", "X-Sync-Secret": target.syncSecret},
+                body: payload
+            });
+            const ack = response.ok ? await response.json() : null;
+            // Existing receivers can report ignored stale writes without a status.
+            // Do not treat these as confirmation of a private/deleted state.
+            const confirmed = !!(ack?.ok && ack.file_id === fileId && ack.status === status &&
+                (!ack.ignored ? ack.version === version : Number(ack.current_version) >= version));
+            if (!confirmed) console.warn("[DOWNLOAD SYNC] Unconfirmed", {worker:target.id,fileId,status:response.status});
+            return confirmed;
+        } catch (error) {
+            console.warn("[DOWNLOAD SYNC] Failed", {worker:target.id,fileId,error:error?.name || "Error"});
             return false;
         }
-        return true;
-    } catch (error) {
-        console.error("[DOWNLOAD SYNC] Request failed", record.short_id || record.id, error?.message || error);
-        return false;
-    }
+    }));
+    return results.every(Boolean);
 }
 
 // ==================================================
@@ -2573,6 +2601,27 @@ export default {
             return new Response(null, {status: 302, headers: {
                 Location: destination.toString(), "Cache-Control": "no-store"
             }});
+        }
+
+        // Authenticated server-to-server revocation check for both download accounts.
+        // The Main D1 is authoritative even when a replica sync failed.
+        if (url.pathname === "/api/internal/download-authorize") {
+            const secret = request.headers.get("X-Sync-Secret") || "";
+            const configured = getDownloadTargets(env, true);
+            if (request.method !== "POST" || !secret || !configured.some(target => safeEqual(secret,target.syncSecret))) {
+                return jsonResponse({status:"error"}, 404);
+            }
+            try {
+                const body = await request.json();
+                const fileId = String(body?.file_id || "");
+                if (!/^[A-Za-z0-9_-]{1,100}$/.test(fileId)) return jsonResponse({status:"error"},400);
+                const record = await env.DB.prepare("SELECT status, sharing_enabled FROM files WHERE short_id = ? LIMIT 1").bind(fileId).first();
+                return new Response(JSON.stringify({allowed: !!record && record.status === "active" && Number(record.sharing_enabled ?? 1) !== 0}), {
+                    headers: {"Content-Type":"application/json", "Cache-Control":"no-store"}
+                });
+            } catch (error) {
+                return jsonResponse({status:"error"},503);
+            }
         }
 
         // V4 support mode never grants a target session or write privileges.
@@ -8621,45 +8670,35 @@ export default {
   }
 
 
-  const expires = Math.floor(Date.now() / 1000) + 600;
-
-  // Per-entry cryptographically random access nonce.
-  // This becomes part of the HMAC-protected credential.
-  const accessBytes = new Uint8Array(24);
-  crypto.getRandomValues(accessBytes);
-
-  const accessNonce =
-    Array.from(accessBytes)
-      .map(b => b.toString(16).padStart(2, "0"))
-      .join("");
-
-  const dataToSign =
-    `${fileId}:${expires}:${accessNonce}`;
-
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(env.SYNC_SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  
-  const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(dataToSign));
-  const signatureHex = Array.from(new Uint8Array(signatureBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  // Keep Download Worker metadata fresh before redirect.
-  // This uses the ONE canonical sync format.
-  await syncDownloadMetadata(row, env);
+  // Select one replica at random. Only that replica is synced on the
+  // critical path; the other is tried only if synchronization fails.
+  const candidates = getDownloadTargets(env);
+  if (candidates.length === 2 && crypto.getRandomValues(new Uint8Array(1))[0] < 128) candidates.reverse();
+  let selected = null;
+  for (const target of candidates) {
+    if (await syncDownloadMetadata(row, env, [target])) { selected = target; break; }
+  }
+  if (!selected) {
+    return new Response("Download service temporarily unavailable. Please try again.", {
+      status: 503, headers: {"Cache-Control":"no-store", "Retry-After":"5"}
+    });
+  }
+  // Check source again before issuing a signed credential.
+  const current = await env.DB.prepare("SELECT status, sharing_enabled FROM files WHERE short_id = ? LIMIT 1").bind(fileId).first();
+  if (!current || current.status !== "active" || Number(current.sharing_enabled ?? 1) === 0) {
+    return new Response("File not found, deleted, or private.", {status:404,headers:{"Cache-Control":"no-store"}});
+  }
   ctx.waitUntil(prepareFastLinks(fileId, env));
-
-  const downloadWorkerBase =
-    String(
-      env.DOWNLOAD_WORKER_URL ||
-      "https://scloud-download.scloud-download1.workers.dev"
-    ).replace(/\/+$/, "");
+  const expires = Math.floor(Date.now() / 1000) + 600;
+  const accessBytes = crypto.getRandomValues(new Uint8Array(24));
+  const accessNonce = Array.from(accessBytes).map(b => b.toString(16).padStart(2,"0")).join("");
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", encoder.encode(selected.signSecret),
+    {name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const signatureBuffer = await crypto.subtle.sign("HMAC",key,encoder.encode(`${fileId}:${expires}:${accessNonce}`));
+  const signatureHex = Array.from(new Uint8Array(signatureBuffer)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  const downloadWorkerBase = selected.base;
+  console.log("[DOWNLOAD ROUTE]", {worker:selected.id,fileId});
 
   const downloadWorkerUrl =
     `${downloadWorkerBase}/d/${encodeURIComponent(fileId)}` +
