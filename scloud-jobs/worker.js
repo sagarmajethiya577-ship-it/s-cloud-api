@@ -30,18 +30,17 @@ async function tick(env) {
     const concurrency=Math.max(1,Math.min(4,Number.parseInt(env.SCLOUD_JOB_CONCURRENCY||'3',10)||3));
     const now=Date.now();
     const due=await env.DB.prepare(`SELECT file_id,provider FROM scloud_mirror_jobs WHERE state='queued' AND available_at<=? AND provider<>'extract' ORDER BY available_at ASC LIMIT ?`).bind(now,batchSize).all();
-    const extraction=await env.DB.prepare(`SELECT file_id,provider FROM scloud_mirror_jobs WHERE state='queued' AND available_at<=? AND provider='extract' ORDER BY available_at ASC LIMIT 2`).bind(now).all();
+    const extraction=await env.DB.prepare(`SELECT file_id,provider FROM scloud_mirror_jobs WHERE state='queued' AND available_at<=? AND provider='extract' ORDER BY available_at ASC LIMIT 12`).bind(now).all();
     const providerResults=[];
-    async function runRows(rows) {
-        for(let i=0;i<rows.length;i+=concurrency) {
+    async function runRows(rows, width) {
+        for(let i=0;i<rows.length;i+=width) {
             if(Date.now()-now>50000) break;
-            const result=await Promise.allSettled(rows.slice(i,i+concurrency).map(row=>postMain(env,'/run',{file_id:row.file_id,provider:row.provider})));
+            const result=await Promise.allSettled(rows.slice(i,i+width).map(row=>postMain(env,'/run',{file_id:row.file_id,provider:row.provider})));
             providerResults.push(...result);
             for(const item of result) if(item.status==='rejected') console.error('[SCLOUD CRON] Provider job:',item.reason?.message);
         }
     }
-    await runRows(due.results||[]);
-    await runRows(extraction.results||[]);
+    await Promise.all([runRows(due.results||[],concurrency), runRows(extraction.results||[],1)]);
 
     // Direct-source mode must NEVER delete an original user's Drive file.
     // Legacy cleanup records stay queued, but this scheduler never dispatches

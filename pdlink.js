@@ -8,7 +8,8 @@ const PDLINK_BASE =
 
 export async function queuePDLinkFile(
     googleDriveFileId,
-    env
+    env,
+    options = {}
 ) {
 
     if (!googleDriveFileId) {
@@ -62,6 +63,7 @@ export async function queuePDLinkFile(
             apiUrl,
             {
                 method: "GET",
+                ...(options.signal ? {signal: options.signal} : {}),
                 headers: {
                     "Accept":
                         "application/json"

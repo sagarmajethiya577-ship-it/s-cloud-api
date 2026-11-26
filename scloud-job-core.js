@@ -92,11 +92,19 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
     SET state = 'running', attempts = attempts + 1,
         lease_token = ?, lease_until = ?, updated_at = CURRENT_TIMESTAMP
     WHERE file_id = ? AND provider = ? AND state = 'queued' AND available_at <= ?
-    RETURNING attempts`
+    RETURNING attempts, available_at`
   ).bind(token, now + 480000, fileId, provider, now).first();
   if (!claim) return { state: "not_due" };
 
   let outboundStarted = false;
+  let sentAt = null;
+  const dispatch = options.fastStart ? "upload" : options.publicEntry ? "self-heal" : "cron";
+  const requestOptions = () => options.fastStart ? {signal:AbortSignal.timeout(18000)} : {};
+  const beginOutbound = () => {
+    sentAt = nowMs(); outboundStarted = true;
+    console.log("[SCLOUD PROVIDER TIMING] send", {fileId,provider,dispatch,queue_ms:Math.max(0,sentAt-Number(claim.available_at||now)),preflight_ms:sentAt-now});
+  };
+  const responseReceived = () => console.log("[SCLOUD PROVIDER TIMING] response", {fileId,provider,dispatch,response_ms:nowMs()-sentAt});
   try {
     const record = await env.DB.prepare(`SELECT * FROM files
       WHERE (short_id = ? OR id = ?) LIMIT 1`).bind(fileId,fileId).first();
@@ -119,8 +127,9 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
       if (!record.pdlink_share_id) {
         const driveId = parseJobDriveId(record.drive_url);
         if (!env.PDLINK_API_KEY) throw new Error("PDLINK_API_KEY missing");
-        outboundStarted = true;
-        const result = await queuePDLinkFile(driveId, env);
+        beginOutbound();
+        const result = await queuePDLinkFile(driveId, env, requestOptions());
+        responseReceived();
         if (!result?.share_id) throw new Error("PDLink returned no share_id");
         const write = await env.DB.prepare(`UPDATE files SET pdlink_share_id = ?
           WHERE (id = ? OR short_id = ?) AND COALESCE(pdlink_share_id,'') = ''
@@ -132,8 +141,9 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
       if (!record.toxcloud_url) {
         const driveId = parseJobDriveId(record.drive_url);
         if (!env.TOXCLOUD_API_KEY) throw new Error("TOXCLOUD_API_KEY missing");
-        outboundStarted = true;
-        const result = await uploadToToxCloud(driveId, env);
+        beginOutbound();
+        const result = await uploadToToxCloud(driveId, env, requestOptions());
+        responseReceived();
         if (!isRealLink(result?.download_url)) {
           // Provider may have already accepted the upload. No blind retry.
           throw new Error("TOXCloud accepted/pending but URL unavailable; needs review");
@@ -151,8 +161,9 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
       } else {
         const driveId = parseJobDriveId(record.drive_url);
         if (!env.DRIVETOT_API_KEY) throw new Error("DRIVETOT_API_KEY missing");
-        outboundStarted = true;
-        const result = await uploadToDrivetot(driveId, env, {singleAttempt:true});
+        beginOutbound();
+        const result = await uploadToDrivetot(driveId, env, {singleAttempt:true,...requestOptions()});
+        responseReceived();
         if (!result?.share_id || !/^[A-Za-z0-9_-]{4,200}$/.test(String(result.share_id))) {
           throw new Error("Drivetot returned no usable share_id; needs review");
         }
@@ -180,7 +191,7 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
         }
       }
       if (!shareId) throw new Error("Missing Drivetot share ID for read-only extraction");
-      const result = await extractLinksFromDrivetot(shareId, env);
+      const result = await extractLinksFromDrivetot(shareId, env, options.fastStart ? {waitMs:0,signal:AbortSignal.timeout(7000)} : {waitMs: Math.max(0, Math.min(15000, 15000 - (nowMs()-Number(claim.available_at||now))))});
       const hub = isRealLink(result?.hubcloud_url) ? result.hubcloud_url : null;
       const gd = isRealLink(result?.gdflix_url) ? result.gdflix_url : null;
       const updated = await env.DB.prepare(`UPDATE files SET
@@ -200,7 +211,7 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
         const attempts = Number(claim.attempts||1);
         if (attempts < 12) {
           await markJob(env,fileId,provider,token,"queued",
-            "Waiting for Drivetot mirrors",nowMs()+Math.min(3600000,60000*2**Math.min(attempts,5)));
+            "Waiting for Drivetot mirrors",nowMs()+(options.fastStart ? 15000 : Math.min(3600000,30000*2**Math.min(attempts-1,5))));
           if (didWrite) {
             const fresh = await env.DB.prepare(`SELECT * FROM files WHERE short_id = ? LIMIT 1`).bind(fileId).first();
             if (fresh) await syncDownloadMetadata(fresh,env);
@@ -223,9 +234,10 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
     // An external upload may have succeeded even if its response was lost.
     // Never automatically submit a second request for that same provider.
     const reason = String(error?.message||"failed").slice(0,250);
+    if (sentAt !== null) console.log("[SCLOUD PROVIDER TIMING] failed", {fileId,provider,dispatch,elapsed_ms:nowMs()-sentAt,error_type:error?.name||"Error"});
     const attempts = Number(claim.attempts||1);
     if ((provider === 'extract' && attempts < 12) || (!outboundStarted && provider !== 'extract' && attempts < 4)) {
-      await markJob(env,fileId,provider,token,'queued',reason,nowMs()+Math.min(3600000,60000*2**Math.min(attempts,5)));
+      await markJob(env,fileId,provider,token,'queued',reason,nowMs()+(provider === 'extract' && options.fastStart ? 15000 : Math.min(3600000,60000*2**Math.min(attempts,5))));
       return {state:'retry_safe'};
     }
     await markJob(env,fileId,provider,token,

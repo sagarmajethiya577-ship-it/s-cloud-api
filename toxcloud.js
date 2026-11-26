@@ -3,7 +3,8 @@ const TOXCLOUD_API_URL =
 
 export async function uploadToToxCloud(
     googleDriveFileId,
-    env
+    env,
+    options = {}
 ) {
     if (!googleDriveFileId) {
         throw new Error(
@@ -43,6 +44,7 @@ export async function uploadToToxCloud(
         apiUrl,
         {
             method: "GET",
+                ...(options.signal ? {signal: options.signal} : {}),
             headers: {
                 "Accept": "application/json"
             }

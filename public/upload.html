@@ -1021,13 +1021,17 @@
 
             // Upload a few files at a time to avoid overwhelming the Worker.
             let nextIndex = 0;
+            let finishedCount = 0;
+            const updateProgress = () => { const el=button.querySelector("span"); if(el) el.textContent=`Uploading ${finishedCount}/${uploadLinks.length}…`; };
+            updateProgress();
             const workerCount = Math.min(3, uploadLinks.length);
             const uploadWorker = async () => {
                 while (nextIndex < uploadLinks.length) {
                     const index = nextIndex++;
-                    if(v4QuotaReached) { const status=rows[index].querySelector('[data-status]'); status.textContent='Daily upload limit reached'; status.classList.remove('text-cyan-400'); status.classList.add('text-amber-400'); continue; }
+                    if(v4QuotaReached) { const status=rows[index].querySelector('[data-status]'); status.textContent='Daily upload limit reached'; status.classList.remove('text-cyan-400'); status.classList.add('text-amber-400'); finishedCount++; updateProgress(); continue; }
                     const success = await uploadOne(uploadLinks[index], rows[index]);
                     if (success) successCount++;
+                    finishedCount++; updateProgress();
                 }
             };
             await Promise.all(Array.from({ length: workerCount }, () => uploadWorker()));

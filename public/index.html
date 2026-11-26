@@ -600,6 +600,9 @@
             >
                 Secure Publisher Network
             </p>
+            <nav aria-label="Public pages" class="mt-3 flex flex-wrap justify-center gap-3 text-[11px] text-cyan-300/80">
+              <a href="/">Home</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>
+            </nav>
 
         </div>
 
@@ -881,7 +884,7 @@
 
                         const redirectTarget =
                             redirectParam &&
-                            redirectParam.startsWith("/")
+                            redirectParam.startsWith("/") && !redirectParam.startsWith("//") && !redirectParam.includes("\\")
                                 ? redirectParam
                                 : "/dashboard";
 
@@ -1130,6 +1133,7 @@
             "DOMContentLoaded",
             () => {
 
+                if (new URLSearchParams(window.location.search).get("mode") === "register" && !loginForm.classList.contains("hidden")) toggleForms();
                 checkExistingSession();
 
             }

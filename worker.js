@@ -1003,7 +1003,7 @@ async function ensureV4Limits(env) {
 }
 async function v4UploadLimits(env, userId) {
     await ensureV4Limits(env);
-    const row = await env.DB.prepare(`SELECT (SELECT daily_limit FROM user_upload_limits WHERE user_id=?) AS daily_limit, COALESCE((SELECT uploads_count FROM user_daily_upload_usage WHERE user_id=? AND usage_date=date('now')),0) AS uploads_today, COALESCE((SELECT folder_limit FROM user_folder_upload_limits WHERE user_id=?),20) AS folder_limit`).bind(userId,userId,userId).first();
+    const row = await env.DB.prepare(`SELECT NULLIF(COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id=?),20),-1) AS daily_limit, COALESCE((SELECT uploads_count FROM user_daily_upload_usage WHERE user_id=? AND usage_date=date('now')),0) AS uploads_today, COALESCE((SELECT folder_limit FROM user_folder_upload_limits WHERE user_id=?),20) AS folder_limit`).bind(userId,userId,userId).first();
     return {...row, remaining: row.daily_limit == null ? null : Math.max(0,Number(row.daily_limit)-Number(row.uploads_today))};
 }
 function v4DriveId(value, folder=false) {
@@ -2572,7 +2572,7 @@ export default {
             const asset=method==='GET' && /^\/(css|js|images|assets)\//.test(path) && !path.endsWith('.html');
             // Public download links are not account mutations. Keep the normal
             // /d handler's active-file/sharing checks, signing and healing intact.
-            const publicDownload=method==='GET' && /^\/d\/[A-Za-z0-9_-]{1,100}$/.test(path);
+            const publicDownload=method==='GET' && (/^\/d\/[A-Za-z0-9_-]{1,100}$/.test(path) || ["/","/home.html","/privacy","/privacy.html","/terms","/terms.html"].includes(path));
             if(!allowed && !asset && !publicDownload) return jsonResponse({status:'error',code:'SUPPORT_READ_ONLY',message:'Read-only admin view. Return to Admin before changing anything.'},403);
             if(allowed && !await getCurrentUser(request,env)) {
                 if(path.startsWith('/api/')) return jsonResponse({status:'error',code:'SUPPORT_EXPIRED',message:'Support session expired. Return to Admin.'},403);
@@ -3209,7 +3209,7 @@ export default {
                 }
 
                 if (path === "/api/admin/users" && request.method === "GET") {
-                    const result = await env.DB.prepare(`SELECT u.id, u.name, u.email, u.balance, u.custom_cpm, u.status, (SELECT COUNT(*) FROM files f WHERE f.user_id = u.id) AS file_count, ul.daily_limit AS daily_upload_limit, COALESCE((SELECT folder_limit FROM user_folder_upload_limits WHERE user_id=u.id),20) AS folder_upload_limit, COALESCE(du.uploads_count, 0) AS uploads_today FROM users u LEFT JOIN user_upload_limits ul ON ul.user_id = u.id LEFT JOIN user_daily_upload_usage du ON du.user_id = u.id AND du.usage_date = date('now') ORDER BY u.id DESC LIMIT 500`).all();
+                    const result = await env.DB.prepare(`SELECT u.id, u.name, u.email, u.balance, u.custom_cpm, u.status, (SELECT COUNT(*) FROM files f WHERE f.user_id = u.id) AS file_count, CASE WHEN ul.user_id IS NULL THEN 20 ELSE ul.daily_limit END AS daily_upload_limit, COALESCE((SELECT folder_limit FROM user_folder_upload_limits WHERE user_id=u.id),20) AS folder_upload_limit, COALESCE(du.uploads_count, 0) AS uploads_today FROM users u LEFT JOIN user_upload_limits ul ON ul.user_id = u.id LEFT JOIN user_daily_upload_usage du ON du.user_id = u.id AND du.usage_date = date('now') ORDER BY u.id DESC LIMIT 500`).all();
                     return sendAdminJson({ status: "success", data: result.results || [] });
                 }
 
@@ -3952,7 +3952,7 @@ export default {
                             custom_cpm,
                             status
                         )
-                        VALUES (?, ?, ?, 'publisher', 0, 1.0, 'active')`
+                        VALUES (?, ?, ?, 'publisher', 0, 0, 'active')`
                     )
                     .bind(
                         cleanName,
@@ -6822,6 +6822,7 @@ export default {
                     message: "Background jobs must be enabled for direct-source uploads."
                 }, 503);
             }
+            const uploadStartedAt = Date.now();
             const uploadUsageDate = new Date().toISOString().slice(0, 10);
             try {
                 await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
@@ -7077,7 +7078,7 @@ export default {
                 const existingBeforeMetadata = await existingSourceReply();
                 if (existingBeforeMetadata) return existingBeforeMetadata;
                 // Quick quota check before the Drive API call. The atomic reservation below remains authoritative.
-                const earlyLimit=await env.DB.prepare(`SELECT (SELECT daily_limit FROM user_upload_limits WHERE user_id=?) AS daily_limit, COALESCE((SELECT uploads_count FROM user_daily_upload_usage WHERE user_id=? AND usage_date=?),0) AS uploads_today`).bind(currentUser.id,currentUser.id,uploadUsageDate).first();
+                const earlyLimit=await env.DB.prepare(`SELECT NULLIF(COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id=?),20),-1) AS daily_limit, COALESCE((SELECT uploads_count FROM user_daily_upload_usage WHERE user_id=? AND usage_date=?),0) AS uploads_today`).bind(currentUser.id,currentUser.id,uploadUsageDate).first();
                 if(earlyLimit?.daily_limit!=null && Number(earlyLimit.uploads_today)>=Number(earlyLimit.daily_limit)) return jsonResponse({status:'error',code:'DAILY_UPLOAD_LIMIT',message:`Daily upload limit reached (${earlyLimit.uploads_today}/${earlyLimit.daily_limit}). Try again after the daily reset.`,daily_limit:Number(earlyLimit.daily_limit),uploads_today:Number(earlyLimit.uploads_today)},429);
 
 
@@ -7103,31 +7104,15 @@ export default {
 
                     const token = selectedCopyAccount.token;
 
-                    const metaRes =
-                        await fetch(
+                    let metaData = directSourceMode ? selectedCopyAccount.metadata : null;
+                    if (!metaData) {
+                        const metaRes = await fetch(
                             `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceFileId)}?fields=name,size,mimeType&supportsAllDrives=true`,
-                            {
-                                headers: {
-                                    "Authorization":
-                                        `Bearer ${token}`
-                                }
-                            }
+                            {headers:{Authorization:`Bearer ${token}`}}
                         );
-
-
-                    const metaData =
-                        await metaRes.json();
-
-
-                    if (
-                        !metaRes.ok
-                    ) {
-                        throw new Error(
-                            metaData.error?.message ||
-                            "Google Drive metadata error"
-                        );
+                        metaData = await metaRes.json();
+                        if (!metaRes.ok) throw new Error(metaData.error?.message || "Google Drive metadata error");
                     }
-
 
                     // Unknown size on a binary source cannot be safely routed.
                     if (!String(metaData?.mimeType || "").startsWith("application/vnd.google-apps.") &&
@@ -7283,16 +7268,16 @@ export default {
                 // --------------------------------------
                 // ENFORCE DAILY UPLOAD LIMIT (WEB + API)
                 // Atomically reserve one slot before copying.
-                // A blank/null limit means unlimited; 0 blocks uploads.
+                // Missing setting = 20; explicit blank/null = unlimited; 0 blocks uploads.
                 // --------------------------------------
                 const reserveResult = await env.DB.prepare(`
                     INSERT INTO user_daily_upload_usage (user_id, usage_date, uploads_count)
                     SELECT ?, ?, 1
-                    WHERE COALESCE((SELECT daily_limit FROM user_upload_limits WHERE user_id = ?), -1) = -1
-                       OR COALESCE((SELECT daily_limit FROM user_upload_limits WHERE user_id = ?), -1) >= 1
+                    WHERE COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id = ?),20) = -1
+                       OR COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id = ?),20) >= 1
                     ON CONFLICT(user_id, usage_date) DO UPDATE SET uploads_count = uploads_count + 1
-                    WHERE (SELECT daily_limit FROM user_upload_limits WHERE user_id = ?) IS NULL
-                       OR user_daily_upload_usage.uploads_count < (SELECT daily_limit FROM user_upload_limits WHERE user_id = ?)
+                    WHERE COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id = ?),20) = -1
+                       OR user_daily_upload_usage.uploads_count < COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id = ?),20)
                 `).bind(currentUser.id, uploadUsageDate, currentUser.id, currentUser.id, currentUser.id, currentUser.id).run();
 
                 if (!reserveResult.meta?.changes) {
@@ -7307,10 +7292,10 @@ export default {
                     `).bind(currentUser.id, sourceUploadHash).run();
                     sourceUploadClaimed = false;
                     const [limitRow, usageRow] = await Promise.all([
-                        env.DB.prepare(`SELECT daily_limit FROM user_upload_limits WHERE user_id = ?`).bind(currentUser.id).first(),
+                        env.DB.prepare(`SELECT NULLIF(COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id=?),20),-1) AS daily_limit`).bind(currentUser.id).first(),
                         env.DB.prepare(`SELECT uploads_count FROM user_daily_upload_usage WHERE user_id = ? AND usage_date = date('now')`).bind(currentUser.id).first()
                     ]);
-                    const limit = Number(limitRow?.daily_limit ?? 0);
+                    const limit = Number(limitRow?.daily_limit ?? 20);
                     const used = Number(usageRow?.uploads_count || 0);
                     return new Response(JSON.stringify({ status: "error", message: `Daily upload limit reached (${used}/${limit}). Try again after the daily reset.`, code: "DAILY_UPLOAD_LIMIT", daily_limit: limit, uploads_today: used }), { status: 429, headers: { ...corsHeaders, ...jsonHeaders() } });
                 }
@@ -7529,32 +7514,14 @@ export default {
                 // This runs in the background and does not
                 // delay the successful upload response.
                 // --------------------------------------
-                ctx.waitUntil(
-                    (async () => {
-                        try {
-                            const initialSyncRecord =
-                                await env.DB
-                                    .prepare(
-                                        "SELECT * FROM files WHERE id = ? LIMIT 1"
-                                    )
-                                    .bind(shortId)
-                                    .first();
-
-                            if (initialSyncRecord) {
-                                await syncDownloadMetadata(
-                                    initialSyncRecord,
-                                    env
-                                );
-                            }
-                        } catch (syncError) {
-                            console.error(
-                                "[DOWNLOAD SYNC] Initial upload sync failed:",
-                                syncError
-                            );
-                        }
-                    })()
-                );
-
+                const initialSync = (async () => {
+                    try {
+                        const row = await env.DB.prepare("SELECT * FROM files WHERE id = ? LIMIT 1").bind(shortId).first();
+                        if (row) await syncDownloadMetadata(row, env);
+                    } catch (error) {
+                        console.error("[DOWNLOAD SYNC] Initial upload sync failed:", error?.name || "Error");
+                    }
+                })();
 
                 // --------------------------------------
                 // STAGED JOB-WORKER ROLLOUT
@@ -7563,6 +7530,7 @@ export default {
                 // Only one upload engine is active for each NEW file.
                 // --------------------------------------
                 if (String(env.SCLOUD_JOBS_ENABLED || "false").toLowerCase() !== "true") {
+                ctx.waitUntil(initialSync);
                 // --------------------------------------
                 // BACKGROUND PROCESSING
                 //
@@ -7862,7 +7830,34 @@ export default {
 
 
                 } else {
-                    console.log(`[SCLOUD JOBS] durable provider jobs queued for ${shortId}`);
+                    // Start the three durable jobs right now, not at the next Cron tick.
+                    // Cron/self-healing still share the same atomic D1 claim.
+                    // Serialize only metadata sync, not the provider submissions.
+                    // Each response is written to D1 by the atomic job executor.
+                    let syncChain = initialSync;
+                    const syncLatest = () => {
+                        syncChain = syncChain.then(async () => {
+                            const fresh = await env.DB.prepare("SELECT * FROM files WHERE short_id = ? LIMIT 1").bind(shortId).first();
+                            if (fresh) await syncDownloadMetadata(fresh, env);
+                        }).catch(error => console.error("[SCLOUD FAST SUBMIT] sync error", error?.name || "Error"));
+                        return syncChain;
+                    };
+                    const dispatchStartedAt = Date.now();
+                    const fastStart = Promise.allSettled(["pdlink", "toxcloud", "drivetot"].map(async provider => {
+                        const result = await executeScloudMirrorJob(shortId, provider, env, getMirrorUploadPolicy, syncLatest, {fastStart:true});
+                        // A quick read-only extraction attempt if Drivetot is ready
+                        // early; no extra upload. Slow responses remain with Cron.
+                        if (provider === "drivetot" && result.state === "done" && Date.now()-dispatchStartedAt < 8000) {
+                            await executeScloudMirrorJob(shortId, "extract", env, getMirrorUploadPolicy, syncLatest, {fastStart:true});
+                        }
+                        return result;
+                    }));
+                    ctx.waitUntil((async () => {
+                        const results = await fastStart;
+                        await syncChain;
+                        console.log("[SCLOUD FAST SUBMIT] complete", {fileId:shortId, states:results.map(r=>r.status === "fulfilled" ? r.value?.state : "error")});
+                    })().catch(error => console.error("[SCLOUD FAST SUBMIT] background error", error?.name || "Error")));
+                    console.log("[SCLOUD UPLOAD TIMING] registered", {fileId:shortId, elapsed_ms:Date.now()-uploadStartedAt});
                 }
 
                 // --------------------------------------
@@ -7874,7 +7869,7 @@ export default {
                         status:
                             "success",
                         message: directSourceMode
-                            ? "File registered; background mirror processing queued."
+                            ? "File registered; background mirror submissions started."
                             : "File Uploaded Successfully!",
                         data: {
                             file_name:
@@ -9493,13 +9488,13 @@ export default {
         // ==================================================
 
         if (
-            url.pathname === "/" &&
+            ["/", "/login", "/privacy", "/terms"].includes(url.pathname) &&
             request.method === "GET" &&
             env.ASSETS &&
             typeof env.ASSETS.fetch === "function"
         ) {
             const indexRequest = new Request(
-                new URL("/index.html", request.url),
+                new URL(url.pathname === "/privacy" ? "/privacy.html" : url.pathname === "/terms" ? "/terms.html" : url.pathname === "/login" || url.searchParams.has("redirect") ? "/index.html" : "/home.html", request.url),
                 request
             );
 

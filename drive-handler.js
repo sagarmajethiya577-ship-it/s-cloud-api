@@ -97,7 +97,7 @@ async function chooseDriveAccount(env, sourceFileId, requiredAccountNumber = nul
     }
     if (!env.DB) throw new Error("D1 DB binding missing for Drive rotation");
     let start = 0;
-    if (requiredAccountNumber == null) {
+    if (requiredAccountNumber == null && (!metadataOnly || accounts.length > 1)) {
         await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_drive_rotation (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             cursor INTEGER NOT NULL DEFAULT 0
@@ -127,14 +127,19 @@ async function chooseDriveAccount(env, sourceFileId, requiredAccountNumber = nul
             // Before copying, verify THIS account can read the source.
             // Trying another account after this check is safe; no copy exists yet.
             const sourceCheck = await fetch(
-                `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceFileId)}?fields=id&supportsAllDrives=true`,
+                `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceFileId)}?fields=${metadataOnly ? "id,name,size,mimeType" : "id"}&supportsAllDrives=true`,
                 { headers: { "Authorization": `Bearer ${token}` } }
             );
             if (!sourceCheck.ok) {
                 console.warn(`[DRIVE POOL] Account ${account.number} cannot access source (HTTP ${sourceCheck.status})`);
                 continue;
             }
-            if (metadataOnly) return { account, token };
+            if (metadataOnly) {
+                const metadata = await sourceCheck.json();
+                if (metadata?.id !== sourceFileId || !metadata?.name) continue;
+                return { account, token, metadata };
+            }
+            await sourceCheck.body?.cancel();
             // Check the destination folder with the SAME identity before
             // performing any irreversible files.copy operation.
             const folderCheck = await fetch(

@@ -55,6 +55,7 @@ export async function uploadToDrivetot(fileId, env, options = {}) {
                 targetUrl,
                 {
                     method: "GET",
+                    ...(options.signal ? {signal: options.signal} : {}),
                     headers: {
                         "User-Agent":
                             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -155,7 +156,8 @@ export async function uploadToDrivetot(fileId, env, options = {}) {
 
 export async function extractLinksFromDrivetot(
     shareId,
-    env
+    env,
+    options = {}
 ) {
     if (!shareId) {
         return {
@@ -169,11 +171,8 @@ export async function extractLinksFromDrivetot(
     let gdflix_url = null;
     let hubcloud_url = null;
 
-    console.log(
-        "Waiting 15s for Drivetot backend processing..."
-    );
-
-    await sleep(15000);
+    const waitMs = Math.max(0, Math.min(15000, options.waitMs ?? 15000));
+    if (waitMs) await sleep(waitMs);
 
     const headers = {
         "User-Agent":
@@ -190,6 +189,7 @@ export async function extractLinksFromDrivetot(
         page1Url,
         {
             method: "GET",
+            ...(options.signal ? {signal:options.signal} : {}),
             headers
         }
     );
@@ -224,7 +224,9 @@ export async function extractLinksFromDrivetot(
         };
     }
 
-    let page2Url = sMatch[1];
+    const target = new URL(sMatch[1], page1Url);
+    if (target.origin !== "https://drivetot.website" || !target.pathname.startsWith("/s/")) return {error:"Invalid Drivetot extraction target"};
+    let page2Url = target.toString();
 
     // ------------------------------------------------
     // TOKEN ADD
@@ -250,6 +252,7 @@ export async function extractLinksFromDrivetot(
         page2Url,
         {
             method: "GET",
+            ...(options.signal ? {signal:options.signal} : {}),
             headers
         }
     );
