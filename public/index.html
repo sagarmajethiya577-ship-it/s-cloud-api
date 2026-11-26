@@ -329,7 +329,8 @@
                 height: 34px !important;
             }
         }
-    </style>
+    @media(max-width:480px){.scloud-login-brand{height:34px!important}}
+</style>
 </head>
 
 
@@ -356,30 +357,12 @@
             >
 
                 <!-- Cloud Logo -->
-                <svg
-                    class="logo-icon w-9 h-9 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.65)]"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999
-                        5.002 5.002 0 10-9.78 2.096
-                        A4.001 4.001 0 003 15z"
-                    />
-                </svg>
-
                 <h1
                     class="logo-title text-[30px] font-extrabold tracking-[0.14em]
                     text-transparent bg-clip-text
                     bg-gradient-to-r from-cyan-400 to-blue-500
                     drop-shadow-lg"
-                >
-                    S-CLOUD
-                </h1>
+                ><img src="/assets/scloud-logo.png" alt="S-Cloud" class="scloud-brand-image scloud-login-brand" style="display:block;height:36px;width:auto;max-width:100%;object-fit:contain;flex-shrink:0;" decoding="async"></h1>
 
             </div>
 
