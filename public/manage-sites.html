@@ -421,7 +421,7 @@
       </div>
       <div class="my-6 glass-card px-4 py-4 sm:px-5 flex items-start gap-3">
         <svg class="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 11v5m0-8h.01" stroke-linecap="round"/></svg>
-        <div class="text-sm text-gray-400 leading-relaxed">Add your own API key for supported servers. <span class="text-white">Show on download page</span> controls only that mirror's visibility; turning it off will not stop uploads. Automatic user-account uploading and Download Worker visibility filtering will be connected separately.</div>
+        <div class="text-sm text-gray-400 leading-relaxed">Connect your own API keys and manage your download mirrors.</div>
       </div>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-5">
         <div>
@@ -494,7 +494,7 @@
       const status=dom('span','ms-badge'+(p.locked&&p.accepts_key?' locked':''),!p.accepts_key?'System':p.locked?'Locked':'Available');
       addChildren(heading,icon,text,status);card.append(heading);
       const show=dom('div','mt-5 flex items-center justify-between gap-4 rounded-xl px-4 py-3 border border-white/10 bg-[#0a0e17]/70');
-      const showLabel=dom('div','min-w-0');addChildren(showLabel,dom('p','text-sm font-medium text-gray-200','Show on download page'),dom('p','ms-muted','Visibility preference only'));
+      const showLabel=dom('div','min-w-0');addChildren(showLabel,dom('p','text-sm font-medium text-gray-200','Show on download page'));
       const toggleLabel=dom('label','ms-switch');const toggle=dom('input');toggle.type='checkbox';toggle.checked=!!p.visible;toggle.setAttribute('aria-label','Show '+p.name+' on download page');
       addChildren(toggleLabel,toggle,dom('span','track'));addChildren(show,showLabel,toggleLabel);card.append(show);
       const message=dom('p','ms-feedback');message.setAttribute('role','status');message.setAttribute('aria-live','polite');
@@ -518,7 +518,7 @@
           catch(e){feedback(message,e.message,true);notice('error','Could not remove key',e.message)}finally{busy(false)}
         });
         addChildren(row,field,save,remove);wrap.append(row);
-        wrap.append(dom('p','ms-muted mt-2',p.locked?'API configuration is locked by admin. You can still change display visibility.':'Key is encrypted in S-Cloud. Saving it does not start uploads yet.'));
+        wrap.append(dom('p','ms-muted mt-2',p.locked?'API configuration is locked by admin. You can still change display visibility.':'Key is encrypted in S-Cloud.'));
         card.append(wrap);
       }
       card.append(message);return card;
