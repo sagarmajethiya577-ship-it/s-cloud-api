@@ -2557,6 +2557,24 @@ export default {
             );
 
 
+        // Canonical public domain. Keep machine-to-machine endpoints compatible
+        // with existing clients and internal service bindings; never forward credentials.
+        const legacyPublicHost = "dashboard.scloud7266.workers.dev";
+        const canonicalPublicOrigin = "https://scloudd.dpdns.org";
+        const legacyMachinePath = url.pathname === "/v1/upload" ||
+            url.pathname.startsWith("/api/") ||
+            url.pathname.startsWith("/__scloud_jobs/") ||
+            (url.pathname.startsWith("/file/") && request.headers.get("Sec-Fetch-Mode") !== "navigate");
+        if (url.hostname === legacyPublicHost &&
+            (request.method === "GET" || request.method === "HEAD") && !legacyMachinePath) {
+            const destination = new URL(canonicalPublicOrigin);
+            destination.pathname = url.pathname;
+            destination.search = url.search;
+            return new Response(null, {status: 302, headers: {
+                Location: destination.toString(), "Cache-Control": "no-store"
+            }});
+        }
+
         // V4 support mode never grants a target session or write privileges.
         if (getCookie(request,V4_SUPPORT_COOKIE)) {
             // Visiting the login page explicitly leaves support mode. The cookie
@@ -7046,7 +7064,7 @@ export default {
                         const alreadyHidden =
                             Number(previous.sharing_enabled ?? 1) === 0;
                         const existingLink =
-                            `https://${url.hostname}/d/${existingShortId}`;
+                            `${canonicalPublicOrigin}/d/${existingShortId}`;
                         return jsonResponse({
                             status: "success",
                             already_uploaded: true,
@@ -7463,7 +7481,7 @@ export default {
                 }
 
                 const short_link =
-                    `https://${url.hostname}/d/${shortId}`;
+                    `${canonicalPublicOrigin}/d/${shortId}`;
 
 
                 // --------------------------------------

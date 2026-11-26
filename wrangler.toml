@@ -7,7 +7,7 @@ keep_vars = true
 directory = "./public"
 binding = "ASSETS"
 html_handling = "none"
-run_worker_first = ["/", "/login", "/index.html", "/privacy", "/terms", "/v1/upload", "/api/*", "/file/*", "/d/*", "/sc_*", "/manage-sites", "/manage-sites.html", "/__scloud_jobs/*", "/dashboard", "/dashboard.html", "/files", "/files.html", "/admin", "/admin.html"]
+run_worker_first = ["/", "/login", "/index.html", "/privacy", "/terms", "/v1/upload", "/api/*", "/file/*", "/d/*", "/sc_*", "/manage-sites", "/manage-sites.html", "/__scloud_jobs/*", "/dashboard", "/dashboard.html", "/files", "/files.html", "/admin", "/admin.html", "/home.html", "/privacy.html", "/terms.html", "/upload", "/upload.html", "/api", "/api.html", "/settings", "/settings.html", "/withdraw", "/withdraw.html", "/download.html", "/app.html"]
 
 [[d1_databases]]
 binding = "DB"
