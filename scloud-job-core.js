@@ -165,14 +165,37 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
         const result = await uploadToDrivetot(driveId, env, {singleAttempt:true,...requestOptions()});
         responseReceived();
         if (!result?.share_id || !/^[A-Za-z0-9_-]{4,200}$/.test(String(result.share_id))) {
-          throw new Error("Drivetot returned no usable share_id; needs review");
+          const reason = result?.error || "Drivetot returned no usable share_id; needs review";
+          const attempts = Number(claim.attempts || 1);
+          // Retry only explicit, structured rate-limit rejections. Never retry
+          // a timeout, ambiguous provider response, quota error or lost response.
+          if (result?.retrySafe === true && attempts < 3) {
+            await markJob(env,fileId,provider,token,"queued",reason,
+              nowMs()+Math.max(120000, Number(result.retryDelay)||0, 60000*2**attempts));
+            return {state:"retry_rate_limit"};
+          }
+          throw new Error(reason);
         }
         shareId = String(result.share_id);
         const write = await env.DB.prepare(`UPDATE files SET drivetot_url = ?
-          WHERE (id = ? OR short_id = ?) AND COALESCE(drivetot_url,'') = ''
+          WHERE (id = ? OR short_id = ?) AND COALESCE(drivetot_url,'') IN ('','Not Found')
           AND COALESCE(status,'') <> 'deleted'`
         ).bind(`https://drivetot.website/${shareId}`,fileId,fileId).run();
         didWrite = Number(write.meta?.changes||0)>0;
+      }
+      // Confirm the persisted link before scheduling extraction. A failed
+      // conditional write (e.g. deleted file) must not create a dangling job.
+      const saved = await env.DB.prepare(`SELECT drivetot_url,status FROM files
+        WHERE short_id=? LIMIT 1`).bind(fileId).first();
+      if (!saved || saved.status === "deleted") {
+        await markJob(env,fileId,provider,token,"cancelled");
+        return {state:"cancelled"};
+      }
+      let savedUrl;
+      try { savedUrl = new URL(saved.drivetot_url); } catch {}
+      if (!savedUrl || savedUrl.origin !== "https://drivetot.website" ||
+          !/^\/[A-Za-z0-9_-]{4,200}\/?$/.test(savedUrl.pathname)) {
+        throw new Error("Drivetot share received but valid link was not persisted; needs review");
       }
       // Extraction is read-only and may be safely retried independently.
       await env.DB.prepare(`INSERT OR IGNORE INTO scloud_mirror_jobs

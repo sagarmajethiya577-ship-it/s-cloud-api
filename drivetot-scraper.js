@@ -25,6 +25,70 @@ function robustBase64Decode(str) {
 // UPLOAD FILE TO DRIVETOT
 // --------------------------------------------------
 
+// The durable queue owns retries. Do not retry a possibly accepted request
+// inside this helper, or expose API keys/raw provider response bodies in logs.
+async function submitDrivetotOnce(fileId, apiKey, options) {
+    const validId = value => {
+        if (typeof value === "number" && !Number.isSafeInteger(value)) return null;
+        if (typeof value !== "number" && typeof value !== "string") return null;
+        const id = String(value).trim();
+        return /^[A-Za-z0-9_-]{4,200}$/.test(id) ? id : null;
+    };
+    let response, data;
+    try {
+        response = await fetch(
+            `https://drivetot.website/v4/api/file/add/${encodeURIComponent(fileId)}?key=${encodeURIComponent(apiKey)}`,
+            { method:"GET", redirect:"manual", signal:options.signal || AbortSignal.timeout(18000),
+              headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"} }
+        );
+        const body = await response.text();
+        try { data = JSON.parse(body); } catch { data = null; }
+    } catch (error) {
+        const kind = ["AbortError","TimeoutError"].includes(error?.name) ? "timeout" : "network_error";
+        console.warn("[SCLOUD DRIVETOT] response unavailable", {kind,http_status:response?.status || null});
+        return {error:`Drivetot ${kind}; acceptance unknown`, kind};
+    }
+    const http_status = response.status;
+    const objects = [data, data?.data, data?.result].filter(v => v && typeof v === "object" && !Array.isArray(v));
+    const values = objects.map(v=>v.share_id).filter(v=>v !== undefined && v !== null && v !== "");
+    const ids = [...new Set(values.map(validId).filter(Boolean))];
+    const explicitFailure = objects.some(v => v.success === false || v.status === false ||
+        ["error","failed","failure","rejected"].includes(String(v.status || "").toLowerCase()) ||
+        (v.error != null && v.error !== false && v.error !== ""));
+    const shape = data === null ? "non_json" : Array.isArray(data) ? "array" : typeof data;
+    // Only accept an explicit share_id field, never arbitrary IDs or URLs.
+    if (response.ok && !explicitFailure && ids.length === 1 && values.every(v=>validId(v)===ids[0])) {
+        console.log("[SCLOUD DRIVETOT] accepted", {http_status,shape});
+        return {share_id:ids[0]};
+    }
+    const markers = objects.flatMap(v => [v.code,v.error_code,v.reason,v.message,
+        typeof v.error === "string" ? v.error : v.error?.code,
+        v.error?.reason,v.error?.message]).filter(v=>typeof v === "string").join(" ").toLowerCase();
+    // Log categories only; arbitrary provider messages may contain credentials.
+    const exactRateCode = objects.some(v => [v.code,v.error_code,v.reason,v.error?.code,v.error?.reason]
+        .some(x=>typeof x === "string" && ["rate_limit_exceeded","ratelimitexceeded","too_many_requests"].includes(x.toLowerCase())));
+    const kind = http_status === 401 || /invalid.?api.?key|unauthori[sz]ed/.test(markers) ? "authentication" :
+        /downloadquotaexceeded|download.quota|storage.quota|quota/.test(markers) ? "quota" :
+        http_status === 429 || /rate.limit|too many requests/.test(markers) ? "rate_limit" :
+        http_status === 403 ? "forbidden" : http_status >= 500 ? "server_error" :
+        http_status >= 300 && http_status < 400 ? "redirect" :
+        explicitFailure ? "provider_rejected" : ids.length > 1 ? "conflicting_share_ids" : "missing_share_id";
+    // Only an explicit structured 429 rejection with no returned ID is
+    // eligible for a bounded delayed retry; quota and unknown outcomes stay review.
+    const retryAfter = response.headers.get("Retry-After");
+    let retryDelay = 120000;
+    if (retryAfter) {
+        const seconds = /^\d+$/.test(retryAfter) ? Number(retryAfter)*1000 : Date.parse(retryAfter)-Date.now();
+        if (Number.isFinite(seconds)) retryDelay = Math.max(retryDelay, seconds);
+    }
+    const retrySafe = http_status === 429 && explicitFailure && exactRateCode && kind === "rate_limit" &&
+        values.length === 0 && retryDelay <= 86400000;
+    console.warn("[SCLOUD DRIVETOT] rejected or unconfirmed", {http_status,kind,shape,
+        explicit_failure:explicitFailure,has_share_field:values.length>0,retry_safe:retrySafe});
+    return {error:`Drivetot HTTP ${http_status}: ${kind}; ${retrySafe ? "rate-limit rejection" : "needs review"}`,
+        kind,http_status,retrySafe,retryDelay};
+}
+
 export async function uploadToDrivetot(fileId, env, options = {}) {
     const apiKey = env.DRIVETOT_API_KEY;
 
@@ -40,7 +104,8 @@ export async function uploadToDrivetot(fileId, env, options = {}) {
         );
     }
 
-    const maxRetries = options.singleAttempt ? 1 : 4;
+    if (options.singleAttempt) return submitDrivetotOnce(fileId, apiKey, options);
+    const maxRetries = 4;
 
     for (
         let attempt = 1;
