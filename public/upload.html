@@ -859,7 +859,16 @@
 
                 if (!response.ok || !data || data.status !== "success") {
                     const status = row.querySelector("[data-status]");
-                    status.innerHTML = `<span class="text-red-400">Failed</span>`;
+                    const labels = {
+                        DRIVE_ACCESS_DENIED: "Drive access denied", DRIVE_NOT_FOUND: "Drive file unavailable",
+                        DRIVE_RATE_LIMIT: "Drive API rate limit", DRIVE_QUOTA: "Drive quota reached",
+                        DRIVE_OAUTH_UNAVAILABLE: "Drive authentication unavailable", DRIVE_METADATA_UNAVAILABLE: "Metadata verification failed",
+                        DRIVE_SIZE_UNAVAILABLE: "File size unavailable", DRIVE_INVALID_FILE: "Invalid Drive file",
+                        LEGACY_COPY_REVIEW: "Previous copy needs review", UPLOAD_STATE_REVIEW: "Previous upload needs review", UPLOAD_RETRY: "Retry upload",
+                        DIRECT_SOURCE_REQUIRES_JOBS: "Upload service unavailable"
+                    };
+                    status.textContent = labels[data?.code] || "Failed";
+                    if (typeof data?.message === "string") status.title = data.message;
                     status.classList.remove("text-cyan-400");
                     status.classList.add("text-red-400");
                     return false;
@@ -964,7 +973,7 @@
 
                 folderFiles = folderData.files;
                 if(folderData.truncated) showToast("success","Folder Limit",`Uploading up to ${folderData.limit} files from this folder.`);
-                uploadLinks = folderFiles.map(file => `https://drive.google.com/file/d/${encodeURIComponent(file.id)}/view`);
+                uploadLinks = folderFiles.map(file => `https://drive.google.com/file/d/${encodeURIComponent(file.id)}/view` + (file.resourceKey ? `?resourcekey=${encodeURIComponent(file.resourceKey)}` : ""));
             }
 
             const button = document.getElementById("uploadBtn");

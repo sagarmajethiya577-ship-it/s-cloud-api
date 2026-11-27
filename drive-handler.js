@@ -87,202 +87,88 @@ async function getAccessToken(clientId, clientSecret, refreshToken) {
     return data.access_token;
 }
 
-async function chooseDriveAccount(env, sourceFileId, requiredAccountNumber = null, metadataOnly = false) {
-    const configured = getDrivePoolConfigurations(env, metadataOnly);
-    const accounts = requiredAccountNumber == null
-        ? configured
-        : configured.filter(account => account.number === requiredAccountNumber);
-    if (!accounts.length) {
-        throw new Error(`Required Google Drive account ${requiredAccountNumber} is not configured`);
+// Read-only metadata path. No folder write, files.copy or content download.
+const metadataTokenCache = new Map();
+function metadataError(code) { return Object.assign(new Error(code), {code}); }
+async function metadataToken(account, signal, force = false) {
+    const credentials = JSON.stringify([account.clientId,account.clientSecret,account.refreshToken]);
+    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(credentials));
+    const key=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
+    const cached=metadataTokenCache.get(key);
+    if (!force && cached && cached.expiresAt>Date.now()) return cached.token;
+    metadataTokenCache.delete(key);
+    const response=await fetch('https://oauth2.googleapis.com/token',{
+        method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},signal,
+        body:new URLSearchParams({client_id:account.clientId,client_secret:account.clientSecret,
+            refresh_token:account.refreshToken,grant_type:'refresh_token'}).toString()
+    });
+    const data=await response.json().catch(()=>null);
+    if(response.status===429) throw metadataError('DRIVE_RATE_LIMIT');
+    if(!response.ok||typeof data?.access_token!=='string'||!data.access_token) throw metadataError('DRIVE_OAUTH_UNAVAILABLE');
+    const ttl=Number(data.expires_in);
+    if(Number.isFinite(ttl)&&ttl>90) {
+        if(metadataTokenCache.size>=32) metadataTokenCache.delete(metadataTokenCache.keys().next().value);
+        metadataTokenCache.set(key,{token:data.access_token,expiresAt:Date.now()+Math.min(ttl-60,3600)*1000});
     }
-    if (!env.DB) throw new Error("D1 DB binding missing for Drive rotation");
-    let start = 0;
-    if (requiredAccountNumber == null && (!metadataOnly || accounts.length > 1)) {
-        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_drive_rotation (
-            singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-            cursor INTEGER NOT NULL DEFAULT 0
-        )`).run();
-        await env.DB.prepare(`INSERT OR IGNORE INTO scloud_drive_rotation (singleton, cursor)
-            VALUES (1, 0)`).run();
-
-        // UPDATE ... RETURNING atomically reserves one slot across Workers.
-        const row = await env.DB.prepare(`UPDATE scloud_drive_rotation
-            SET cursor = cursor + 1 WHERE singleton = 1 RETURNING cursor`).first();
-        const cursor = Number(row?.cursor);
-        if (!Number.isSafeInteger(cursor) || cursor < 1) {
-            throw new Error("Drive account rotation state unavailable");
-        }
-        start = (cursor - 1) % accounts.length;
-    }
-    // Forced Account 1 for >12 GiB never advances round-robin cursor again.
-
-    // A failed OAuth token refresh cannot have copied a file, so safely try
-    // another configured account. DO NOT retry after starting files.copy.
-    for (let offset = 0; offset < accounts.length; offset++) {
-        const account = accounts[(start + offset) % accounts.length];
+    return data.access_token;
+}
+function driveMetadataError(status, data) {
+    const reasons=(data?.error?.errors||[]).map(item=>String(item.reason||''));
+    if(reasons.some(reason=>/^(downloadQuotaExceeded|storageQuotaExceeded|quotaExceeded|dailyLimitExceeded)$/i.test(reason))) return 'DRIVE_QUOTA';
+    if(status===429||reasons.some(reason=>/rateLimitExceeded/i.test(reason))) return 'DRIVE_RATE_LIMIT';
+    if(status===404) return 'DRIVE_NOT_FOUND';
+    if(status===403) return 'DRIVE_ACCESS_DENIED';
+    if(status===401) return 'DRIVE_OAUTH_UNAVAILABLE';
+    return 'DRIVE_METADATA_UNAVAILABLE';
+}
+export async function selectDriveMetadataAccount(sourceFileId, env, options = {}) {
+    if (!/^[A-Za-z0-9_-]{10,200}$/.test(String(sourceFileId))) throw metadataError('DRIVE_NOT_FOUND');
+    const resourceKey=options.resourceKey;
+    if(resourceKey!=null&&!/^[A-Za-z0-9_-]{1,200}$/.test(String(resourceKey))) throw metadataError('DRIVE_ACCESS_DENIED');
+    let accounts;
+    try { accounts=getDrivePoolConfigurations(env,true); }
+    catch { throw metadataError('DRIVE_OAUTH_UNAVAILABLE'); }
+    // Use configured authorized accounts for access; never rotate to evade a
+    // reported quota or API rate restriction. Bound total upstream time.
+    const signal=AbortSignal.timeout(12000);
+    const failures=[];
+    for(const account of accounts) {
         try {
-            const token = await getAccessToken(
-                account.clientId, account.clientSecret, account.refreshToken
-            );
-            // Before copying, verify THIS account can read the source.
-            // Trying another account after this check is safe; no copy exists yet.
-            const sourceCheck = await fetch(
-                `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceFileId)}?fields=${metadataOnly ? "id,name,size,mimeType" : "id"}&supportsAllDrives=true`,
-                { headers: { "Authorization": `Bearer ${token}` } }
-            );
-            if (!sourceCheck.ok) {
-                console.warn(`[DRIVE POOL] Account ${account.number} cannot access source (HTTP ${sourceCheck.status})`);
+            const headers=token=>({Authorization:`Bearer ${token}`,...(resourceKey?{'X-Goog-Drive-Resource-Keys':`${sourceFileId}/${resourceKey}`}:{})});
+            const url=`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceFileId)}?fields=id,name,size,mimeType,trashed&supportsAllDrives=true`;
+            let token=await metadataToken(account,signal);
+            let response=await fetch(url,{headers:headers(token),signal});
+            if(response.status===401) {
+                await response.body?.cancel();
+                token=await metadataToken(account,signal,true);
+                response=await fetch(url,{headers:headers(token),signal});
+            }
+            const metadata=await response.json().catch(()=>null);
+            if(!response.ok) {
+                const code=driveMetadataError(response.status,metadata);
+                console.warn('[DRIVE METADATA]',{account:account.number,http:response.status,code});
+                if(code==='DRIVE_RATE_LIMIT'||code==='DRIVE_QUOTA') throw metadataError(code);
+                failures.push(code);
                 continue;
             }
-            if (metadataOnly) {
-                const metadata = await sourceCheck.json();
-                if (metadata?.id !== sourceFileId || !metadata?.name) continue;
-                return { account, token, metadata };
+            if(metadata?.id!==sourceFileId||!metadata?.name) {
+                failures.push('DRIVE_METADATA_UNAVAILABLE'); continue;
             }
-            await sourceCheck.body?.cancel();
-            // Check the destination folder with the SAME identity before
-            // performing any irreversible files.copy operation.
-            const folderCheck = await fetch(
-                `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(account.folderId)}?fields=id,mimeType,capabilities(canAddChildren)&supportsAllDrives=true`,
-                { headers: { "Authorization": `Bearer ${token}` } }
-            );
-            if (!folderCheck.ok) {
-                console.warn(`[DRIVE POOL] Account ${account.number} cannot access its folder (HTTP ${folderCheck.status})`);
-                continue;
-            }
-            const folder = await folderCheck.json();
-            if (folder?.id !== account.folderId ||
-                folder?.mimeType !== "application/vnd.google-apps.folder" ||
-                folder?.capabilities?.canAddChildren === false) {
-                console.warn(`[DRIVE POOL] Account ${account.number} folder is not writable`);
-                continue;
-            }
-            return { account, token };
-        } catch (error) {
-            console.error(`[DRIVE POOL] Account ${account.number} OAuth unavailable:`,
-                error?.message || "token failed");
+            return {account,token,metadata};
+        } catch(error) {
+            if(error?.code==='DRIVE_RATE_LIMIT'||error?.code==='DRIVE_QUOTA') throw error;
+            failures.push(error?.code||'DRIVE_METADATA_UNAVAILABLE');
+            if(signal.aborted) throw metadataError('DRIVE_METADATA_UNAVAILABLE');
         }
     }
-    throw new Error("All configured Drive accounts failed OAuth token refresh");
+    for(const code of ['DRIVE_METADATA_UNAVAILABLE','DRIVE_ACCESS_DENIED','DRIVE_NOT_FOUND','DRIVE_OAUTH_UNAVAILABLE']) {
+        if(failures.includes(code)) throw metadataError(code);
+    }
+    throw metadataError('DRIVE_METADATA_UNAVAILABLE');
 }
-
-function formatFileSize(bytes) {
-    const size = Number(bytes);
-    if (!Number.isFinite(size) || size <= 0) return "Unknown";
-    if (size > 1024 * 1024 * 1024) {
-        return (size / (1024 * 1024 * 1024)).toFixed(2) + " GB";
-    }
-    return (size / (1024 * 1024)).toFixed(2) + " MB";
-}
-
-export async function selectDriveMetadataAccount(sourceFileId, env) {
-    if (!/^[A-Za-z0-9_-]{10,200}$/.test(String(sourceFileId))) throw new Error("Invalid Drive ID");
-    return chooseDriveAccount(env, sourceFileId, null, true);
-}
-
-export async function selectDriveCopyAccount(sourceFileId, env, options = {}) {
-    if (typeof sourceFileId !== "string" || !/^[A-Za-z0-9_-]{10,}$/.test(sourceFileId)) {
-        throw new Error("Invalid original Drive file ID");
-    }
-    const requiredAccountNumber = options.requiredAccountNumber == null
-        ? null : Number(options.requiredAccountNumber);
-    if (requiredAccountNumber != null &&
-        (!Number.isSafeInteger(requiredAccountNumber) || requiredAccountNumber < 1)) {
-        throw new Error("Invalid required Drive account");
-    }
-    return chooseDriveAccount(env, sourceFileId, requiredAccountNumber);
-}
-
-export async function copyFileToSCloud(
-    driveUrl, env, onCopyCreated = null, onCopyAttempted = null, preparedAccount = null
-) {
-    if (!driveUrl || typeof driveUrl !== "string") {
-        throw new Error("Invalid Google Drive Link");
-    }
-    const match = driveUrl.match(/[-\w]{25,}/);
-    if (!match) throw new Error("Invalid Google Drive Link");
-    const sourceFileId = match[0];
-
-    // The upload route can preselect one account to read metadata and copy
-    // with the SAME credentials. Direct callers may let this function select.
-    const { account, token } = preparedAccount || await chooseDriveAccount(env, sourceFileId);
-    console.log(`[DRIVE POOL] Copy started | account=${account.number}`);
-
-    // One selected identity + its matching destination folder are used for
-    // the ENTIRE copy and permissions flow. No fallback after this request.
-    if (typeof onCopyAttempted === "function") onCopyAttempted();
-    const copyRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceFileId)}/copy?supportsAllDrives=true`,
-        {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ parents: [account.folderId] })
-        }
-    );
-    let copyData;
-    try { copyData = await copyRes.json(); }
-    catch (_) { throw new Error(`Google copy returned invalid JSON (HTTP ${copyRes.status})`); }
-    if (!copyRes.ok || copyData?.error) {
-        throw new Error(`Google Drive copy rejected (HTTP ${copyRes.status}); account=${account.number}`);
-    }
-    const newFileId = copyData?.id;
-    if (typeof newFileId !== "string" || !/^[A-Za-z0-9_-]{10,200}$/.test(newFileId)) {
-        throw new Error("Google copy response lacks a valid file ID; manual review required");
-    }
-
-    // Save copied ID AND account/folder immediately. On a later permission
-    // error, same-user dedupe claim remains and never silently recopies.
-    if (typeof onCopyCreated === "function") {
-        await onCopyCreated(newFileId, {
-            accountNumber: account.number,
-            folderId: account.folderId
-        });
-    }
-
-    const permRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(newFileId)}/permissions?supportsAllDrives=true`,
-        {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ type: "anyone", role: "reader" })
-        }
-    );
-    let permData;
-    try { permData = await permRes.json(); }
-    catch (_) { throw new Error(`Google permission response invalid (HTTP ${permRes.status})`); }
-    if (!permRes.ok || permData?.error) {
-        throw new Error(`Google Drive permission rejected (HTTP ${permRes.status}); account=${account.number}`);
-    }
-
-    let fileSize = "Unknown";
-    try {
-        const metaRes = await fetch(
-            `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(newFileId)}?fields=size&supportsAllDrives=true`,
-            { headers: { "Authorization": `Bearer ${token}` } }
-        );
-        if (metaRes.ok) {
-            const metadata = await metaRes.json();
-            if (metadata?.size) fileSize = formatFileSize(metadata.size);
-        }
-    } catch (error) {
-        console.warn(`[DRIVE POOL] Size lookup failed for account=${account.number}`);
-    }
-
-    console.log(`[DRIVE POOL] Copy ready | account=${account.number}`);
-    return {
-        fileId: newFileId,
-        fileSize,
-        driveAccountNumber: account.number,
-        targetFolderId: account.folderId
-    };
-}
-
+// Keep old exports fail-closed so an accidental legacy caller cannot copy.
+export async function selectDriveCopyAccount() { throw new Error('Google Drive copy mode is permanently disabled for new uploads'); }
+export async function copyFileToSCloud() { throw new Error('Google Drive copy mode is permanently disabled for new uploads'); }
 
 // Delete ONLY a D1-tracked copy, not a user's original source.
 // Credentials and folder MUST match the account used at files.copy time.
