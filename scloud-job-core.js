@@ -302,28 +302,38 @@ export async function healScloudMirrorJobs(fileId, env, uploadPolicy, syncDownlo
 }
 
 export async function reconcileScloudJobs(env, uploadPolicy) {
-  await ensureScloudJobTables(env);
   const now = nowMs();
-  // A crashed operation may have reached provider API: mark uncertain uploads
-  // for review rather than restarting them. Extraction is safe to restart.
-  await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'review',
-    last_error = 'Lease expired; check provider for existing submission',
-    lease_token = NULL, lease_until = NULL
-    WHERE state = 'running' AND lease_until < ? AND provider <> 'extract'`
-  ).bind(now).run();
-  await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'queued',
-    lease_token = NULL, lease_until = NULL, available_at = ?
-    WHERE state = 'running' AND lease_until < ? AND provider = 'extract'`
-  ).bind(now,now).run();
-  // Google deletion may have completed before a network acknowledgment.
-  // Do not automatically issue a second destructive call after lease expiry.
-  await env.DB.prepare(`UPDATE scloud_drive_cleanup_jobs
-    SET state='review', last_error='Cleanup lease expired; verify file before retry',
-        lease_token=NULL, lease_until=NULL
-    WHERE state='running' AND lease_until < ?`).bind(now).run();
-  const paused = await env.DB.prepare(`SELECT j.file_id,j.provider,f.user_id
-    FROM scloud_mirror_jobs j INNER JOIN files f ON f.short_id = j.file_id
-    WHERE j.state = 'paused' LIMIT 30`).all();
+  const cleanupEnabled = String(env.DRIVE_CLEANUP_ENABLED||'false').toLowerCase() === 'true';
+  // Schema already exists in deployed installations. Initialize only on a missing-table error.
+  const maintenance = () => {
+    const statements = [
+      env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'review',
+        last_error = 'Lease expired; check provider for existing submission',
+        lease_token = NULL, lease_until = NULL
+        WHERE state = 'running' AND lease_until < ? AND provider <> 'extract'`).bind(now),
+      env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'queued',
+        lease_token = NULL, lease_until = NULL, available_at = ?
+        WHERE state = 'running' AND lease_until < ? AND provider = 'extract'`).bind(now,now)
+    ];
+    if (cleanupEnabled) statements.push(env.DB.prepare(`UPDATE scloud_drive_cleanup_jobs
+      SET state='review', last_error='Cleanup lease expired; verify file before retry',
+          lease_token=NULL, lease_until=NULL
+      WHERE state='running' AND lease_until < ?`).bind(now));
+    statements.push(env.DB.prepare(`SELECT j.file_id,j.provider,f.user_id
+      FROM scloud_mirror_jobs j INNER JOIN files f ON f.short_id = j.file_id
+      WHERE j.state = 'paused' LIMIT 30`));
+    return env.DB.batch(statements);
+  };
+  let results;
+  try {
+    results = await maintenance();
+  } catch (error) {
+    if (!/no such table:\s*(?:main\.)?scloud_(?:mirror_jobs|drive_cleanup_jobs)\b/i.test(String(error?.message||error))) throw error;
+    await ensureScloudJobTables(env);
+    results = await maintenance();
+  }
+  if (!results?.length || results.some(r=>!r||r.success===false)) throw new Error('Job maintenance batch failed');
+  const paused = results[results.length-1];
   for (const j of paused.results||[]) {
     const rule = await uploadPolicy(j.user_id,env);
     if (j.provider === 'pdlink' && rule.pdlink ||

@@ -29,8 +29,11 @@ async function tick(env) {
     const batchSize=Math.max(3,Math.min(36,Number.parseInt(env.SCLOUD_JOB_BATCH_SIZE||'18',10)||18));
     const concurrency=Math.max(1,Math.min(4,Number.parseInt(env.SCLOUD_JOB_CONCURRENCY||'3',10)||3));
     const now=Date.now();
-    const due=await env.DB.prepare(`SELECT file_id,provider FROM scloud_mirror_jobs WHERE state='queued' AND available_at<=? AND provider<>'extract' ORDER BY available_at ASC LIMIT ?`).bind(now,batchSize).all();
-    const extraction=await env.DB.prepare(`SELECT file_id,provider FROM scloud_mirror_jobs WHERE state='queued' AND available_at<=? AND provider='extract' ORDER BY available_at ASC LIMIT 12`).bind(now).all();
+    const [due, extraction] = await env.DB.batch([
+        env.DB.prepare(`SELECT file_id,provider FROM scloud_mirror_jobs WHERE state='queued' AND available_at<=? AND provider<>'extract' ORDER BY available_at ASC LIMIT ?`).bind(now,batchSize),
+        env.DB.prepare(`SELECT file_id,provider FROM scloud_mirror_jobs WHERE state='queued' AND available_at<=? AND provider='extract' ORDER BY available_at ASC LIMIT 12`).bind(now)
+    ]);
+    if (!due || !extraction || due.success===false || extraction.success===false) throw new Error('Job selection batch failed');
     const providerResults=[];
     async function runRows(rows, width) {
         for(let i=0;i<rows.length;i+=width) {
