@@ -2537,9 +2537,6 @@ export default {
         ctx
     ) {
 
-        const perfRequestStart = Date.now();
-        let perfAuthMs = 0;
-
         // ------------------------------------------
         // CORS / COMMON HEADERS
         // ------------------------------------------
@@ -5627,7 +5624,6 @@ export default {
 
         let currentUser =
             null;
-        const perfAuthStart = Date.now();
 
 
         if (
@@ -5674,8 +5670,6 @@ export default {
                         env
                     );
             }
-
-            perfAuthMs = Date.now() - perfAuthStart;
 
             if (
                 !currentUser
@@ -5784,10 +5778,14 @@ export default {
                 }
 
 
-                // V5: one D1 round trip; preserve the original date filters and response shape.
-                const dashboardDbStart = Date.now();
-                const dashboardBatch = await env.DB.batch([
-                    env.DB.prepare(`SELECT
+                // ==========================================
+                // LIFETIME REVENUE
+                // ==========================================
+
+                const lifetimeEarnings =
+                    await env.DB
+                        .prepare(
+                            `SELECT
                                 COALESCE(
                                     SUM(
                                         CASE
@@ -5799,13 +5797,76 @@ export default {
                                     0
                                 ) AS total
                              FROM earnings e
-                             WHERE e.user_id = ?`).bind(currentUser.id),
-                    env.DB.prepare(`SELECT
-                        COALESCE(SUM(CASE WHEN status='completed' THEN amount END),0) AS paid,
-                        COALESCE(SUM(CASE WHEN status='approved' THEN amount END),0) AS approved,
-                        COALESCE(SUM(CASE WHEN status='pending' THEN amount END),0) AS pending
-                    FROM withdrawals WHERE user_id=? AND status IN ('completed','approved','pending')`).bind(currentUser.id),
-                    env.DB.prepare(`SELECT
+                             WHERE e.user_id = ?`
+                        )
+                        .bind(
+                            currentUser.id
+                        )
+                        .first();
+
+
+                const paidWithdrawals =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COALESCE(
+                                    SUM(amount),
+                                    0
+                                ) AS total
+                             FROM withdrawals w
+                             WHERE w.user_id = ?
+                             AND w.status = 'completed'`
+                        )
+                        .bind(
+                            currentUser.id
+                        )
+                        .first();
+
+
+                const approvedWithdrawals =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COALESCE(
+                                    SUM(amount),
+                                    0
+                                ) AS total
+                             FROM withdrawals w
+                             WHERE w.user_id = ?
+                             AND w.status = 'approved'`
+                        )
+                        .bind(
+                            currentUser.id
+                        )
+                        .first();
+
+
+                const pendingWithdrawals =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                COALESCE(
+                                    SUM(amount),
+                                    0
+                                ) AS total
+                             FROM withdrawals w
+                             WHERE w.user_id = ?
+                             AND w.status = 'pending'`
+                        )
+                        .bind(
+                            currentUser.id
+                        )
+                        .first();
+
+
+                // ==========================================
+                // DAILY UPLOADS
+                // ==========================================
+
+                const dailyUploads =
+                    await env.DB
+                        .prepare(
+                            `SELECT
                                 COUNT(*) AS total
                              FROM files
                              WHERE user_id = ?
@@ -5813,8 +5874,23 @@ export default {
                              AND date(
                                  created_at,
                                  '+05:30'
-                             ) = ?`).bind(currentUser.id, requestedDate),
-                    env.DB.prepare(`SELECT
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedDate
+                        )
+                        .first();
+
+
+                // ==========================================
+                // DAILY VIEWS
+                // ==========================================
+
+                const dailyViews =
+                    await env.DB
+                        .prepare(
+                            `SELECT
                                 COUNT(*) AS total
                              FROM views_log vl
                              INNER JOIN files f
@@ -5824,8 +5900,23 @@ export default {
                              AND date(
                                  vl.viewed_at,
                                  '+05:30'
-                             ) = ?`).bind(currentUser.id, requestedDate),
-                    env.DB.prepare(`SELECT
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedDate
+                        )
+                        .first();
+
+
+                // ==========================================
+                // DAILY EARNINGS
+                // ==========================================
+
+                const dailyEarnings =
+                    await env.DB
+                        .prepare(
+                            `SELECT
                                 COALESCE(
                                     SUM(
                                         CASE
@@ -5841,8 +5932,23 @@ export default {
                              AND date(
                                  e.created_at,
                                  '+05:30'
-                             ) = ?`).bind(currentUser.id, requestedDate),
-                    env.DB.prepare(`SELECT
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedDate
+                        )
+                        .first();
+
+
+                // ==========================================
+                // MONTHLY UPLOADS
+                // ==========================================
+
+                const monthlyUploads =
+                    await env.DB
+                        .prepare(
+                            `SELECT
                                 COUNT(*) AS total
                              FROM files
                              WHERE user_id = ?
@@ -5851,8 +5957,23 @@ export default {
                                  '%Y-%m',
                                  created_at,
                                  '+05:30'
-                             ) = ?`).bind(currentUser.id, requestedMonth),
-                    env.DB.prepare(`SELECT
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedMonth
+                        )
+                        .first();
+
+
+                // ==========================================
+                // MONTHLY VIEWS
+                // ==========================================
+
+                const monthlyViews =
+                    await env.DB
+                        .prepare(
+                            `SELECT
                                 COUNT(*) AS total
                              FROM views_log vl
                              INNER JOIN files f
@@ -5863,8 +5984,23 @@ export default {
                                  '%Y-%m',
                                  vl.viewed_at,
                                  '+05:30'
-                             ) = ?`).bind(currentUser.id, requestedMonth),
-                    env.DB.prepare(`SELECT
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedMonth
+                        )
+                        .first();
+
+
+                // ==========================================
+                // MONTHLY EARNINGS
+                // ==========================================
+
+                const monthlyEarnings =
+                    await env.DB
+                        .prepare(
+                            `SELECT
                                 COALESCE(
                                     SUM(
                                         CASE
@@ -5881,8 +6017,23 @@ export default {
                                  '%Y-%m',
                                  e.created_at,
                                  '+05:30'
-                             ) = ?`).bind(currentUser.id, requestedMonth),
-                    env.DB.prepare(`SELECT
+                             ) = ?`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedMonth
+                        )
+                        .first();
+
+
+                // ==========================================
+                // LAST 7 DAYS CHART
+                // ==========================================
+
+                const chartResult =
+                    await env.DB
+                        .prepare(
+                            `SELECT
                                 date(
                                     vl.viewed_at,
                                     '+05:30'
@@ -5900,59 +6051,15 @@ export default {
                                  date(?, '-6 days')
                                  AND ?
                              GROUP BY day
-                             ORDER BY day ASC`).bind(currentUser.id, requestedDate, requestedDate),
-                    env.DB.prepare(`SELECT
-                                f.id,
-                                f.short_id,
-                                f.file_name,
-                                f.views,
-                                f.created_at,
-                                COALESCE(
-                                    SUM(
-                                        CASE
-                                            WHEN e.status = 'credited'
-                                            THEN e.amount
-                                            ELSE 0
-                                        END
-                                    ),
-                                    0
-                                ) AS earnings
-                             FROM files f
-                             LEFT JOIN earnings e
-                                ON e.file_id = f.id
-                             WHERE f.user_id = ?
-                             AND f.status != 'deleted'
-                             GROUP BY
-                                f.id,
-                                f.short_id,
-                                f.file_name,
-                                f.views,
-                                f.created_at
-                             ORDER BY
-                                f.created_at DESC
-                             LIMIT 5`).bind(currentUser.id),
-                ]);
-                if (dashboardBatch.length !== 10 || dashboardBatch.some(r => !r || r.success === false)) {
-                    throw new Error("Dashboard database batch failed");
-                }
-                const lifetimeEarnings = dashboardBatch[0].results?.[0] || null;
-                const withdrawalTotals = dashboardBatch[1].results?.[0] || null;
-                const dailyUploads = dashboardBatch[2].results?.[0] || null;
-                const dailyViews = dashboardBatch[3].results?.[0] || null;
-                const dailyEarnings = dashboardBatch[4].results?.[0] || null;
-                const monthlyUploads = dashboardBatch[5].results?.[0] || null;
-                const monthlyViews = dashboardBatch[6].results?.[0] || null;
-                const monthlyEarnings = dashboardBatch[7].results?.[0] || null;
-                const chartResult = dashboardBatch[8];
-                const recentFiles = dashboardBatch[9];
-                const paidWithdrawals = {total: withdrawalTotals?.paid};
-                const approvedWithdrawals = {total: withdrawalTotals?.approved};
-                const pendingWithdrawals = {total: withdrawalTotals?.pending};
-                console.log("[SCLOUD PERF] dashboard", {
-                    auth_ms: perfAuthMs, db_ms: Date.now()-dashboardDbStart,
-                    elapsed_ms: Date.now()-perfRequestStart, statements: dashboardBatch.length,
-                    rows_read: dashboardBatch.reduce((n,r)=>n+Number(r.meta?.rows_read||0),0)
-                });
+                             ORDER BY day ASC`
+                        )
+                        .bind(
+                            currentUser.id,
+                            requestedDate,
+                            requestedDate
+                        )
+                        .all();
+
 
                 const chartMap =
                     new Map();
@@ -6005,6 +6112,50 @@ export default {
                             ) || 0
                     });
                 }
+
+
+                // ==========================================
+                // RECENT FILES
+                // ==========================================
+
+                const recentFiles =
+                    await env.DB
+                        .prepare(
+                            `SELECT
+                                f.id,
+                                f.short_id,
+                                f.file_name,
+                                f.views,
+                                f.created_at,
+                                COALESCE(
+                                    SUM(
+                                        CASE
+                                            WHEN e.status = 'credited'
+                                            THEN e.amount
+                                            ELSE 0
+                                        END
+                                    ),
+                                    0
+                                ) AS earnings
+                             FROM files f
+                             LEFT JOIN earnings e
+                                ON e.file_id = f.id
+                             WHERE f.user_id = ?
+                             AND f.status != 'deleted'
+                             GROUP BY
+                                f.id,
+                                f.short_id,
+                                f.file_name,
+                                f.views,
+                                f.created_at
+                             ORDER BY
+                                f.created_at DESC
+                             LIMIT 5`
+                        )
+                        .bind(
+                            currentUser.id
+                        )
+                        .all();
 
 
                 // ==========================================
@@ -6166,8 +6317,9 @@ export default {
         ) {
             try {
 
-                const filesDbStart = Date.now();
-                const filesQuery =
+                const {
+                    results
+                } =
                     await env.DB
                         .prepare(
                             `SELECT
@@ -6194,13 +6346,6 @@ export default {
                             currentUser.id
                         )
                         .all();
-                const {results} = filesQuery;
-                console.log("[SCLOUD PERF] files", {
-                    auth_ms: perfAuthMs, db_ms: Date.now()-filesDbStart,
-                    elapsed_ms: Date.now()-perfRequestStart,
-                    rows_read: Number(filesQuery.meta?.rows_read||0),
-                    returned: results?.length||0
-                });
 
 
                 return new Response(

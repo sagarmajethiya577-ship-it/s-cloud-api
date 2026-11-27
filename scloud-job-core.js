@@ -165,37 +165,14 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
         const result = await uploadToDrivetot(driveId, env, {singleAttempt:true,...requestOptions()});
         responseReceived();
         if (!result?.share_id || !/^[A-Za-z0-9_-]{4,200}$/.test(String(result.share_id))) {
-          const reason = result?.error || "Drivetot returned no usable share_id; needs review";
-          const attempts = Number(claim.attempts || 1);
-          // Retry only explicit, structured rate-limit rejections. Never retry
-          // a timeout, ambiguous provider response, quota error or lost response.
-          if (result?.retrySafe === true && attempts < 3) {
-            await markJob(env,fileId,provider,token,"queued",reason,
-              nowMs()+Math.max(120000, Number(result.retryDelay)||0, 60000*2**attempts));
-            return {state:"retry_rate_limit"};
-          }
-          throw new Error(reason);
+          throw new Error("Drivetot returned no usable share_id; needs review");
         }
         shareId = String(result.share_id);
         const write = await env.DB.prepare(`UPDATE files SET drivetot_url = ?
-          WHERE (id = ? OR short_id = ?) AND COALESCE(drivetot_url,'') IN ('','Not Found')
+          WHERE (id = ? OR short_id = ?) AND COALESCE(drivetot_url,'') = ''
           AND COALESCE(status,'') <> 'deleted'`
         ).bind(`https://drivetot.website/${shareId}`,fileId,fileId).run();
         didWrite = Number(write.meta?.changes||0)>0;
-      }
-      // Confirm the persisted link before scheduling extraction. A failed
-      // conditional write (e.g. deleted file) must not create a dangling job.
-      const saved = await env.DB.prepare(`SELECT drivetot_url,status FROM files
-        WHERE short_id=? LIMIT 1`).bind(fileId).first();
-      if (!saved || saved.status === "deleted") {
-        await markJob(env,fileId,provider,token,"cancelled");
-        return {state:"cancelled"};
-      }
-      let savedUrl;
-      try { savedUrl = new URL(saved.drivetot_url); } catch {}
-      if (!savedUrl || savedUrl.origin !== "https://drivetot.website" ||
-          !/^\/[A-Za-z0-9_-]{4,200}\/?$/.test(savedUrl.pathname)) {
-        throw new Error("Drivetot share received but valid link was not persisted; needs review");
       }
       // Extraction is read-only and may be safely retried independently.
       await env.DB.prepare(`INSERT OR IGNORE INTO scloud_mirror_jobs
@@ -325,38 +302,28 @@ export async function healScloudMirrorJobs(fileId, env, uploadPolicy, syncDownlo
 }
 
 export async function reconcileScloudJobs(env, uploadPolicy) {
+  await ensureScloudJobTables(env);
   const now = nowMs();
-  const cleanupEnabled = String(env.DRIVE_CLEANUP_ENABLED||'false').toLowerCase() === 'true';
-  // Schema already exists in deployed installations. Initialize only on a missing-table error.
-  const maintenance = () => {
-    const statements = [
-      env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'review',
-        last_error = 'Lease expired; check provider for existing submission',
-        lease_token = NULL, lease_until = NULL
-        WHERE state = 'running' AND lease_until < ? AND provider <> 'extract'`).bind(now),
-      env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'queued',
-        lease_token = NULL, lease_until = NULL, available_at = ?
-        WHERE state = 'running' AND lease_until < ? AND provider = 'extract'`).bind(now,now)
-    ];
-    if (cleanupEnabled) statements.push(env.DB.prepare(`UPDATE scloud_drive_cleanup_jobs
-      SET state='review', last_error='Cleanup lease expired; verify file before retry',
-          lease_token=NULL, lease_until=NULL
-      WHERE state='running' AND lease_until < ?`).bind(now));
-    statements.push(env.DB.prepare(`SELECT j.file_id,j.provider,f.user_id
-      FROM scloud_mirror_jobs j INNER JOIN files f ON f.short_id = j.file_id
-      WHERE j.state = 'paused' LIMIT 30`));
-    return env.DB.batch(statements);
-  };
-  let results;
-  try {
-    results = await maintenance();
-  } catch (error) {
-    if (!/no such table:\s*(?:main\.)?scloud_(?:mirror_jobs|drive_cleanup_jobs)\b/i.test(String(error?.message||error))) throw error;
-    await ensureScloudJobTables(env);
-    results = await maintenance();
-  }
-  if (!results?.length || results.some(r=>!r||r.success===false)) throw new Error('Job maintenance batch failed');
-  const paused = results[results.length-1];
+  // A crashed operation may have reached provider API: mark uncertain uploads
+  // for review rather than restarting them. Extraction is safe to restart.
+  await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'review',
+    last_error = 'Lease expired; check provider for existing submission',
+    lease_token = NULL, lease_until = NULL
+    WHERE state = 'running' AND lease_until < ? AND provider <> 'extract'`
+  ).bind(now).run();
+  await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'queued',
+    lease_token = NULL, lease_until = NULL, available_at = ?
+    WHERE state = 'running' AND lease_until < ? AND provider = 'extract'`
+  ).bind(now,now).run();
+  // Google deletion may have completed before a network acknowledgment.
+  // Do not automatically issue a second destructive call after lease expiry.
+  await env.DB.prepare(`UPDATE scloud_drive_cleanup_jobs
+    SET state='review', last_error='Cleanup lease expired; verify file before retry',
+        lease_token=NULL, lease_until=NULL
+    WHERE state='running' AND lease_until < ?`).bind(now).run();
+  const paused = await env.DB.prepare(`SELECT j.file_id,j.provider,f.user_id
+    FROM scloud_mirror_jobs j INNER JOIN files f ON f.short_id = j.file_id
+    WHERE j.state = 'paused' LIMIT 30`).all();
   for (const j of paused.results||[]) {
     const rule = await uploadPolicy(j.user_id,env);
     if (j.provider === 'pdlink' && rule.pdlink ||

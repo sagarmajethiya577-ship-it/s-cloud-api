@@ -1875,7 +1875,7 @@
            LOAD FILES
            ============================================================ */
 
-        async function loadFiles(showRefresh = false, initialRequest = null) {
+        async function loadFiles(showRefresh = false) {
 
             if (isLoadingFiles || v4BulkBusy) {
                 return;
@@ -1898,7 +1898,7 @@
 
             try {
 
-                const response = await (initialRequest || fetch("/api/files", {
+                const response = await fetch("/api/files", {
                     method: "POST",
                     credentials: "include",
                     headers: {
@@ -1906,7 +1906,7 @@
                         "Accept": "application/json"
                     },
                     body: "{}"
-                }));
+                });
 
                 let data = {};
 
@@ -4191,14 +4191,9 @@
             "DOMContentLoaded",
             async function() {
 
-                // Start both reads together, but do not render files before user/support verification.
-                const initialRequest = fetch("/api/files", {
-                    method: "POST", credentials: "include",
-                    headers: {"Content-Type":"application/json", "Accept":"application/json"}, body: "{}"
-                });
-                initialRequest.catch(() => {}); // handled in loadFiles if user is authenticated
-                const user = await loadUser();
-                if (user) await loadFiles(false, initialRequest);
+                await loadUser();
+
+                await loadFiles();
             }
         );
 
