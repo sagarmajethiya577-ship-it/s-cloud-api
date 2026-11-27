@@ -6975,7 +6975,7 @@ export default {
                 const metadataStart=Date.now();
                 let metaData;
                 try {
-                    ({metadata:metaData}=await selectDriveMetadataAccount(sourceFileId,env,{resourceKey}));
+                    ({metadata:metaData}=await selectDriveMetadataAccount(sourceFileId,env,{resourceKey,verifyDownload:true}));
                 } catch(error) {
                     const code=error?.code || 'DRIVE_METADATA_UNAVAILABLE';
                     const publicErrors={
@@ -6983,6 +6983,12 @@ export default {
                         DRIVE_NOT_FOUND:[404,'Google Drive file was not found or is not accessible to S-Cloud.'],
                         DRIVE_RATE_LIMIT:[429,'Google Drive API rate limit reached. Please retry later.'],
                         DRIVE_QUOTA:[429,'Google Drive reports a quota restriction. Please retry after the quota resets.'],
+                        DRIVE_DOWNLOAD_QUOTA:[429,'Google Drive download quota exceeded. Retry when the file becomes downloadable again.'],
+                        DRIVE_DOWNLOAD_DENIED:[400,'Google Drive does not allow downloading this file. Check its download permissions.'],
+                        DRIVE_AVAILABILITY_UNAVAILABLE:[503,'Unable to verify Google Drive download availability. Please retry later.'],
+                        DRIVE_UNSUPPORTED_FILE:[400,'Only downloadable Google Drive binary files are supported. Native Google documents and shortcuts are not supported.'],
+                        DRIVE_INVALID_FILE:[400,'The Google Drive file is missing, trashed or is a folder.'],
+                        DRIVE_SIZE_UNAVAILABLE:[400,'Google Drive did not provide a valid file size. Please retry.'],
                         DRIVE_OAUTH_UNAVAILABLE:[503,'S-Cloud Google Drive authentication is temporarily unavailable. Contact support if it continues.'],
                         DRIVE_METADATA_UNAVAILABLE:[503,'Google Drive metadata could not be verified. Please retry.']
                     };
@@ -7113,6 +7119,9 @@ export default {
                             "success",
                         message: "File registered; background mirror submissions started.",
                         data: {
+                            registration_state: "registered",
+                            mirror_state: "pending",
+                            source_check: "available",
                             file_name:
                                 actualFileName,
                             file_size:

@@ -87,7 +87,7 @@ async function getAccessToken(clientId, clientSecret, refreshToken) {
     return data.access_token;
 }
 
-// Read-only metadata path. No folder write, files.copy or content download.
+// Read-only metadata path. Uploads additionally probe content availability; no copy or full download.
 const metadataTokenCache = new Map();
 function metadataError(code) { return Object.assign(new Error(code), {code}); }
 async function metadataToken(account, signal, force = false) {
@@ -113,13 +113,60 @@ async function metadataToken(account, signal, force = false) {
     return data.access_token;
 }
 function driveMetadataError(status, data) {
-    const reasons=(data?.error?.errors||[]).map(item=>String(item.reason||''));
-    if(reasons.some(reason=>/^(downloadQuotaExceeded|storageQuotaExceeded|quotaExceeded|dailyLimitExceeded)$/i.test(reason))) return 'DRIVE_QUOTA';
+    const reasons=(Array.isArray(data?.error?.errors)?data.error.errors:[]).map(item=>String(item?.reason||''));
+    if(reasons.some(reason=>/^downloadQuotaExceeded$/i.test(reason))) return 'DRIVE_DOWNLOAD_QUOTA';
+    if(reasons.some(reason=>/^(storageQuotaExceeded|quotaExceeded|dailyLimitExceeded)$/i.test(reason))) return 'DRIVE_QUOTA';
     if(status===429||reasons.some(reason=>/rateLimitExceeded/i.test(reason))) return 'DRIVE_RATE_LIMIT';
     if(status===404) return 'DRIVE_NOT_FOUND';
     if(status===403) return 'DRIVE_ACCESS_DENIED';
     if(status===401) return 'DRIVE_OAUTH_UNAVAILABLE';
     return 'DRIVE_METADATA_UNAVAILABLE';
+}
+// Probe ONLY the same authorized account that successfully read metadata.
+// Stop on any restriction; never switch accounts to try to evade it.
+async function verifyDownloadAvailability(sourceFileId, metadata, headers, signal) {
+    const mime = String(metadata.mimeType || '');
+    if (metadata.trashed === true || mime === 'application/vnd.google-apps.folder') {
+        throw metadataError('DRIVE_INVALID_FILE');
+    }
+    // Native Workspace files and shortcuts are not downloadable blobs.
+    if (!mime || mime.startsWith('application/vnd.google-apps.')) {
+        throw metadataError('DRIVE_UNSUPPORTED_FILE');
+    }
+    if (metadata.capabilities?.canDownload === false) {
+        throw metadataError('DRIVE_DOWNLOAD_DENIED');
+    }
+    const size = metadata.size == null || metadata.size === '' ? NaN : Number(metadata.size);
+    if (!Number.isSafeInteger(size) || size < 0) throw metadataError('DRIVE_SIZE_UNAVAILABLE');
+    const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceFileId)}?alt=media&supportsAllDrives=true`;
+    let response;
+    try {
+        response = await fetch(url, {headers: {...headers, ...(size > 0 ? {Range:'bytes=0-0'} : {})}, signal, redirect:'manual'});
+    } catch {
+        throw metadataError('DRIVE_AVAILABILITY_UNAVAILABLE');
+    }
+    if (response.status === 200 || response.status === 206) {
+        // Never buffer or store file bytes; if the server ignores Range,
+        // cancel its stream too. A successful probe is not a quota guarantee.
+        try { await response.body?.cancel(); } catch { throw metadataError('DRIVE_AVAILABILITY_UNAVAILABLE'); }
+        return;
+    }
+    // Only parse Google error JSON, never a successful content response.
+    let data = null;
+    if (response.status >= 400 && response.status < 600 && /application\/json/i.test(response.headers.get('content-type') || '')) {
+        data = await response.json().catch(()=>null);
+    } else {
+        await response.body?.cancel().catch(()=>{});
+    }
+    const code = driveMetadataError(response.status, data);
+    if (['DRIVE_DOWNLOAD_QUOTA','DRIVE_QUOTA','DRIVE_RATE_LIMIT','DRIVE_NOT_FOUND','DRIVE_OAUTH_UNAVAILABLE'].includes(code)) throw metadataError(code);
+    const reasons = (Array.isArray(data?.error?.errors) ? data.error.errors : []).map(item=>String(item?.reason||''));
+    if (reasons.some(reason=>/^(cannotDownloadFile|downloadRestrictedForRevision|insufficientFilePermissions|fileNotDownloadable|cannotDownloadAbusiveFile|download_restricted_for_revision|downloadRestrictedByPolicy)$/i.test(reason))) {
+        throw metadataError('DRIVE_DOWNLOAD_DENIED');
+    }
+    // An unspecified 403 can be an OAuth scope or policy problem, not
+    // necessarily a quota failure. Do not claim a particular quota reason.
+    throw metadataError('DRIVE_AVAILABILITY_UNAVAILABLE');
 }
 export async function selectDriveMetadataAccount(sourceFileId, env, options = {}) {
     if (!/^[A-Za-z0-9_-]{10,200}$/.test(String(sourceFileId))) throw metadataError('DRIVE_NOT_FOUND');
@@ -135,7 +182,8 @@ export async function selectDriveMetadataAccount(sourceFileId, env, options = {}
     for(const account of accounts) {
         try {
             const headers=token=>({Authorization:`Bearer ${token}`,...(resourceKey?{'X-Goog-Drive-Resource-Keys':`${sourceFileId}/${resourceKey}`}:{})});
-            const url=`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceFileId)}?fields=id,name,size,mimeType,trashed&supportsAllDrives=true`;
+            const fields=options.verifyDownload ? 'id,name,size,mimeType,trashed,capabilities(canDownload)' : 'id,name,size,mimeType,trashed';
+            const url=`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceFileId)}?fields=${fields}&supportsAllDrives=true`;
             let token=await metadataToken(account,signal);
             let response=await fetch(url,{headers:headers(token),signal});
             if(response.status===401) {
@@ -147,16 +195,21 @@ export async function selectDriveMetadataAccount(sourceFileId, env, options = {}
             if(!response.ok) {
                 const code=driveMetadataError(response.status,metadata);
                 console.warn('[DRIVE METADATA]',{account:account.number,http:response.status,code});
-                if(code==='DRIVE_RATE_LIMIT'||code==='DRIVE_QUOTA') throw metadataError(code);
+                if(['DRIVE_RATE_LIMIT','DRIVE_QUOTA','DRIVE_DOWNLOAD_QUOTA'].includes(code)) throw metadataError(code);
                 failures.push(code);
                 continue;
             }
             if(metadata?.id!==sourceFileId||!metadata?.name) {
                 failures.push('DRIVE_METADATA_UNAVAILABLE'); continue;
             }
+            if(options.verifyDownload) {
+                // Wrap the probe so no failed probe can fall back to another account.
+                try { await verifyDownloadAvailability(sourceFileId,metadata,headers(token),signal); }
+                catch(error) { throw Object.assign(metadataError(error?.code || 'DRIVE_AVAILABILITY_UNAVAILABLE'),{downloadProbe:true}); }
+            }
             return {account,token,metadata};
         } catch(error) {
-            if(error?.code==='DRIVE_RATE_LIMIT'||error?.code==='DRIVE_QUOTA') throw error;
+            if(error?.downloadProbe || ['DRIVE_RATE_LIMIT','DRIVE_QUOTA','DRIVE_DOWNLOAD_QUOTA'].includes(error?.code)) throw error;
             failures.push(error?.code||'DRIVE_METADATA_UNAVAILABLE');
             if(signal.aborted) throw metadataError('DRIVE_METADATA_UNAVAILABLE');
         }
