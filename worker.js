@@ -1,6 +1,7 @@
-import { selectDriveMetadataAccount } from "./drive-handler.js";
+import { copyFileToSCloud, selectDriveCopyAccount, selectDriveMetadataAccount } from "./drive-handler.js";
 import {
     ensureScloudJobTables,
+    newMirrorJobStatements,
     hasCronMirrorJobs,
     healScloudMirrorJobs,
     executeScloudMirrorJob,
@@ -1033,12 +1034,6 @@ async function v4UploadLimits(env, userId) {
     const row = await env.DB.prepare(`SELECT NULLIF(COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id=?),20),-1) AS daily_limit, COALESCE((SELECT uploads_count FROM user_daily_upload_usage WHERE user_id=? AND usage_date=date('now')),0) AS uploads_today, COALESCE((SELECT folder_limit FROM user_folder_upload_limits WHERE user_id=?),20) AS folder_limit`).bind(userId,userId,userId).first();
     return {...row, remaining: row.daily_limit == null ? null : Math.max(0,Number(row.daily_limit)-Number(row.uploads_today))};
 }
-function v4DriveResourceKey(value) {
-    try {
-        const key = new URL(String(value)).searchParams.get('resourcekey');
-        return /^[A-Za-z0-9_-]{1,200}$/.test(key || '') ? key : null;
-    } catch { return null; }
-}
 function v4DriveId(value, folder=false) {
     try {
         const u=new URL(String(value));
@@ -1047,15 +1042,15 @@ function v4DriveId(value, folder=false) {
         return /^[A-Za-z0-9_-]{10,200}$/.test(id||'') ? id : null;
     } catch { return null; }
 }
-async function v4ListFolder(folderId, env, limit, resourceKey = null) {
-    const {token}=await selectDriveMetadataAccount(folderId,env,{resourceKey});
+async function v4ListFolder(folderId, env, limit) {
+    const {token}=await selectDriveMetadataAccount(folderId,env);
     const files=[]; let pageToken; let pages=0;
     do {
-        const params=new URLSearchParams({q:`'${folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,supportsAllDrives:'true',includeItemsFromAllDrives:'true',pageSize:'100',fields:'nextPageToken,files(id,name,mimeType,resourceKey)',orderBy:'name'});
+        const params=new URLSearchParams({q:`'${folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,supportsAllDrives:'true',includeItemsFromAllDrives:'true',pageSize:'100',fields:'nextPageToken,files(id,name,mimeType)',orderBy:'name'});
         if(pageToken) params.set('pageToken',pageToken);
-        const res=await fetch('https://www.googleapis.com/drive/v3/files?'+params,{headers:{Authorization:`Bearer ${token}`, ...(resourceKey ? {'X-Goog-Drive-Resource-Keys':`${folderId}/${resourceKey}`} : {})}});
+        const res=await fetch('https://www.googleapis.com/drive/v3/files?'+params,{headers:{Authorization:`Bearer ${token}`}});
         const data=await res.json(); if(!res.ok) throw new Error('Google Drive folder listing failed');
-        for(const f of data.files||[]) if(f.id && f.mimeType!=='application/vnd.google-apps.folder') files.push({id:f.id,name:f.name||'Unnamed file', ...(/^[A-Za-z0-9_-]{1,200}$/.test(f.resourceKey||'') ? {resourceKey:f.resourceKey} : {})});
+        for(const f of data.files||[]) if(f.id && f.mimeType!=='application/vnd.google-apps.folder') files.push({id:f.id,name:f.name||'Unnamed file'});
         pageToken=data.nextPageToken;
         if(++pages>=20) break;
     } while(pageToken && files.length<=limit);
@@ -6624,7 +6619,6 @@ export default {
                     JOIN scloud_upload_sources s
                       ON s.user_id = r.user_id AND s.source_hash = r.source_hash
                     WHERE s.user_id = ? AND s.file_short_id = ?
-                      AND s.copied_drive_id = r.copied_drive_id
                       AND changes() > 0
                 `).bind(Date.now(), currentUser.id, file.short_id || file.id));
 
@@ -6723,7 +6717,7 @@ export default {
                 if(!limits.folder_limit) return jsonResponse({status:'error',code:'FOLDER_UPLOAD_LIMIT',message:'Folder upload is disabled for your account.'},429);
                 if(limits.remaining===0) return jsonResponse({status:'error',code:'DAILY_UPLOAD_LIMIT',message:`Daily upload limit reached (${limits.uploads_today}/${limits.daily_limit}). Try again after the daily reset.`,...limits},429);
                 const cap=Math.min(limits.folder_limit,limits.remaining??limits.folder_limit);
-                const listed=await v4ListFolder(folderId,env,cap,v4DriveResourceKey(folderUrl));
+                const listed=await v4ListFolder(folderId,env,cap);
                 if(!listed.files.length) return jsonResponse({status:'error',message:'No files found inside this folder.'},400);
                 return jsonResponse({status:'success',...listed,total:listed.files.length,limit:cap,folder_limit:limits.folder_limit,remaining:limits.remaining});
             } catch (err) {
@@ -6753,15 +6747,28 @@ export default {
                     "GET"
             )
         ) {
-            // Direct-source is mandatory for every new upload, even if an old
-            // environment variable is missing or false. Never fall back to copy.
-            if (String(env.SCLOUD_JOBS_ENABLED || "false").toLowerCase() !== "true") {
-                return jsonResponse({status:"error", code:"DIRECT_SOURCE_REQUIRES_JOBS",
-                    message:"Background upload jobs are not enabled. Please contact support."},503);
+            let uploadReservation = false;
+            let sourceUploadClaimed = false;
+            let sourceCopyStarted = false;
+            let sourceUploadHash = null;
+            // Direct-source uploads require the durable Cron queue. Existing
+            // copied files keep their original behavior when this is disabled.
+            const directSourceMode =
+                String(env.SCLOUD_DIRECT_SOURCE_ENABLED || "false").toLowerCase() === "true";
+            if (directSourceMode &&
+                String(env.SCLOUD_JOBS_ENABLED || "false").toLowerCase() !== "true") {
+                return jsonResponse({
+                    status: "error",
+                    code: "DIRECT_SOURCE_REQUIRES_JOBS",
+                    message: "Background jobs must be enabled for direct-source uploads."
+                }, 503);
             }
             const uploadStartedAt = Date.now();
             const uploadUsageDate = new Date().toISOString().slice(0, 10);
             try {
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_upload_limits (user_id INTEGER PRIMARY KEY, daily_limit INTEGER NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`).run();
+                await env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_daily_upload_usage (user_id INTEGER NOT NULL, usage_date TEXT NOT NULL, uploads_count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, usage_date))`).run();
+
                 let drive_url;
 
                 if (
@@ -6857,9 +6864,9 @@ export default {
                         const limits=await v4UploadLimits(env,currentUser.id);
                         if(!limits.folder_limit) return jsonResponse({status:'error',code:'FOLDER_UPLOAD_LIMIT',message:'Folder upload is disabled for your account.'},429);
                         if(limits.remaining===0) return jsonResponse({status:'error',code:'DAILY_UPLOAD_LIMIT',message:'Daily upload limit reached.',...limits},429);
-                        const listed=await v4ListFolder(folderId,env,1,v4DriveResourceKey(cleanUrl));
+                        const listed=await v4ListFolder(folderId,env,1);
                         if(!listed.files.length) return jsonResponse({status:'error',message:'No files found inside this folder.'},400);
-                        cleanUrl=`https://drive.google.com/file/d/${listed.files[0].id}/view` + (listed.files[0].resourceKey ? `?resourcekey=${encodeURIComponent(listed.files[0].resourceKey)}` : "");
+                        cleanUrl=`https://drive.google.com/file/d/${listed.files[0].id}/view`;
 
                     } catch (
                         err
@@ -6895,173 +6902,550 @@ export default {
 
                 const sourceFileId=v4DriveId(cleanUrl);
                 if(!sourceFileId) return jsonResponse({status:'error',message:'Invalid Google Drive Link format!'},400);
-                const resourceKey = v4DriveResourceKey(cleanUrl);
-                const sourceUploadHash = await sha256Hex(sourceFileId);
-                const userId = currentUser.id;
-                const schemaError = error => /no such table/i.test(String(error?.message || error));
-                const ensureUploadSchema = async () => {
-                    await ensureV4Limits(env);
-                    await env.DB.batch([
-                        env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_upload_sources (
-                            user_id INTEGER NOT NULL, source_hash TEXT NOT NULL,
-                            state TEXT NOT NULL DEFAULT 'processing', file_short_id TEXT,
-                            copied_drive_id TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                            PRIMARY KEY(user_id,source_hash))`),
-                        env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_drive_copy_registry (
-                            user_id INTEGER NOT NULL, source_hash TEXT NOT NULL,
-                            copied_drive_id TEXT NOT NULL, account_number INTEGER NOT NULL,
-                            folder_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                            PRIMARY KEY(user_id,source_hash))`)
-                    ]);
-                    await ensureScloudJobTables(env);
-                };
-                const lookupSource = () => env.DB.prepare(`
-                    SELECT s.state AS source_state, s.file_short_id,s.copied_drive_id,
-                           f.short_id AS existing_short_id,f.file_name,f.file_size,
-                           f.status AS file_status,f.sharing_enabled,
-                           EXISTS(SELECT 1 FROM scloud_drive_copy_registry r
-                             WHERE r.user_id=s.user_id AND r.source_hash=s.source_hash) AS has_copy_registry,
-                           CASE WHEN s.state='processing' AND s.copied_drive_id IS NULL
-                             AND s.updated_at <= datetime('now','-10 minutes')
-                             AND NOT EXISTS(SELECT 1 FROM files x WHERE x.id=s.file_short_id OR x.short_id=s.file_short_id)
-                             AND NOT EXISTS(SELECT 1 FROM scloud_drive_copy_registry r WHERE r.user_id=s.user_id AND r.source_hash=s.source_hash)
-                             THEN 1 ELSE 0 END AS stale_uncommitted
-                    FROM scloud_upload_sources s LEFT JOIN files f
-                      ON f.short_id=s.file_short_id AND f.user_id=s.user_id
-                    WHERE s.user_id=? AND s.source_hash=? LIMIT 1`).bind(userId,sourceUploadHash);
-                const lookupQuota = () => env.DB.prepare(`SELECT
-                    NULLIF(COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id=?),20),-1) AS daily_limit,
-                    COALESCE((SELECT uploads_count FROM user_daily_upload_usage WHERE user_id=? AND usage_date=?),0) AS uploads_today`)
-                    .bind(userId,userId,uploadUsageDate);
-                const quotaExceeded = row => row?.daily_limit != null && Number(row.uploads_today)>=Number(row.daily_limit);
-                const quotaReply = row => jsonResponse({status:'error',code:'DAILY_UPLOAD_LIMIT',
-                    message:`Daily upload limit reached (${row.uploads_today}/${row.daily_limit}). Try again after the daily reset.`,
-                    daily_limit:Number(row.daily_limit),uploads_today:Number(row.uploads_today)},429);
-                const sourceReply = previous => {
+                // Normalize for the legacy copy helper; direct source uses the parsed ID.
+                cleanUrl=`https://drive.google.com/file/d/${sourceFileId}/view`;
+
+                // ====================================================
+                // PER-USER SOURCE DRIVE DEDUPLICATION
+                // One original Drive ID per uploader, regardless of
+                // URL format. Never persist the original URL/ID.
+                // A D1 unique claim prevents parallel files.copy calls.
+                // ====================================================
+                sourceUploadHash = await sha256Hex(sourceFileId);
+
+                await env.DB.prepare(`
+                    CREATE TABLE IF NOT EXISTS scloud_upload_sources (
+                        user_id INTEGER NOT NULL,
+                        source_hash TEXT NOT NULL,
+                        state TEXT NOT NULL DEFAULT 'processing',
+                        file_short_id TEXT,
+                        copied_drive_id TEXT,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, source_hash)
+                    )
+                `).run();
+
+                // Each completed copy remembers its owning account and folder.
+                // This will support safe retention/cleanup and per-account recovery.
+                await env.DB.prepare(`
+                    CREATE TABLE IF NOT EXISTS scloud_drive_copy_registry (
+                        user_id INTEGER NOT NULL,
+                        source_hash TEXT NOT NULL,
+                        copied_drive_id TEXT NOT NULL,
+                        account_number INTEGER NOT NULL,
+                        folder_id TEXT NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, source_hash)
+                    )
+                `).run();
+
+
+                // Durable mirror and cleanup jobs live in this SAME D1 database.
+                await ensureScloudJobTables(env);
+
+                const existingSourceReply = async () => {
+                    const previous = await env.DB.prepare(`
+                        SELECT s.state AS source_state,
+                               s.file_short_id, s.copied_drive_id,
+                               f.short_id AS existing_short_id,
+                               f.file_name, f.file_size,
+                               f.status AS file_status,
+                               f.sharing_enabled
+                        FROM scloud_upload_sources AS s
+                        LEFT JOIN files AS f
+                          ON f.short_id = s.file_short_id
+                         AND f.user_id = s.user_id
+                        WHERE s.user_id = ? AND s.source_hash = ?
+                        LIMIT 1
+                    `).bind(currentUser.id, sourceUploadHash).first();
+
                     if (!previous) return null;
-                    if (previous.existing_short_id && previous.file_status !== 'deleted') {
-                        const alreadyHidden=Number(previous.sharing_enabled ?? 1)===0;
-                        return jsonResponse({status:'success',already_uploaded:true,
-                            message:alreadyHidden?'Already uploaded. Sharing is OFF for this file.':'This Google Drive file was already uploaded.',
-                            data:{file_name:previous.file_name||'Unknown File',file_size:previous.file_size||'Unknown',
-                                short_id:previous.existing_short_id,short_link:`${canonicalPublicOrigin}/d/${previous.existing_short_id}`,
-                                already_uploaded:true,sharing_enabled:!alreadyHidden}});
+
+                    if (previous.existing_short_id &&
+                        previous.file_status !== "deleted") {
+                        const existingShortId = previous.existing_short_id;
+                        const alreadyHidden =
+                            Number(previous.sharing_enabled ?? 1) === 0;
+                        const existingLink =
+                            `${canonicalPublicOrigin}/d/${existingShortId}`;
+                        return jsonResponse({
+                            status: "success",
+                            already_uploaded: true,
+                            message: alreadyHidden
+                                ? "Already uploaded. Sharing is OFF for this file."
+                                : "This Google Drive file was already uploaded.",
+                            data: {
+                                file_name: previous.file_name || "Unknown File",
+                                file_size: previous.file_size || "Unknown",
+                                short_id: existingShortId,
+                                short_link: existingLink,
+                                already_uploaded: true,
+                                sharing_enabled: !alreadyHidden
+                            }
+                        });
                     }
-                    if (Number(previous.stale_uncommitted)===1 ||
-                        (previous.file_status==='deleted' && !previous.copied_drive_id && !Number(previous.has_copy_registry))) return null;
-                    if (previous.copied_drive_id || Number(previous.has_copy_registry)) {
-                        return jsonResponse({status:'error',code:'LEGACY_COPY_REVIEW',message:'A previous legacy copy needs review. No new copy was made. Contact support.'},409);
+
+                    // If a user permanently deleted the original file,
+                    // allow fresh upload. No S-Cloud copy is performed here.
+                    if (previous.file_short_id &&
+                        previous.file_status === "deleted") {
+                        await env.DB.prepare(`
+                            DELETE FROM scloud_upload_sources
+                            WHERE user_id = ? AND source_hash = ?
+                              AND file_short_id = ?
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM files
+                                  WHERE short_id = ? AND user_id = ?
+                                    AND COALESCE(status, '') != 'deleted'
+                              )
+                        `).bind(
+                            currentUser.id, sourceUploadHash,
+                            previous.file_short_id,
+                            previous.file_short_id, currentUser.id
+                        ).run();
+                        return null;
                     }
-                    if (previous.source_state !== 'processing') {
-                        return jsonResponse({status:'error',code:'UPLOAD_STATE_REVIEW',message:'A previous upload record is inconsistent. Contact support; no new copy was made.'},409);
-                    }
-                    return jsonResponse({status:'processing',code:'UPLOAD_IN_PROGRESS',
-                        message:'A previous upload is still being processed. If it failed, retry after 10 minutes.'},409);
+
+                    return jsonResponse({
+                        status: "processing",
+                        code: "UPLOAD_IN_PROGRESS",
+                        message: previous.copied_drive_id
+                            ? "This Drive file was already copied; its upload needs completion or review."
+                            : "This Drive file is already being processed. Try again once its upload finishes."
+                    }, 409);
                 };
-                const startedLookup=Date.now();
-                let preflight;
-                try { preflight=await env.DB.batch([lookupSource(),lookupQuota()]); }
-                catch(error) {
-                    if(!schemaError(error)) throw error;
-                    await ensureUploadSchema();
-                    preflight=await env.DB.batch([lookupSource(),lookupQuota()]);
-                }
-                const priorReply=sourceReply(preflight[0]?.results?.[0]);
-                if(priorReply) return priorReply;
-                const earlyLimit=preflight[1]?.results?.[0];
-                if(quotaExceeded(earlyLimit)) return quotaReply(earlyLimit);
-                const preflightMs=Date.now()-startedLookup;
-                const metadataStart=Date.now();
-                let metaData;
+
+                const existingBeforeMetadata = await existingSourceReply();
+                if (existingBeforeMetadata) return existingBeforeMetadata;
+                // Quick quota check before the Drive API call. The atomic reservation below remains authoritative.
+                const earlyLimit=await env.DB.prepare(`SELECT NULLIF(COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id=?),20),-1) AS daily_limit, COALESCE((SELECT uploads_count FROM user_daily_upload_usage WHERE user_id=? AND usage_date=?),0) AS uploads_today`).bind(currentUser.id,currentUser.id,uploadUsageDate).first();
+                if(earlyLimit?.daily_limit!=null && Number(earlyLimit.uploads_today)>=Number(earlyLimit.daily_limit)) return jsonResponse({status:'error',code:'DAILY_UPLOAD_LIMIT',message:`Daily upload limit reached (${earlyLimit.uploads_today}/${earlyLimit.daily_limit}). Try again after the daily reset.`,daily_limit:Number(earlyLimit.daily_limit),uploads_today:Number(earlyLimit.uploads_today)},429);
+
+
+                // Use the same numbered OAuth account for source metadata
+                // AND the eventual files.copy request; no cross-account mix.
+                let selectedCopyAccount = directSourceMode ? await selectDriveMetadataAccount(sourceFileId,env) : await selectDriveCopyAccount(sourceFileId,env);
+
+                // --------------------------------------
+                // GET SOURCE FILE METADATA
+                // --------------------------------------
+
+                let actualFileName =
+                    "Unknown File";
+
+                let exactFileSize =
+                    "Unknown";
+
+                let actualMimeType =
+                    null;
+
+
                 try {
-                    ({metadata:metaData}=await selectDriveMetadataAccount(sourceFileId,env,{resourceKey,verifyDownload:true}));
-                } catch(error) {
-                    const code=error?.code || 'DRIVE_METADATA_UNAVAILABLE';
-                    const publicErrors={
-                        DRIVE_ACCESS_DENIED:[400,'Google Drive file is private or access is restricted. Check sharing and the complete link.'],
-                        DRIVE_NOT_FOUND:[404,'Google Drive file was not found or is not accessible to S-Cloud.'],
-                        DRIVE_RATE_LIMIT:[429,'Google Drive API rate limit reached. Please retry later.'],
-                        DRIVE_QUOTA:[429,'Google Drive reports a quota restriction. Please retry after the quota resets.'],
-                        DRIVE_DOWNLOAD_QUOTA:[429,'Google Drive download quota exceeded. Retry when the file becomes downloadable again.'],
-                        DRIVE_DOWNLOAD_DENIED:[400,'Google Drive does not allow downloading this file. Check its download permissions.'],
-                        DRIVE_AVAILABILITY_UNAVAILABLE:[503,'Unable to verify Google Drive download availability. Please retry later.'],
-                        DRIVE_UNSUPPORTED_FILE:[400,'Only downloadable Google Drive binary files are supported. Native Google documents and shortcuts are not supported.'],
-                        DRIVE_INVALID_FILE:[400,'The Google Drive file is missing, trashed or is a folder.'],
-                        DRIVE_SIZE_UNAVAILABLE:[400,'Google Drive did not provide a valid file size. Please retry.'],
-                        DRIVE_OAUTH_UNAVAILABLE:[503,'S-Cloud Google Drive authentication is temporarily unavailable. Contact support if it continues.'],
-                        DRIVE_METADATA_UNAVAILABLE:[503,'Google Drive metadata could not be verified. Please retry.']
-                    };
-                    const [status,message]=publicErrors[code]||publicErrors.DRIVE_METADATA_UNAVAILABLE;
-                    console.warn('[SCLOUD UPLOAD METADATA]',{code,elapsed_ms:Date.now()-metadataStart});
-                    return jsonResponse({status:'error',code,message},status);
+
+                    const token = selectedCopyAccount.token;
+
+                    let metaData = directSourceMode ? selectedCopyAccount.metadata : null;
+                    if (!metaData) {
+                        const metaRes = await fetch(
+                            `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceFileId)}?fields=name,size,mimeType&supportsAllDrives=true`,
+                            {headers:{Authorization:`Bearer ${token}`}}
+                        );
+                        metaData = await metaRes.json();
+                        if (!metaRes.ok) throw new Error(metaData.error?.message || "Google Drive metadata error");
+                    }
+
+                    // Unknown size on a binary source cannot be safely routed.
+                    if (!String(metaData?.mimeType || "").startsWith("application/vnd.google-apps.") &&
+                        (metaData?.size == null || !Number.isFinite(Number(metaData.size)) ||
+                         Number(metaData.size) < 0)) {
+                        throw new Error("Google Drive file size is unavailable");
+                    }
+
+                    // Strict size policy: anything above 12 GiB MUST use Account 1.
+                    // Check actual Google Drive metadata bytes (not rounded UI text).
+                    // Account 1 must have permission to read the source AND write
+                    // its own folder; fail closed if unavailable. Never fall back.
+                    const rawSize = metaData?.size;
+                    const measuredSize = rawSize == null ? NaN : Number(rawSize);
+                    if (!directSourceMode && Number.isFinite(measuredSize) &&
+                        measuredSize > 12 * 1024 ** 3 &&
+                        selectedCopyAccount.account.number !== 1) {
+                        selectedCopyAccount = await selectDriveCopyAccount(
+                            sourceFileId, env, { requiredAccountNumber: 1 }
+                        );
+                        console.log("[DRIVE POOL] File over 12 GiB routed to Account 1");
+                    }
+
+                    if (
+                        metaData &&
+                        metaData.name
+                    ) {
+
+                        actualFileName =
+                            metaData.name;
+
+                        actualMimeType =
+                            typeof metaData.mimeType === "string" &&
+                            metaData.mimeType.trim()
+                                ? metaData.mimeType.trim()
+                                : null;
+
+
+                        if (
+                            metaData.size != null
+                        ) {
+
+                            const bytes =
+                                Number(
+                                    metaData.size
+                                );
+
+
+                            if (
+                                bytes >
+                                1024 *
+                                1024 *
+                                1024
+                            ) {
+
+                                exactFileSize =
+                                    (
+                                        bytes /
+                                        (
+                                            1024 *
+                                            1024 *
+                                            1024
+                                        )
+                                    ).toFixed(
+                                        2
+                                    ) +
+                                    " GB";
+
+                            } else {
+
+                                exactFileSize =
+                                    (
+                                        bytes /
+                                        (
+                                            1024 *
+                                            1024
+                                        )
+                                    ).toFixed(
+                                        2
+                                    ) +
+                                    " MB";
+                            }
+                        }
+
+                    } else {
+
+                        return new Response(
+                            JSON.stringify({
+                                status:
+                                    "error",
+                                message:
+                                    "Drive file not found or private! Make sure it's accessible."
+                            }),
+                            {
+                                status: 400,
+                                headers: {
+                                    ...corsHeaders,
+                                    ...jsonHeaders()
+                                }
+                            }
+                        );
+                    }
+
+                } catch (
+                    e
+                ) {
+
+                    console.error(
+                        "Drive Metadata Error:",
+                        e
+                    );
+
+                    return new Response(
+                        JSON.stringify({
+                            status:
+                                "error",
+                            message:
+                                "Could not verify Google Drive file via API."
+                        }),
+                        {
+                            status: 400,
+                            headers: {
+                                ...corsHeaders,
+                                ...jsonHeaders()
+                            }
+                        }
+                    );
                 }
-                const actualFileName=String(metaData?.name||'');
-                const actualMimeType=typeof metaData?.mimeType==='string'?metaData.mimeType.trim():null;
-                if(!actualFileName.trim() || metaData?.trashed===true || actualMimeType==='application/vnd.google-apps.folder') {
-                    return jsonResponse({status:'error',code:'DRIVE_INVALID_FILE',message:'The Google Drive file is missing, trashed or is a folder.'},400);
+
+
+                // Atomically claim (user, original Drive file) BEFORE
+                // daily quota or the external Google files.copy call.
+                // Simultaneous requests cannot both acquire the claim.
+                const sourceClaim = await env.DB.prepare(`
+                    INSERT OR IGNORE INTO scloud_upload_sources
+                        (user_id, source_hash, state)
+                    VALUES (?, ?, 'processing')
+                `).bind(currentUser.id, sourceUploadHash).run();
+
+                if (Number(sourceClaim.meta?.changes || 0) !== 1) {
+                    const racedReply = await existingSourceReply();
+                    if (racedReply) return racedReply;
+                    // A concurrent delete/retry removed the claim; never
+                    // risk starting a second copy in this same request.
+                    return jsonResponse({
+                        status: "processing",
+                        code: "UPLOAD_IN_PROGRESS",
+                        message: "Upload state changed. Please retry."
+                    }, 409);
                 }
-                const measuredSize=metaData?.size==null?NaN:Number(metaData.size);
-                if(!String(actualMimeType||'').startsWith('application/vnd.google-apps.') &&
-                    (!Number.isFinite(measuredSize)||measuredSize<0)) {
-                    return jsonResponse({status:'error',code:'DRIVE_SIZE_UNAVAILABLE',message:'Google Drive did not provide the file size. Please retry.'},400);
+                sourceUploadClaimed = true;
+
+                // --------------------------------------
+                // ENFORCE DAILY UPLOAD LIMIT (WEB + API)
+                // Atomically reserve one slot before copying.
+                // Missing setting = 20; explicit blank/null = unlimited; 0 blocks uploads.
+                // --------------------------------------
+                const reserveResult = await env.DB.prepare(`
+                    INSERT INTO user_daily_upload_usage (user_id, usage_date, uploads_count)
+                    SELECT ?, ?, 1
+                    WHERE COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id = ?),20) = -1
+                       OR COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id = ?),20) >= 1
+                    ON CONFLICT(user_id, usage_date) DO UPDATE SET uploads_count = uploads_count + 1
+                    WHERE COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id = ?),20) = -1
+                       OR user_daily_upload_usage.uploads_count < COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id = ?),20)
+                `).bind(currentUser.id, uploadUsageDate, currentUser.id, currentUser.id, currentUser.id, currentUser.id).run();
+
+                if (!reserveResult.meta?.changes) {
+                    // No copy attempted: release the unique claim so a
+                    // later date can retry without a stuck reservation.
+                    await env.DB.prepare(`
+                        DELETE FROM scloud_upload_sources
+                        WHERE user_id = ? AND source_hash = ?
+                          AND state = 'processing'
+                          AND copied_drive_id IS NULL
+                          AND file_short_id IS NULL
+                    `).bind(currentUser.id, sourceUploadHash).run();
+                    sourceUploadClaimed = false;
+                    const [limitRow, usageRow] = await Promise.all([
+                        env.DB.prepare(`SELECT NULLIF(COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id=?),20),-1) AS daily_limit`).bind(currentUser.id).first(),
+                        env.DB.prepare(`SELECT uploads_count FROM user_daily_upload_usage WHERE user_id = ? AND usage_date = date('now')`).bind(currentUser.id).first()
+                    ]);
+                    const limit = Number(limitRow?.daily_limit ?? 20);
+                    const used = Number(usageRow?.uploads_count || 0);
+                    return new Response(JSON.stringify({ status: "error", message: `Daily upload limit reached (${used}/${limit}). Try again after the daily reset.`, code: "DAILY_UPLOAD_LIMIT", daily_limit: limit, uploads_today: used }), { status: 429, headers: { ...corsHeaders, ...jsonHeaders() } });
                 }
-                const exactFileSize=Number.isFinite(measuredSize)&&measuredSize>=0
-                    ? (measuredSize>1024**3?(measuredSize/1024**3).toFixed(2)+' GB':(measuredSize/1024**2).toFixed(2)+' MB'):'Unknown';
-                const metadataMs=Date.now()-metadataStart;
-                // The claim, quota, file and all three jobs commit together. The
-                // temporary UUID cannot be confused with a legacy short ID.
-                const shortId=generateFileId();
-                const claimId=crypto.randomUUID();
-                const currentTime=Date.now();
-                const scloudDriveUrl=`https://drive.google.com/file/d/${sourceFileId}/view`;
-                const short_link=`${canonicalPublicOrigin}/d/${shortId}`;
-                const registerStart=Date.now();
-                const registerStatements=()=>[
-                    // Only expired legacy locks without a committed file or known copy.
-                    // Never delete an actual file, its earnings or any copy registry.
-                    env.DB.prepare(`DELETE FROM scloud_upload_sources
-                        WHERE user_id=? AND source_hash=? AND copied_drive_id IS NULL
-                        AND NOT EXISTS(SELECT 1 FROM scloud_drive_copy_registry r WHERE r.user_id=scloud_upload_sources.user_id AND r.source_hash=scloud_upload_sources.source_hash)
-                        AND ((state='processing' AND updated_at<=datetime('now','-10 minutes')
-                            AND NOT EXISTS(SELECT 1 FROM files f WHERE f.id=scloud_upload_sources.file_short_id OR f.short_id=scloud_upload_sources.file_short_id))
-                          OR EXISTS(SELECT 1 FROM files f WHERE f.short_id=scloud_upload_sources.file_short_id AND f.user_id=scloud_upload_sources.user_id AND f.status='deleted'))`)
-                        .bind(userId,sourceUploadHash),
-                    env.DB.prepare(`INSERT OR IGNORE INTO scloud_upload_sources(user_id,source_hash,state,file_short_id)
-                        SELECT ?,?,'processing',?
-                        WHERE COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id=?),20)=-1
-                           OR COALESCE((SELECT uploads_count FROM user_daily_upload_usage WHERE user_id=? AND usage_date=?),0)<COALESCE((SELECT COALESCE(daily_limit,-1) FROM user_upload_limits WHERE user_id=?),20)`)
-                        .bind(userId,sourceUploadHash,claimId,userId,userId,uploadUsageDate,userId),
-                    env.DB.prepare(`INSERT INTO user_daily_upload_usage(user_id,usage_date,uploads_count)
-                        SELECT ?,?,1 WHERE EXISTS(SELECT 1 FROM scloud_upload_sources WHERE user_id=? AND source_hash=? AND state='processing' AND file_short_id=?)
-                        ON CONFLICT(user_id,usage_date) DO UPDATE SET uploads_count=uploads_count+1`)
-                        .bind(userId,uploadUsageDate,userId,sourceUploadHash,claimId),
-                    env.DB.prepare(`INSERT INTO files(id,short_id,user_id,file_name,file_size,mime_type,drive_url,last_updated,status)
-                        SELECT ?,?,?,?,?,?,?,?,'active' WHERE EXISTS(SELECT 1 FROM scloud_upload_sources WHERE user_id=? AND source_hash=? AND state='processing' AND file_short_id=?)`)
-                        .bind(shortId,shortId,userId,actualFileName,exactFileSize,actualMimeType,scloudDriveUrl,currentTime,userId,sourceUploadHash,claimId),
-                    ...['pdlink','toxcloud','drivetot'].map(provider=>env.DB.prepare(`INSERT INTO scloud_mirror_jobs(file_id,provider,state,available_at)
-                        SELECT ?,?,'queued',? WHERE EXISTS(SELECT 1 FROM scloud_upload_sources WHERE user_id=? AND source_hash=? AND state='processing' AND file_short_id=?)`)
-                        .bind(shortId,provider,currentTime,userId,sourceUploadHash,claimId)),
-                    env.DB.prepare(`UPDATE scloud_upload_sources SET state='ready',file_short_id=?,updated_at=CURRENT_TIMESTAMP
-                        WHERE user_id=? AND source_hash=? AND state='processing' AND file_short_id=?`)
-                        .bind(shortId,userId,sourceUploadHash,claimId)
-                ];
-                let registered;
-                try { registered=await env.DB.batch(registerStatements()); }
-                catch(error) {
-                    if(!schemaError(error)) throw error;
-                    await ensureUploadSchema();
-                    registered=await env.DB.batch(registerStatements());
+                uploadReservation = true;
+
+                // --------------------------------------
+                // STEP 1 - COPY TO S-CLOUD DRIVE
+                //
+                // IMPORTANT:
+                // Original Google Drive URL is used only
+                // temporarily and is NEVER saved to DB.
+                // --------------------------------------
+
+                // Direct-source mode sends the ORIGINAL Google Drive ID to
+                // provider APIs. No Google files.copy and no S-Cloud Drive write.
+                // Providers may still fail if the file is private/inaccessible.
+                let scloudFileId = sourceFileId;
+                let scloudResult = null;
+                if (directSourceMode) {
+                    console.log("[UPLOAD] Direct source selected; files.copy skipped");
+                } else {
+                console.log("[UPLOAD] S-Cloud Drive copy START | user=", currentUser.id);
+
+                // Persist copied ID immediately after Google's files.copy
+                // returns, BEFORE permission/metadata calls. If a later
+                // step fails, retry must not silently copy the same source.
+                scloudResult =
+                    await copyFileToSCloud(
+                        cleanUrl,
+                        env,
+                        async (copiedId, accountInfo) => {
+                            // Both writes succeed or neither does: no mismatched
+                            // account vs file ID in the cleanup/recovery registry.
+                            const results = await env.DB.batch([
+                                env.DB.prepare(`
+                                    UPDATE scloud_upload_sources
+                                    SET copied_drive_id = ?,
+                                        updated_at = CURRENT_TIMESTAMP
+                                    WHERE user_id = ? AND source_hash = ?
+                                      AND state = 'processing'
+                                      AND copied_drive_id IS NULL
+                                `).bind(copiedId, currentUser.id, sourceUploadHash),
+                                env.DB.prepare(`
+                                    INSERT INTO scloud_drive_copy_registry
+                                        (user_id, source_hash, copied_drive_id,
+                                         account_number, folder_id)
+                                    SELECT ?, ?, ?, ?, ?
+                                    WHERE EXISTS (
+                                        SELECT 1 FROM scloud_upload_sources
+                                        WHERE user_id = ? AND source_hash = ?
+                                          AND copied_drive_id = ?
+                                          AND state = 'processing'
+                                    )
+                                `).bind(
+                                    currentUser.id, sourceUploadHash, copiedId,
+                                    accountInfo.accountNumber, accountInfo.folderId,
+                                    currentUser.id, sourceUploadHash, copiedId
+                                )
+                            ]);
+                            if (Number(results?.[0]?.meta?.changes || 0) !== 1 ||
+                                Number(results?.[1]?.meta?.changes || 0) !== 1) {
+                                throw new Error("S-Cloud copy/account tracking failed; manual review required.");
+                            }
+                        },
+                        () => { sourceCopyStarted = true; },
+                        selectedCopyAccount
+                    );
+                
+                console.log("[UPLOAD DEBUG] S-Cloud Copy ka result:", JSON.stringify(scloudResult));
+
+                if (
+                    !scloudResult ||
+                    !scloudResult.fileId
+                ) {
+                    throw new Error(
+                        "S-Cloud Copy Failed: " + JSON.stringify(scloudResult)
+                    );
                 }
-                if(Number(registered?.[1]?.meta?.changes||0)!==1) {
-                    const state=await env.DB.batch([lookupSource(),lookupQuota()]);
-                    const reply=sourceReply(state[0]?.results?.[0]);
-                    if(reply) return reply;
-                    const limit=state[1]?.results?.[0];
-                    if(quotaExceeded(limit)) return quotaReply(limit);
-                    return jsonResponse({status:'error',code:'UPLOAD_RETRY',message:'Upload state changed. Please retry.'},409);
+
+
+                scloudFileId =
+                    scloudResult.fileId;
+
+
                 }
-                console.log('[SCLOUD UPLOAD TIMING] direct registration', {fileId:shortId,preflight_ms:preflightMs,metadata_ms:metadataMs,registration_ms:Date.now()-registerStart,elapsed_ms:Date.now()-uploadStartedAt});
+
+                // --------------------------------------
+                // CREATE S-CLOUD DRIVE URL
+                // --------------------------------------
+
+                const scloudDriveUrl =
+                    `https://drive.google.com/file/d/${scloudFileId}/view`;
+
+
+                // --------------------------------------
+                // UPDATE FILE SIZE FROM S-CLOUD COPY
+                // --------------------------------------
+
+                if (
+                    scloudResult &&
+                    scloudResult.fileSize &&
+                    scloudResult.fileSize !==
+                        "Unknown"
+                ) {
+
+                    exactFileSize =
+                        scloudResult.fileSize;
+                }
+
+
+                // --------------------------------------
+                // CREATE SHORT ID
+                // --------------------------------------
+
+                const shortId =
+                    generateFileId();
+
+
+                const currentTime =
+                    Date.now();
+
+                // Store the planned S-Cloud record before inserting it.
+                // Direct mode has no copied ID, so claim via source hash only;
+                // legacy copy mode still matches its tracked copied ID.
+                const reservationSql = directSourceMode ? `
+                    UPDATE scloud_upload_sources
+                    SET file_short_id = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ? AND source_hash = ?
+                      AND state = 'processing'
+                      AND copied_drive_id IS NULL
+                      AND file_short_id IS NULL
+                ` : `
+                    UPDATE scloud_upload_sources
+                    SET file_short_id = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ? AND source_hash = ?
+                      AND state = 'processing'
+                      AND copied_drive_id = ?
+                `;
+                const recordClaim = await env.DB.prepare(reservationSql)
+                    .bind(...(directSourceMode
+                        ? [shortId, currentUser.id, sourceUploadHash]
+                        : [shortId, currentUser.id, sourceUploadHash, scloudFileId]))
+                    .run();
+                if (Number(recordClaim.meta?.changes || 0) !== 1) {
+                    throw new Error("S-Cloud record reservation failed; manual review required.");
+                }
+
+                const short_link =
+                    `${canonicalPublicOrigin}/d/${shortId}`;
+
+
+                // --------------------------------------
+                // INSERT FILE RECORD
+                //
+                // drive_url contains canonical Drive file reference:
+                // direct mode => original user's file ID;
+                // copy mode   => S-Cloud copied file ID.
+                // We never use the source reference for automatic deletion.
+                // --------------------------------------
+
+                await env.DB.batch([
+                    env.DB.prepare(
+                        `INSERT INTO files
+                        (
+                            id,
+                            short_id,
+                            user_id,
+                            file_name,
+                            file_size,
+                            mime_type,
+                            drive_url,
+                            last_updated,
+                            status
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                    )
+                    .bind(
+                        shortId,
+                        shortId,
+                        currentUser.id,
+                        actualFileName,
+                        exactFileSize,
+                        actualMimeType,
+                        scloudDriveUrl,
+                        currentTime,
+                        "active"
+                    )
+                    ,
+                    ...(String(env.SCLOUD_JOBS_ENABLED || "false").toLowerCase() === "true"
+                        ? newMirrorJobStatements(shortId, env)
+                        : [])
+                ]);
+
+                // Upload has succeeded once its file record is committed.
+                uploadReservation = false;
+
+                try {
+                    await env.DB.prepare(`
+                        UPDATE scloud_upload_sources
+                        SET state = 'ready', updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = ? AND source_hash = ?
+                          AND file_short_id = ?
+                    `).bind(currentUser.id, sourceUploadHash, shortId).run();
+                } catch (claimFinishError) {
+                    // A later duplicate lookup will still find the saved
+                    // files row via file_short_id; do not recopy the file.
+                    console.error("[UPLOAD] Dedupe finalization failed:",
+                        claimFinishError?.message || claimFinishError);
+                }
 
                 // --------------------------------------
                 // INITIAL DOWNLOAD WORKER SYNC
@@ -7080,6 +7464,313 @@ export default {
                     }
                 })();
 
+                // --------------------------------------
+                // STAGED JOB-WORKER ROLLOUT
+                // Existing uploads stay on the proven background chain until
+                // SCLOUD_JOBS_ENABLED=true is set after the Cron Worker works.
+                // Only one upload engine is active for each NEW file.
+                // --------------------------------------
+                if (String(env.SCLOUD_JOBS_ENABLED || "false").toLowerCase() !== "true") {
+                ctx.waitUntil(initialSync);
+                // --------------------------------------
+                // BACKGROUND PROCESSING
+                //
+                // S-CLOUD COPY IS ALREADY COMPLETE.
+                // Only Drivetot + link extraction run
+                // in the background.
+                // --------------------------------------
+
+                ctx.waitUntil(
+                    (async () => {
+
+                        try {
+
+                            // =================================
+                            // STEP 2 - PDLINK FIRST
+                            // =================================
+                            //
+                            // PDLink upload starts first.
+                            // Share ID is saved immediately.
+                            // Drivetot runs independently even if PDLink is skipped/failed.
+                            // =================================
+
+                            // Use one PDLink job when EITHER GoFile or Pixeldrain is ON.
+                            // If BOTH are OFF, never send the file to PDLink.
+                            const pdlinkPolicy = await getMirrorUploadPolicy(currentUser.id, env);
+                            if (pdlinkPolicy.pdlink) {
+                                try {
+                                    console.log(
+                                        `[PDLINK] Upload START | file=${shortId} | drive=${scloudFileId}`
+                                    );
+
+                                    const pdlinkResult =
+                                        await queuePDLinkFile(
+                                            scloudFileId,
+                                            env
+                                        );
+
+                                    if (
+                                        !pdlinkResult ||
+                                        !pdlinkResult.share_id
+                                    ) {
+                                        throw new Error(
+                                            "PDLink Upload Failed: share_id missing."
+                                        );
+                                    }
+
+                                    // =================================
+                                    // SAVE PDLINK SHARE ID IMMEDIATELY
+                                    // =================================
+
+                                    await env.DB
+                                        .prepare(
+                                            `UPDATE files
+                                             SET pdlink_share_id = ?
+                                             WHERE id = ?`
+                                        )
+                                        .bind(
+                                            pdlinkResult.share_id,
+                                            shortId
+                                        )
+                                        .run();
+                                            {
+                                                const downloadSyncRecord =
+                                                    await env.DB
+                                                        .prepare(
+                                                            "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                                                        )
+                                                        .bind(
+                                                            shortId,
+                                                            shortId
+                                                        )
+                                                        .first();
+    
+                                                if (downloadSyncRecord) {
+                                                    await syncDownloadMetadata(
+                                                        downloadSyncRecord,
+                                                        env
+                                                    );
+                                                }
+                                            }
+
+                                    console.log(
+                                        `[PDLINK] Share ID saved | file=${shortId} | share=${pdlinkResult.share_id}`
+                                    );
+                                } catch (pdlinkError) {
+                                    // Drivetot/TOXCloud still run if PDLink fails.
+                                    console.error(`[PDLINK] Upload FAILED | file=${shortId}:`,
+                                        pdlinkError?.message || 'unknown');
+                                }
+                            } else {
+                                console.log(`[PDLINK] SKIPPED | file=${shortId} | gofile_and_pixeldrain_off`);
+                            }
+
+                            // =================================
+                            // STEP 3 - TOXCLOUD
+                            // =================================
+                            //
+                            // PDLink share ID is already safely saved.
+                            // Now send the S-Cloud Drive file to
+                            // TOXcloud and save its download URL.
+                            //
+                            // If TOXcloud is pending or fails, the
+                            // existing Drivetot flow continues normally.
+                            // =================================
+
+                            const toxcloudPolicy = await getMirrorUploadPolicy(currentUser.id, env);
+                            if (toxcloudPolicy.toxcloud) {
+                                console.log(
+                                    `[TOXCLOUD] Upload START | file=${shortId} | drive=${scloudFileId}`
+                                );
+
+                                try {
+                                    const toxcloudResult =
+                                        await uploadToToxCloud(
+                                            scloudFileId,
+                                            env
+                                        );
+
+                                    if (
+                                        toxcloudResult &&
+                                        toxcloudResult.ready &&
+                                        toxcloudResult.download_url
+                                    ) {
+                                        await env.DB
+                                            .prepare(
+                                                `UPDATE files
+                                                 SET toxcloud_url = ?
+                                                 WHERE id = ?`
+                                            )
+                                            .bind(
+                                                toxcloudResult.download_url,
+                                                shortId
+                                            )
+                                            .run();
+                                        {
+                                            const downloadSyncRecord =
+                                                await env.DB
+                                                    .prepare(
+                                                        "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                                                    )
+                                                    .bind(
+                                                        shortId,
+                                                        shortId
+                                                    )
+                                                    .first();
+    
+                                            if (downloadSyncRecord) {
+                                                await syncDownloadMetadata(
+                                                    downloadSyncRecord,
+                                                    env
+                                                );
+                                            }
+                                        }
+
+                                        console.log(
+                                            `[TOXCLOUD] Download URL saved | file=${shortId}`
+                                        );
+                                    } else {
+                                        console.log(
+                                            `[TOXCLOUD] Download URL not ready | file=${shortId} | status=${toxcloudResult?.status || "unknown"}`
+                                        );
+                                    }
+
+                                } catch (toxcloudError) {
+                                    console.error(
+                                        `[TOXCLOUD] Upload FAILED | file=${shortId}:`,
+                                        toxcloudError.message
+                                    );
+                                }
+                            } else {
+                                console.log(`[TOXCLOUD] SKIPPED | file=${shortId} | user_off`);
+                            }
+
+                            // =================================
+                            // STEP 4 - DRIVETOT
+                            // =================================
+
+                            console.log(
+                                `[DRIVETOT] Upload START | file=${shortId}`
+                            );
+
+                            const drivetotResult =
+                                await uploadToDrivetot(
+                                    scloudFileId,
+                                    env
+                                );
+
+                            if (
+                                !drivetotResult ||
+                                !drivetotResult.share_id
+                            ) {
+                                throw new Error(
+                                    "Drivetot Upload Failed"
+                                );
+                            }
+
+
+                            const drivetot_url =
+                                `https://drivetot.website/${drivetotResult.share_id}`;
+
+
+                            await env.DB
+                                .prepare(
+                                    `UPDATE files
+                                     SET drivetot_url = ?
+                                     WHERE id = ?`
+                                )
+                                .bind(
+                                    drivetot_url,
+                                    shortId
+                                )
+                                .run();
+
+
+                            // =================================
+                            // STEP 3 - EXTRACT LINKS
+                            // =================================
+
+                            const extractedLinks =
+                                await extractLinksFromDrivetot(
+                                    drivetotResult.share_id,
+                                    env
+                                );
+
+
+                            if (
+                                extractedLinks.error
+                            ) {
+                                throw new Error(
+                                    "Drivetot Scraper Failed: " +
+                                    extractedLinks.error
+                                );
+                            }
+
+
+                            const hubcloud_url =
+                                extractedLinks.hubcloud_url ||
+                                "Not Found";
+
+
+                            const gdflix_url =
+                                extractedLinks.gdflix_url;
+
+
+                            await env.DB
+                                .prepare(
+                                    `UPDATE files
+                                     SET hubcloud_url = ?,
+                                         gdflix_url = ?
+                                     WHERE id = ?`
+                                )
+                                .bind(
+                                    hubcloud_url,
+                                    gdflix_url,
+                                    shortId
+                                )
+                                .run();
+                                {
+                                    const downloadSyncRecord =
+                                        await env.DB
+                                            .prepare(
+                                                "SELECT * FROM files WHERE (id = ? OR short_id = ?) LIMIT 1"
+                                            )
+                                            .bind(
+                                                shortId,
+                                                shortId
+                                            )
+                                            .first();
+    
+                                    if (downloadSyncRecord) {
+                                        await syncDownloadMetadata(
+                                            downloadSyncRecord,
+                                            env
+                                        );
+                                    }
+                                }
+
+
+                            console.log(
+                                `Background processing completed: ${shortId}`
+                            );
+
+                        } catch (
+                            bgErr
+                        ) {
+
+                            console.error(
+                                "Background processing error for " +
+                                shortId +
+                                ":",
+                                bgErr.message
+                            );
+                        }
+
+                    })()
+                );
+
+
+                } else {
                     // Start the three durable jobs right now, not at the next Cron tick.
                     // Cron/self-healing still share the same atomic D1 claim.
                     // Serialize only metadata sync, not the provider submissions.
@@ -7108,6 +7799,7 @@ export default {
                         console.log("[SCLOUD FAST SUBMIT] complete", {fileId:shortId, states:results.map(r=>r.status === "fulfilled" ? r.value?.state : "error")});
                     })().catch(error => console.error("[SCLOUD FAST SUBMIT] background error", error?.name || "Error")));
                     console.log("[SCLOUD UPLOAD TIMING] registered", {fileId:shortId, elapsed_ms:Date.now()-uploadStartedAt});
+                }
 
                 // --------------------------------------
                 // RESPONSE
@@ -7117,11 +7809,10 @@ export default {
                     JSON.stringify({
                         status:
                             "success",
-                        message: "File registered; background mirror submissions started.",
+                        message: directSourceMode
+                            ? "File registered; background mirror submissions started."
+                            : "File Uploaded Successfully!",
                         data: {
-                            registration_state: "registered",
-                            mirror_state: "pending",
-                            source_check: "available",
                             file_name:
                                 actualFileName,
                             file_size:
@@ -7145,9 +7836,37 @@ export default {
                 error
             ) {
 
-                // A failed D1 batch rolls back every write. If the response
-                // was lost after commit, the next retry returns the existing ID.
-                console.error('[SCLOUD UPLOAD ERROR]', {name:error?.name||'Error',elapsed_ms:Date.now()-uploadStartedAt});
+                if (uploadReservation) {
+                    try {
+                        await env.DB.prepare(`UPDATE user_daily_upload_usage SET uploads_count = CASE WHEN uploads_count > 0 THEN uploads_count - 1 ELSE 0 END WHERE user_id = ? AND usage_date = ?`).bind(currentUser.id, uploadUsageDate).run();
+                    } catch (releaseError) {
+                        console.error("Could not release failed upload reservation:", releaseError);
+                    }
+                }
+
+                if (sourceUploadClaimed && !sourceCopyStarted) {
+                    // Only release if files.copy was definitely NOT called.
+                    // Once called, an unknown Google response must NEVER
+                    // trigger an automatic duplicate copy on retry.
+                    try {
+                        await env.DB.prepare(`
+                            DELETE FROM scloud_upload_sources
+                            WHERE user_id = ? AND source_hash = ?
+                              AND state = 'processing'
+                              AND copied_drive_id IS NULL
+                              AND (file_short_id IS NULL OR (? = 1 AND NOT EXISTS (SELECT 1 FROM files f WHERE f.id=scloud_upload_sources.file_short_id OR f.short_id=scloud_upload_sources.file_short_id)))
+                        `).bind(currentUser.id, sourceUploadHash,directSourceMode?1:0).run();
+                    } catch (dedupeReleaseError) {
+                        console.error("[UPLOAD] Could not release pre-copy claim:",
+                            dedupeReleaseError?.message || dedupeReleaseError);
+                    }
+                }
+
+                // ==============================
+                // ADVANCED ERROR LOGGING ADDED
+                // ==============================
+                console.error("[UPLOAD ERROR MESSAGE]:", error.message);
+                console.error("[UPLOAD ERROR STACK]:", error.stack);
 
                 return new Response(
                     JSON.stringify({
