@@ -72,6 +72,7 @@ export async function queuePDLinkFile(
         );
 
 
+    options.onResponse?.(response);
     const text =
         await response.text();
 

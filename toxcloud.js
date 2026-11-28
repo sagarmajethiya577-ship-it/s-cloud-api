@@ -51,6 +51,7 @@ export async function uploadToToxCloud(
         }
     );
 
+    options.onResponse?.(response);
     const text =
         await response.text();
 

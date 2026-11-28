@@ -88,6 +88,7 @@ export async function uploadToDrivetot(fileId, env, options = {}) {
                 }
             );
 
+            options.onResponse?.(response);
             const responseText =
                 await response.text();
 
@@ -224,6 +225,7 @@ export async function extractLinksFromDrivetot(
         }
     );
 
+    options.onResponse?.(res1);
     if (!res1.ok) {
         return {
             error:
@@ -287,6 +289,7 @@ export async function extractLinksFromDrivetot(
         }
     );
 
+    options.onResponse?.(res2);
     if (!res2.ok) {
         return {
             error:
