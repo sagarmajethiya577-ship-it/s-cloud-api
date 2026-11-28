@@ -43,6 +43,41 @@ function getDownloadTargets(env, includeDisabled = false) {
     return [first, (enabled || includeDisabled) && distinct ? second : null].filter(Boolean);
 }
 
+// Per-account download permission, independent of global API-key locks.
+const DOWNLOAD_LOCK_COLUMNS = Object.freeze({
+    gofile: "gofile_download_locked",
+    pixeldrain: "pixeldrain_download_locked"
+});
+const controlledDownloadProvider = provider => Object.prototype.hasOwnProperty.call(DOWNLOAD_LOCK_COLUMNS, provider);
+const accountDownloadLocked = (row, provider) => row?.[DOWNLOAD_LOCK_COLUMNS[provider]] !== 0;
+
+async function getAccountMirrorVisibility(userId, env) {
+    const visibility = {instant:true, toxcloud:true, gofile:false, pixeldrain:false, hubcloud:true, gdflix:true};
+    const locked = {gofile:true,pixeldrain:true};
+    if (userId == null) return {visibility, locked, ownerFound:false, failed:false};
+    try {
+        const result = await env.DB.prepare(`SELECT u.gofile_download_locked, u.pixeldrain_download_locked,
+            m.provider, m.show_on_download FROM users u LEFT JOIN user_mirror_sites m ON m.user_id=u.id
+            WHERE u.id=?`).bind(userId).all();
+        const rows = result.results || [];
+        if (!rows.length) return {visibility, locked, ownerFound:false, failed:false};
+        for (const provider of Object.keys(DOWNLOAD_LOCK_COLUMNS)) {
+            locked[provider] = accountDownloadLocked(rows[0], provider);
+            visibility[provider] = !locked[provider];
+        }
+        for (const row of rows) {
+            if (!Object.prototype.hasOwnProperty.call(visibility,row.provider)) continue;
+            if (controlledDownloadProvider(row.provider) && accountDownloadLocked(row,row.provider)) continue;
+            visibility[row.provider] = Number(row.show_on_download) !== 0;
+        }
+        return {visibility, locked, ownerFound:true, failed:false};
+    } catch (error) {
+        // Never unlock a paid mirror because its permission lookup failed.
+        console.error("[DOWNLOAD POLICY] Account visibility lookup failed", error?.name || "Error");
+        return {visibility, locked, ownerFound:false, failed:true};
+    }
+}
+
 async function syncDownloadMetadata(record, env, selectedTargets = null) {
     const targets = selectedTargets || getDownloadTargets(env, record?.status === "deleted" || Number(record?.sharing_enabled ?? 1) === 0);
     if (!record || !targets.length) {
@@ -111,47 +146,8 @@ async function syncDownloadMetadata(record, env, selectedTargets = null) {
             : "active";
 
 
-    // User-specific Manage Sites visibility.
-    // Default ON for settings not explicitly changed.
-    const mirrorVisibility = {
-        instant: true,
-        toxcloud: true,
-        gofile: true,
-        pixeldrain: true,
-        hubcloud: true,
-        gdflix: true
-    };
-
-    if (record.user_id != null) {
-        try {
-            const visibilityRows = await env.DB.prepare(
-                `SELECT provider, show_on_download
-                 FROM user_mirror_sites
-                 WHERE user_id = ?`
-            ).bind(record.user_id).all();
-
-            for (const item of visibilityRows.results || []) {
-                if (
-                    Object.prototype.hasOwnProperty.call(
-                        mirrorVisibility,
-                        item.provider
-                    )
-                ) {
-                    mirrorVisibility[item.provider] =
-                        Number(item.show_on_download) !== 0;
-                }
-            }
-        } catch (error) {
-            // Older databases may not have Manage Sites yet.
-            // Existing download behaviour remains unchanged.
-            if (!/no such table/i.test(String(error?.message || ""))) {
-                console.error(
-                    "[DOWNLOAD SYNC] Visibility lookup failed:",
-                    error?.message || error
-                );
-            }
-        }
-    }
+    // Account admin locks override the user's display preference.
+    const {visibility: mirrorVisibility} = await getAccountMirrorVisibility(record.user_id, env);
 
     const metadata = {
         short_id: String(record.short_id || record.id),
@@ -207,33 +203,9 @@ async function syncDownloadMetadata(record, env, selectedTargets = null) {
 // TOXCloud runs only while visible. Drivetot is independent.
 // ==================================================
 async function getMirrorUploadPolicy(userId, env) {
-    const settings = {gofile:true, pixeldrain:true, toxcloud:true};
-    if (userId == null) {
-        // Missing owner should not initiate paid provider uploads.
-        return {pdlink:false, toxcloud:false};
-    }
-    try {
-        const rows = await env.DB.prepare(
-            `SELECT provider, show_on_download FROM user_mirror_sites
-             WHERE user_id = ? AND provider IN ('gofile','pixeldrain','toxcloud')`
-        ).bind(userId).all();
-        for (const row of rows.results || []) {
-            if (Object.prototype.hasOwnProperty.call(settings, row.provider)) {
-                settings[row.provider] = Number(row.show_on_download) !== 0;
-            }
-        }
-    } catch (error) {
-        // Existing installations without Manage Sites default to all ON.
-        if (!/no such table/i.test(String(error?.message || ''))) {
-            console.error('[UPLOAD POLICY] DB lookup failed. Provider uploads skipped:',
-                error?.message || 'unknown');
-            return {pdlink:false, toxcloud:false};
-        }
-    }
-    return {
-        pdlink: settings.gofile || settings.pixeldrain,
-        toxcloud: settings.toxcloud
-    };
+    const {visibility, ownerFound, failed} = await getAccountMirrorVisibility(userId, env);
+    if (!ownerFound || failed) return {pdlink:false, toxcloud:false};
+    return {pdlink:visibility.gofile || visibility.pixeldrain, toxcloud:visibility.toxcloud};
 }
 
 // ==================================================
@@ -2615,8 +2587,15 @@ export default {
                 const body = await request.json();
                 const fileId = String(body?.file_id || "");
                 if (!/^[A-Za-z0-9_-]{1,100}$/.test(fileId)) return jsonResponse({status:"error"},400);
-                const record = await env.DB.prepare("SELECT status, sharing_enabled FROM files WHERE short_id = ? LIMIT 1").bind(fileId).first();
-                return new Response(JSON.stringify({allowed: !!record && record.status === "active" && Number(record.sharing_enabled ?? 1) !== 0}), {
+                const record = await env.DB.prepare(`SELECT f.status, f.sharing_enabled,
+                    CASE WHEN u.gofile_download_locked=0 AND COALESCE(g.show_on_download,1)=1 THEN 1 ELSE 0 END AS gofile_visible,
+                    CASE WHEN u.pixeldrain_download_locked=0 AND COALESCE(p.show_on_download,1)=1 THEN 1 ELSE 0 END AS pixeldrain_visible
+                    FROM files f LEFT JOIN users u ON u.id=f.user_id
+                    LEFT JOIN user_mirror_sites g ON g.user_id=u.id AND g.provider='gofile'
+                    LEFT JOIN user_mirror_sites p ON p.user_id=u.id AND p.provider='pixeldrain'
+                    WHERE f.short_id=? LIMIT 1`).bind(fileId).first();
+                return new Response(JSON.stringify({allowed: !!record && record.status === "active" && Number(record.sharing_enabled ?? 1) !== 0,
+                    controlled_mirror_visibility:{gofile:record?.gofile_visible===1,pixeldrain:record?.pixeldrain_visible===1}}), {
                     headers: {"Content-Type":"application/json", "Cache-Control":"no-store"}
                 });
             } catch (error) {
@@ -2936,9 +2915,8 @@ export default {
         }
 
         // ==================================================
-        // MANAGE SITES V1 - settings only; no provider uploads
-        // This module does NOT change mirror URLs, the download worker,
-        // file earnings or the existing upload pipeline.
+        // MANAGE SITES - settings and account download permission.
+        // Global API key configuration stays independent from download locks.
         // ==================================================
         const MIRROR_SITE_PROVIDERS = Object.freeze([
             { id: 'instant', name: 'Instant Download 10GBps', accepts_key: false, initial_locked: true },
@@ -2988,21 +2966,24 @@ export default {
             ));
         }
         async function mirrorSiteListForUser(userId) {
-            const [controls, prefs] = await Promise.all([
+            const [controls, prefs, account] = await Promise.all([
                 env.DB.prepare('SELECT provider, locked FROM mirror_provider_controls').all(),
                 env.DB.prepare(`SELECT provider, encrypted_key, show_on_download FROM user_mirror_sites WHERE user_id = ?`)
-                    .bind(userId).all()
+                    .bind(userId).all(),
+                env.DB.prepare(`SELECT gofile_download_locked,pixeldrain_download_locked FROM users WHERE id=?`).bind(userId).first()
             ]);
             const locks = new Map((controls.results || []).map(r => [r.provider, Number(r.locked) === 1]));
             const userPrefs = new Map((prefs.results || []).map(r => [r.provider, r]));
             return MIRROR_SITE_PROVIDERS.map(p => {
                 const pref = userPrefs.get(p.id);
+                const downloadLocked = controlledDownloadProvider(p.id) && accountDownloadLocked(account,p.id);
                 return {
                     id: p.id, name: p.name,
                     accepts_key: p.accepts_key,
                     locked: !p.accepts_key || (locks.get(p.id) ?? p.initial_locked),
                     has_key: !!pref?.encrypted_key,
-                    visible: pref ? Number(pref.show_on_download) === 1 : true,
+                    download_locked: downloadLocked,
+                    visible: !downloadLocked && (pref ? Number(pref.show_on_download) === 1 : true),
                     upload_integration_ready: false
                 };
             });
@@ -3142,10 +3123,21 @@ export default {
                     if (typeof body.visible !== 'boolean') {
                         return mirrorSiteReply({status:'error',message:'visible must be true or false'},400);
                     }
-                    await env.DB.prepare(`INSERT INTO user_mirror_sites (user_id, provider, show_on_download)
-                        VALUES (?, ?, ?) ON CONFLICT(user_id,provider) DO UPDATE SET
-                        show_on_download=excluded.show_on_download, updated_at=CURRENT_TIMESTAMP`)
-                        .bind(mirrorUser.id, provider.id, body.visible ? 1 : 0).run();
+                    if (controlledDownloadProvider(provider.id)) {
+                        // Column name comes exclusively from the fixed allowlist.
+                        const column = DOWNLOAD_LOCK_COLUMNS[provider.id];
+                        const write = await env.DB.prepare(`INSERT INTO user_mirror_sites (user_id,provider,show_on_download)
+                            SELECT ?,?,? FROM users WHERE id=? AND ${column}=0
+                            ON CONFLICT(user_id,provider) DO UPDATE SET
+                            show_on_download=excluded.show_on_download,updated_at=CURRENT_TIMESTAMP`)
+                            .bind(mirrorUser.id,provider.id,body.visible ? 1 : 0,mirrorUser.id).run();
+                        if (!write.meta?.changes) return mirrorSiteReply({status:'error',message:'Download option is locked by admin'},403);
+                    } else {
+                        await env.DB.prepare(`INSERT INTO user_mirror_sites (user_id, provider, show_on_download)
+                            VALUES (?, ?, ?) ON CONFLICT(user_id,provider) DO UPDATE SET
+                            show_on_download=excluded.show_on_download, updated_at=CURRENT_TIMESTAMP`)
+                            .bind(mirrorUser.id, provider.id, body.visible ? 1 : 0).run();
+                    }
                     return mirrorSiteReply({status:'success',provider:provider.id,visible:body.visible});
                 }
                 if (!provider.accepts_key) return mirrorSiteReply({status:'error',message:'This server has no user API key'},400);
@@ -3190,6 +3182,63 @@ export default {
             } catch (error) {
                 console.error('[MANAGE SITES] user settings error:', error?.message || error);
                 return mirrorSiteReply({status:'error',message:'Unable to save server settings'},500);
+            }
+        }
+        if (url.pathname === '/api/admin/mirror-sites/downloads') {
+            const admin = await getCurrentUser(request,env);
+            if (!admin) return mirrorSiteReply({status:'error',message:'Authentication required'},401);
+            if (String(admin.email||'').trim().toLowerCase() !== V4_OWNER_EMAIL) {
+                return mirrorSiteReply({status:'error',message:'Admin access required'},403);
+            }
+            if (request.method === 'POST' && !mirrorSiteSameOrigin()) {
+                return mirrorSiteReply({status:'error',message:'Invalid request origin'},403);
+            }
+            try {
+                await ensureMirrorSiteTables();
+                if (request.method === 'GET') {
+                    const q=String(url.searchParams.get('q')||'').trim().slice(0,200);
+                    const rows=await env.DB.prepare(`SELECT id,name,email,gofile_download_locked,pixeldrain_download_locked
+                        FROM users WHERE ?='' OR instr(lower(COALESCE(name,'')),lower(?))>0
+                        OR instr(lower(COALESCE(email,'')),lower(?))>0 OR CAST(id AS TEXT)=?
+                        ORDER BY id DESC LIMIT 100`).bind(q,q,q,q).all();
+                    return mirrorSiteReply({status:'success',users:(rows.results||[]).map(row=>({
+                        id:row.id,name:row.name,email:row.email,
+                        gofile_locked:accountDownloadLocked(row,'gofile'),
+                        pixeldrain_locked:accountDownloadLocked(row,'pixeldrain')
+                    }))});
+                }
+                if (request.method === 'POST') {
+                    const body=await request.json();
+                    const userId=Number(body?.user_id), provider=String(body?.provider||'');
+                    if (!Number.isSafeInteger(userId)||userId<1||!controlledDownloadProvider(provider)||typeof body?.locked!=='boolean') {
+                        return mirrorSiteReply({status:'error',message:'Invalid account, provider or lock status'},400);
+                    }
+                    if (!await env.DB.prepare('SELECT id FROM users WHERE id=?').bind(userId).first()) {
+                        return mirrorSiteReply({status:'error',message:'User not found'},404);
+                    }
+                    const column=DOWNLOAD_LOCK_COLUMNS[provider];
+                    const statements=[env.DB.prepare(`UPDATE users SET ${column}=? WHERE id=?`).bind(body.locked?1:0,userId)];
+                    if (!body.locked) {
+                        // Admin unlock turns this server ON; the user may turn it OFF later.
+                        statements.push(env.DB.prepare(`INSERT INTO user_mirror_sites(user_id,provider,show_on_download)
+                            SELECT id,?,1 FROM users WHERE id=? ON CONFLICT(user_id,provider) DO UPDATE SET
+                            show_on_download=1,updated_at=CURRENT_TIMESTAMP`).bind(provider,userId));
+                        // Wake this account's existing paused PDLink jobs only, not running/done jobs.
+                        if (String(env.SCLOUD_JOBS_ENABLED||'false').toLowerCase()==='true' &&
+                            await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='scloud_mirror_jobs'").first()) {
+                            statements.push(env.DB.prepare(`UPDATE scloud_mirror_jobs SET state='queued',available_at=?,updated_at=CURRENT_TIMESTAMP
+                                WHERE provider='pdlink' AND state='paused' AND file_id IN
+                                (SELECT short_id FROM files WHERE user_id=? AND status='active' AND COALESCE(pdlink_share_id,'')='')`)
+                                .bind(Date.now(),userId));
+                        }
+                    }
+                    await env.DB.batch(statements);
+                    return mirrorSiteReply({status:'success',user_id:userId,provider,locked:body.locked});
+                }
+                return mirrorSiteReply({status:'error',message:'Method Not Allowed'},405);
+            } catch(error) {
+                console.error('[DOWNLOAD LOCK] Admin update failed',error?.name||'Error');
+                return mirrorSiteReply({status:'error',message:'Unable to manage account download locks'},500);
             }
         }
         if (url.pathname === '/api/admin/mirror-sites') {
@@ -3810,20 +3859,6 @@ export default {
             request.method ===
                 "POST"
         ) {
-            return new Response(
-                JSON.stringify({
-                    status: "error",
-                    message: "New account registration is temporarily closed."
-                }),
-                {
-                    status: 403,
-                    headers: {
-                        ...corsHeaders,
-                        ...jsonHeaders()
-                    }
-                }
-            );
-
             try {
 
                 const body =
@@ -4036,9 +4071,11 @@ export default {
                             role,
                             balance,
                             custom_cpm,
-                            status
+                            status,
+                            gofile_download_locked,
+                            pixeldrain_download_locked
                         )
-                        VALUES (?, ?, ?, 'publisher', 0, 0, 'active')`
+                        VALUES (?, ?, ?, 'publisher', 0, 0, 'active', 1, 1)`
                     )
                     .bind(
                         cleanName,
@@ -8118,6 +8155,7 @@ export default {
                     });
                 }
 
+                const {visibility: accountVisibility} = await getAccountMirrorVisibility(record.user_id,env);
                 const currentTime =
                     Date.now();
 
@@ -8442,13 +8480,13 @@ export default {
                                 !!record.gdflix_url,
 
                             gofile:
-                                !!record.pdlink_share_id,
+                                accountVisibility.gofile && !!record.pdlink_share_id,
 
                             toxcloud:
                                 !!record.toxcloud_url,
 
                             pixeldrain:
-                                !!record.pdlink_share_id
+                                accountVisibility.pixeldrain && !!record.pdlink_share_id
                         },
 
                         instant: {
@@ -8817,6 +8855,7 @@ export default {
                     });
                 }
 
+                const {visibility: accountVisibility} = await getAccountMirrorVisibility(record.user_id,env);
                 const currentTime =
                     Date.now();
 
@@ -8858,13 +8897,13 @@ export default {
                                     "Not Found",
 
                             gofile:
-                                !!record.pdlink_share_id,
+                                accountVisibility.gofile && !!record.pdlink_share_id,
 
                             toxcloud:
                                 !!record.toxcloud_url,
 
                             pixeldrain:
-                                !!record.pdlink_share_id
+                                accountVisibility.pixeldrain && !!record.pdlink_share_id
                         }
                     }),
                     {
@@ -8987,6 +9026,13 @@ export default {
                 // ------------------------------------------
                 // PDLINK: GOFILE + PIXELDRAIN
                 // ------------------------------------------
+                if (controlledDownloadProvider(action)) {
+                    const {locked} = await getAccountMirrorVisibility(record.user_id,env);
+                    if (locked[action]) return new Response("This download server is disabled for this account.", {
+                        status:403,headers:{...corsHeaders,"Cache-Control":"no-store"}
+                    });
+                }
+
 
                 if (
                     action ===

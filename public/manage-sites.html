@@ -495,12 +495,13 @@
       addChildren(heading,icon,text,status);card.append(heading);
       const show=dom('div','mt-5 flex items-center justify-between gap-4 rounded-xl px-4 py-3 border border-white/10 bg-[#0a0e17]/70');
       const showLabel=dom('div','min-w-0');addChildren(showLabel,dom('p','text-sm font-medium text-gray-200','Show on download page'));
-      const toggleLabel=dom('label','ms-switch');const toggle=dom('input');toggle.type='checkbox';toggle.checked=!!p.visible;toggle.setAttribute('aria-label','Show '+p.name+' on download page');
+      if(p.download_locked)showLabel.append(dom('p','text-xs text-amber-400 mt-1','🔒 Download locked by admin'));
+      const toggleLabel=dom('label','ms-switch');const toggle=dom('input');toggle.type='checkbox';toggle.checked=!!p.visible&&!p.download_locked;toggle.disabled=!!p.download_locked;toggle.setAttribute('aria-label','Show '+p.name+' on download page');
       addChildren(toggleLabel,toggle,dom('span','track'));addChildren(show,showLabel,toggleLabel);card.append(show);
       const message=dom('p','ms-feedback');message.setAttribute('role','status');message.setAttribute('aria-live','polite');
-      toggle.addEventListener('change',async()=>{const selected=toggle.checked;toggle.disabled=true;
+      toggle.addEventListener('change',async()=>{if(p.download_locked){toggle.checked=false;return}const selected=toggle.checked;toggle.disabled=true;
         try{await postJSON('/api/mirror-sites/visibility',{provider:p.id,visible:selected});feedback(message,'Visibility preference saved');notice('success','Saved',p.name+' visibility updated')}
-        catch(e){toggle.checked=!selected;feedback(message,e.message,true);notice('error','Save failed',e.message)}finally{toggle.disabled=false}
+        catch(e){toggle.checked=!selected;feedback(message,e.message,true);notice('error','Save failed',e.message)}finally{toggle.disabled=!!p.download_locked}
       });
       if(p.accepts_key){
         const wrap=dom('div','mt-5');
@@ -508,7 +509,7 @@
         const row=dom('div','ms-key-controls flex items-stretch gap-2');const field=dom('input','ms-input flex-1');field.type='password';field.autocomplete='off';field.maxLength=4096;field.spellcheck=false;field.placeholder=p.has_key?'Enter new key to replace saved key':'Enter your API key';field.setAttribute('aria-label',p.name+' API key');field.disabled=!!p.locked;
         const save=dom('button','ms-btn ms-btn-primary','Save Key');save.type='button';save.disabled=!!p.locked;
         const remove=dom('button','ms-btn ms-btn-neutral','Remove');remove.type='button';remove.disabled=!p.has_key;
-        const busy=active=>{field.disabled=active||p.locked;save.disabled=active||p.locked;remove.disabled=active||!p.has_key;toggle.disabled=active};
+        const busy=active=>{field.disabled=active||p.locked;save.disabled=active||p.locked;remove.disabled=active||!p.has_key;toggle.disabled=active||!!p.download_locked};
         save.addEventListener('click',async()=>{if(!field.value.trim()){feedback(message,'Enter an API key before saving',true);field.focus();return};busy(true);
           try{await postJSON('/api/mirror-sites/key',{provider:p.id,api_key:field.value});p.has_key=true;head.lastElementChild.textContent='● Connected';head.lastElementChild.className='text-xs text-emerald-400';field.value='';field.placeholder='Enter new key to replace saved key';feedback(message,'API key saved securely');notice('success','API key saved',p.name+' connected')}
           catch(e){feedback(message,e.message,true);notice('error','Could not save key',e.message)}finally{busy(false)}
@@ -518,7 +519,7 @@
           catch(e){feedback(message,e.message,true);notice('error','Could not remove key',e.message)}finally{busy(false)}
         });
         addChildren(row,field,save,remove);wrap.append(row);
-        wrap.append(dom('p','ms-muted mt-2',p.locked?'API configuration is locked by admin. You can still change display visibility.':'Key is encrypted in S-Cloud.'));
+        wrap.append(dom('p','ms-muted mt-2',p.locked?'API configuration is locked by admin.':'Key is encrypted in S-Cloud.'));
         card.append(wrap);
       }
       card.append(message);return card;

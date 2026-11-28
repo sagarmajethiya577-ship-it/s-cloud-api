@@ -917,15 +917,26 @@
         ================================================== -->
         <section id="tab-mirrors" class="hidden-tab">
           <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div><h2 class="text-2xl font-semibold">Mirror Server Controls</h2><p class="text-sm text-gray-500 mt-1">Control which providers allow users to configure API keys.</p></div>
+            <div><h2 class="text-2xl font-semibold">Mirror Server Controls</h2><p class="text-sm text-gray-500 mt-1">Control global API keys and per-account download access.</p></div>
             <button id="refreshMirrorServers" type="button" class="px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-medium self-start" onclick="loadMirrorServers()">↻ Refresh</button>
           </div>
           <div class="glass-card p-4 md:p-5 mb-5 flex items-start gap-3 border-l-2 border-red-500/50">
             <span class="text-red-400">●</span>
-            <p class="text-sm text-gray-400 leading-relaxed">Locking a provider prevents users from saving or replacing its API key. Existing saved keys and download mirrors stay intact. Download visibility ON/OFF is a separate user preference.</p>
+            <p class="text-sm text-gray-400 leading-relaxed">Locking a provider prevents users from saving or replacing its API key. Existing saved keys and download mirrors stay intact. Account download locks below are separate from API-key locks.</p>
           </div>
           <p id="mirrorAdminStatus" class="text-sm text-gray-400 mb-4" role="status" aria-live="polite">Open this tab to load provider controls.</p>
           <div id="mirrorAdminGrid" class="grid grid-cols-1 xl:grid-cols-2 gap-4"></div>
+          <div class="glass-card p-4 md:p-5 mt-6">
+            <h3 class="text-lg font-semibold">Account Download Controls</h3>
+            <p class="text-sm text-gray-400 mt-1">New accounts: GoFile and Pixeldrain are locked by default. Unlock a server to enable it for the selected account only.</p>
+            <div class="flex flex-wrap gap-2 mt-4">
+              <input id="mirrorAccountSearch" type="search" maxlength="200" placeholder="Search name, email or user ID" class="min-w-0 flex-1 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm" aria-label="Search account">
+              <button id="mirrorAccountFind" type="button" onclick="loadMirrorAccounts()" class="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm">Search</button>
+            </div>
+            <select id="mirrorAccountSelect" aria-label="Select account" onchange="renderAccountDownloadControls()" class="w-full mt-3 px-3 py-2.5 rounded-xl bg-[#12151d] border border-white/10 text-sm"><option value="">Select an account</option></select>
+            <div id="mirrorAccountControls" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"></div>
+            <p id="mirrorAccountStatus" class="text-sm text-gray-400 mt-3" role="status" aria-live="polite"></p>
+          </div>
         </section>
 
     </div>
@@ -1845,7 +1856,65 @@ button.disabled = true;
             status.textContent=`${result.providers.length} mirror providers · Changes save immediately`;
         }catch(error){status.textContent='Could not load mirror providers: '+error.message;toast(error.message)}
         finally{mirrorAdminBusy=false;if(refresh)refresh.disabled=false}
+        await loadMirrorAccounts();
     }
+    let mirrorAccounts=[], mirrorAccountBusy=false;
+    async function loadMirrorAccounts(){
+        if(mirrorAccountBusy)return;
+        const select=document.getElementById('mirrorAccountSelect');
+        const status=document.getElementById('mirrorAccountStatus');
+        const search=document.getElementById('mirrorAccountSearch');
+        const find=document.getElementById('mirrorAccountFind');
+        const selected=select.value;
+        mirrorAccountBusy=true;find.disabled=true;select.disabled=true;
+        document.getElementById('mirrorAccountControls').replaceChildren();
+        status.textContent='Loading accounts…';
+        try{
+            const data=await api('/api/admin/mirror-sites/downloads?q='+encodeURIComponent(search.value.trim()));
+            if(!Array.isArray(data.users))throw Error('Unexpected account response');
+            mirrorAccounts=data.users;
+            const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Select an account';
+            select.replaceChildren(placeholder,...mirrorAccounts.map(u=>{
+                const option=document.createElement('option');option.value=String(u.id);
+                option.textContent=`${u.name||'User'} · ${u.email||''} (#${u.id})`;return option;
+            }));
+            if(mirrorAccounts.some(u=>String(u.id)===selected))select.value=selected;
+            status.textContent=mirrorAccounts.length?'Select an account to manage its download servers.':'No matching accounts.';
+        }catch(error){mirrorAccounts=[];select.replaceChildren(new Option('Unable to load accounts',''));status.textContent=error.message;}
+        finally{mirrorAccountBusy=false;find.disabled=false;select.disabled=false;renderAccountDownloadControls();}
+    }
+    function renderAccountDownloadControls(){
+        const select=document.getElementById('mirrorAccountSelect');
+        const area=document.getElementById('mirrorAccountControls');
+        const status=document.getElementById('mirrorAccountStatus');
+        area.replaceChildren();
+        const account=mirrorAccounts.find(u=>String(u.id)===select.value);
+        if(!account)return;
+        for(const [provider,name] of [['gofile','GoFile'],['pixeldrain','Pixeldrain']]){
+            const locked=account[provider+'_locked']===true;
+            const card=document.createElement('div');card.className='rounded-xl p-3 border border-white/10 bg-white/5';
+            const head=document.createElement('div');head.className='flex justify-between items-center gap-2';
+            const title=document.createElement('span');title.className='font-semibold text-sm';title.textContent=name;
+            const badge=document.createElement('span');badge.className='mirror-admin-badge '+(locked?'is-locked':'is-unlocked');badge.textContent=locked?'Locked':'Unlocked';
+            head.append(title,badge);
+            const button=document.createElement('button');button.type='button';button.className='mirror-admin-action w-full mt-3 px-3 py-2 rounded-xl text-sm font-semibold '+(locked?'is-locked':'is-unlocked');button.textContent=locked?'Unlock Download':'Lock Download';button.disabled=mirrorAccountBusy;
+            button.addEventListener('click',async()=>{
+                if(mirrorAccountBusy)return;
+                const next=!locked;
+                if(!confirm(`${next?'Lock':'Unlock'} ${name} downloads for ${account.email||account.name}?`))return;
+                mirrorAccountBusy=true;select.disabled=true;document.getElementById('mirrorAccountFind').disabled=true;
+                renderAccountDownloadControls();status.textContent='Saving download access…';
+                try{
+                    const result=await api('/api/admin/mirror-sites/downloads',{method:'POST',body:JSON.stringify({user_id:Number(account.id),provider,locked:next})});
+                    if(result.status!=='success'||result.locked!==next)throw Error('Setting not confirmed');
+                    account[provider+'_locked']=next;status.textContent=name+' '+(next?'locked':'unlocked and enabled')+' for '+(account.email||account.name);toast(status.textContent);
+                }catch(error){status.textContent=error.message;toast(error.message);}
+                finally{mirrorAccountBusy=false;select.disabled=false;document.getElementById('mirrorAccountFind').disabled=false;renderAccountDownloadControls();}
+            });
+            card.append(head,button);area.append(card);
+        }
+    }
+    document.getElementById('mirrorAccountSearch').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();loadMirrorAccounts();}});
     function renderAdminMirrorCard(p){
         const box=document.createElement('article');box.className='glass-card p-5 md:p-6';box.dataset.provider=p.id;
         const upper=document.createElement('div');upper.className='flex items-start justify-between gap-3';
