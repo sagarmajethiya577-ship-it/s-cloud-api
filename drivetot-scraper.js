@@ -25,6 +25,31 @@ function robustBase64Decode(str) {
 // UPLOAD FILE TO DRIVETOT
 // --------------------------------------------------
 
+// Classify only an explicit negative provider response. A missing ID alone
+// is not proof of rejection. Never log raw provider bodies or request URLs.
+function durableDrivetotResult(response, data, parsed) {
+    const status = response.status;
+    const objects = [data, data?.data, data?.result].filter(x => x && typeof x === "object");
+    const hasAcceptance = objects.some(x => x.share_id || x.id || x.download_url || x.url ||
+        x.success === true || x.accepted === true || x.exists === true ||
+        /^(success|ok|accepted|pending|processing|queued|created|completed)$/i.test(String(x.status || "")));
+    if (response.ok && /^[A-Za-z0-9_-]{4,200}$/.test(String(data?.share_id || ""))) {
+        return {share_id: String(data.share_id)};
+    }
+    const errors = objects.flatMap(x => [x.error, x.error?.code, x.error?.reason,
+        x.error?.message, x.code, x.reason, x.message]).filter(x => typeof x === "string");
+    const explicitlyRejected = parsed && objects.some(x => x.success === false ||
+        /^(error|failed|failure|rejected)$/i.test(String(x.status || "")) ||
+        (typeof x.error === "string" && x.error.trim().length > 0) ||
+        (x.error && typeof x.error === "object"));
+    const errorText = errors.join(" ");
+    const rate = /RATE_LIMIT_EXCEEDED|rate[ _-]*limit[ _-]*exceeded|too many requests/i.test(errorText);
+    const quota = /quota/i.test(errorText);
+    const retryKind = !hasAcceptance && explicitlyRejected && (status === 200 || status === 403 || status === 429) && (rate || quota)
+        ? (quota ? "quota" : "rate_limit") : null;
+    return {failureKind: retryKind || "uncertain", httpStatus: status};
+}
+
 export async function uploadToDrivetot(fileId, env, options = {}) {
     const apiKey = env.DRIVETOT_API_KEY;
 
@@ -67,14 +92,18 @@ export async function uploadToDrivetot(fileId, env, options = {}) {
                 await response.text();
 
             let data;
+            let parsed = true;
 
             try {
                 data = JSON.parse(responseText);
             } catch (e) {
+                parsed = false;
                 data = {
                     error: responseText
                 };
             }
+
+            if (options.singleAttempt) return durableDrivetotResult(response, data, parsed);
 
             const dataString =
                 JSON.stringify(data);
@@ -128,6 +157,7 @@ export async function uploadToDrivetot(fileId, env, options = {}) {
             await sleep(5000);
 
         } catch (e) {
+            if (options.singleAttempt) return {failureKind: "uncertain", httpStatus: null};
 
             console.log(
                 `Drivetot attempt ${attempt} failed:`,

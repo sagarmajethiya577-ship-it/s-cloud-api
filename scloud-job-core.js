@@ -1,5 +1,6 @@
 // S-Cloud job orchestration V2; no OAuth credentials live in this file.
-// Externally irreversible provider submissions are never blindly retried.
+// Mirror retries use the original source and a durable per-file/provider lease.
+// Provider-side deduplication is not guaranteed after an ambiguous response.
 import { queuePDLinkFile } from "./pdlink.js";
 import { uploadToToxCloud } from "./toxcloud.js";
 import { uploadToDrivetot, extractLinksFromDrivetot } from "./drivetot-scraper.js";
@@ -9,6 +10,12 @@ const PROVIDERS = new Set(["pdlink", "toxcloud", "drivetot", "extract"]);
 const isRealLink = value => typeof value === "string" &&
   value.length > 12 && value !== "Not Found" && /^https:\/\//i.test(value);
 const nowMs = () => Date.now();
+// Indefinite recovery with bounded frequency, not bounded total attempts.
+function retryDelay(attempts, kind) {
+  const delays = kind === "quota" ? [30,60,120,360] :
+    kind === "extract" ? [1,2,5,15,30,60] : [1,5,15,60,360];
+  return 60000 * delays[Math.min(delays.length - 1, Math.max(0, Number(attempts || 1) - 1))];
+}
 
 export async function ensureScloudJobTables(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scloud_mirror_jobs (
@@ -99,7 +106,7 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
   let outboundStarted = false;
   let sentAt = null;
   const dispatch = options.fastStart ? "upload" : options.publicEntry ? "self-heal" : "cron";
-  const requestOptions = () => options.fastStart ? {signal:AbortSignal.timeout(18000)} : {};
+  const requestOptions = () => ({signal:AbortSignal.timeout(options.fastStart ? 18000 : 45000)});
   const beginOutbound = () => {
     sentAt = nowMs(); outboundStarted = true;
     console.log("[SCLOUD PROVIDER TIMING] send", {fileId,provider,dispatch,queue_ms:Math.max(0,sentAt-Number(claim.available_at||now)),preflight_ms:sentAt-now});
@@ -145,8 +152,8 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
         const result = await uploadToToxCloud(driveId, env, requestOptions());
         responseReceived();
         if (!isRealLink(result?.download_url)) {
-          // Provider may have already accepted the upload. No blind retry.
-          throw new Error("TOXCloud accepted/pending but URL unavailable; needs review");
+          // No saved URL yet; retry later through the same queue.
+          throw new Error("TOXCloud response did not contain a download URL");
         }
         const write = await env.DB.prepare(`UPDATE files SET toxcloud_url = ?
           WHERE (id = ? OR short_id = ?) AND COALESCE(toxcloud_url,'') = ''
@@ -165,15 +172,29 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
         const result = await uploadToDrivetot(driveId, env, {singleAttempt:true,...requestOptions()});
         responseReceived();
         if (!result?.share_id || !/^[A-Za-z0-9_-]{4,200}$/.test(String(result.share_id))) {
-          throw new Error("Drivetot returned no usable share_id; needs review");
+          const kind = result?.failureKind === "quota" ? "quota" : result?.failureKind === "rate_limit" ? "rate_limit" : "uncertain";
+          const http = Number.isInteger(result?.httpStatus) ? result.httpStatus : "unknown";
+          const reason = `Drivetot HTTP ${http}: ${kind}`;
+          const attempts = Number(claim.attempts || 1);
+          // Same source only; respect quota and rate limits via cooldown.
+          const next = nowMs() + retryDelay(attempts,kind);
+          await markJob(env,fileId,provider,token,"queued",reason,next);
+          console.info("[SCLOUD JOBS] Drivetot retry scheduled", {fileId,attempts,kind,http,next});
+          return {state:"retry_provider", next_run:next};
         }
         shareId = String(result.share_id);
         const write = await env.DB.prepare(`UPDATE files SET drivetot_url = ?
-          WHERE (id = ? OR short_id = ?) AND COALESCE(drivetot_url,'') = ''
+          WHERE (id = ? OR short_id = ?) AND COALESCE(drivetot_url,'') IN ('', 'Not Found')
           AND COALESCE(status,'') <> 'deleted'`
         ).bind(`https://drivetot.website/${shareId}`,fileId,fileId).run();
         didWrite = Number(write.meta?.changes||0)>0;
       }
+      const saved = await env.DB.prepare(`SELECT drivetot_url,status FROM files WHERE short_id=? LIMIT 1`).bind(fileId).first();
+      if (!saved || saved.status === "deleted") {
+        await markJob(env,fileId,provider,token,"cancelled");
+        return {state:"cancelled"};
+      }
+      if (!isRealLink(saved.drivetot_url)) throw new Error("Drivetot accepted but link not saved");
       // Extraction is read-only and may be safely retried independently.
       await env.DB.prepare(`INSERT OR IGNORE INTO scloud_mirror_jobs
         (file_id, provider, state, available_at) VALUES (?, 'extract', 'queued', ?)`
@@ -191,7 +212,7 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
         }
       }
       if (!shareId) throw new Error("Missing Drivetot share ID for read-only extraction");
-      const result = await extractLinksFromDrivetot(shareId, env, options.fastStart ? {waitMs:0,signal:AbortSignal.timeout(7000)} : {waitMs: Math.max(0, Math.min(15000, 15000 - (nowMs()-Number(claim.available_at||now))))});
+      const result = await extractLinksFromDrivetot(shareId, env, options.fastStart ? {waitMs:0,signal:AbortSignal.timeout(7000)} : {waitMs: Math.max(0, Math.min(15000, 15000 - (nowMs()-Number(claim.available_at||now)))), signal:AbortSignal.timeout(45000)});
       const hub = isRealLink(result?.hubcloud_url) ? result.hubcloud_url : null;
       const gd = isRealLink(result?.gdflix_url) ? result.gdflix_url : null;
       const updated = await env.DB.prepare(`UPDATE files SET
@@ -209,16 +230,13 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
       if (!isRealLink(check?.hubcloud_url) || !isRealLink(check?.gdflix_url)) {
         // Avoid 2nd Drivetot upload; only repeat read-only page scraping.
         const attempts = Number(claim.attempts||1);
-        if (attempts < 12) {
-          await markJob(env,fileId,provider,token,"queued",
-            "Waiting for Drivetot mirrors",nowMs()+(options.fastStart ? 15000 : Math.min(3600000,30000*2**Math.min(attempts-1,5))));
-          if (didWrite) {
-            const fresh = await env.DB.prepare(`SELECT * FROM files WHERE short_id = ? LIMIT 1`).bind(fileId).first();
-            if (fresh) await syncDownloadMetadata(fresh,env);
-          }
-          return { state:"retry_scrape" };
+        await markJob(env,fileId,provider,token,"queued",
+          "Waiting for Drivetot mirrors",nowMs()+(options.fastStart ? 15000 : retryDelay(attempts,"extract")));
+        if (didWrite) {
+          const fresh = await env.DB.prepare(`SELECT * FROM files WHERE short_id = ? LIMIT 1`).bind(fileId).first();
+          if (fresh) await syncDownloadMetadata(fresh,env);
         }
-        throw new Error("Drivetot mirror extraction exhausted; manual review");
+        return { state:"retry_scrape" };
       }
     }
 
@@ -231,24 +249,20 @@ export async function executeScloudMirrorJob(fileId, provider, env, uploadPolicy
     }
     return { state:"done" };
   } catch (error) {
-    // An external upload may have succeeded even if its response was lost.
-    // Never automatically submit a second request for that same provider.
-    const reason = String(error?.message||"failed").slice(0,250);
-    if (sentAt !== null) console.log("[SCLOUD PROVIDER TIMING] failed", {fileId,provider,dispatch,elapsed_ms:nowMs()-sentAt,error_type:error?.name||"Error"});
-    const attempts = Number(claim.attempts||1);
-    if ((provider === 'extract' && attempts < 12) || (!outboundStarted && provider !== 'extract' && attempts < 4)) {
-      await markJob(env,fileId,provider,token,'queued',reason,nowMs()+(provider === 'extract' && options.fastStart ? 15000 : Math.min(3600000,60000*2**Math.min(attempts,5))));
-      return {state:'retry_safe'};
-    }
-    await markJob(env,fileId,provider,token,
-      !outboundStarted && provider !== "extract" ? "safe_review" : "review",reason);
-    console.error(`[SCLOUD JOBS] ${provider} needs review:`, reason);
-    return { state:"review" };
+    // Avoid storing raw provider bodies, URLs, or credentials in the retry log.
+    const text = String(error?.message || "failed");
+    const kind = provider === "extract" ? "extract" : /quota/i.test(text) ? "quota" : "other";
+    const reason = `${provider}: ${kind === "quota" ? "quota reported" : outboundStarted ? "provider response unavailable or submission failed" : provider === "extract" ? "extraction failed" : "pre-submission failure"}`;
+    const attempts = Number(claim.attempts || 1);
+    const next = nowMs() + retryDelay(attempts,kind);
+    await markJob(env,fileId,provider,token,"queued",reason,next);
+    console.warn("[SCLOUD JOBS] automatic retry scheduled", {fileId,provider,attempts,kind,next,dispatch});
+    return { state:provider === "extract" ? "retry_scrape" : "retry_provider", next_run:next };
   }
 }
 
 // V4.1: public entry can accelerate due jobs, but uses exactly the same D1
-// atomic claim as Cron. Never infer an unsubmitted upload from a missing URL.
+// atomic claim as Cron. Due retries respect current policy and saved links.
 export async function healScloudMirrorJobs(fileId, env, uploadPolicy, syncDownloadMetadata) {
   if (String(env.SCLOUD_JOBS_ENABLED || "false").toLowerCase() !== "true") return;
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(String(fileId))) return;
@@ -271,19 +285,17 @@ export async function healScloudMirrorJobs(fileId, env, uploadPolicy, syncDownlo
   if (needsExtract) {
     await env.DB.prepare(`INSERT OR IGNORE INTO scloud_mirror_jobs
       (file_id,provider,state,available_at) VALUES (?,'extract','queued',?)`).bind(fileId,now).run();
-    // Bounded additional attempts after the normal Cron extraction budget.
-    // Enforce cooldown atomically; simultaneous viewers cannot reset attempts.
+    // Recover legacy stopped extraction after cooldown; no total attempt cap.
     await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state='queued',available_at=?,updated_at=CURRENT_TIMESTAMP
       WHERE file_id=? AND provider='extract' AND state IN ('review','done')
-      AND attempts < 16 AND updated_at <= datetime('now','-30 minutes')`).bind(now,fileId).run();
+      AND updated_at <= datetime('now','-30 minutes')`).bind(now,fileId).run();
   }
   for (const provider of eligible.filter(p=>p!=="extract")) {
-    // Paused uploads did not submit. Only explicitly marked pre-submission
-    // failures can be reopened, and only after a bounded cooldown.
+    // Reopen legacy failed jobs after cooldown; never reset a running job.
     await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state='queued',available_at=?,updated_at=CURRENT_TIMESTAMP
       WHERE file_id=? AND provider=? AND (state='paused' OR
-        (state='safe_review' AND attempts<8
-          AND updated_at<=datetime('now','-15 minutes')))`).bind(now,fileId,provider).run();
+        (state IN ('review','safe_review') AND updated_at<=datetime('now','-30 minutes')
+          AND available_at<=?))`).bind(now,fileId,provider,now).run();
   }
   const due = await env.DB.prepare(`SELECT provider FROM scloud_mirror_jobs
     WHERE file_id=? AND state='queued' AND available_at<=?`).bind(fileId,nowMs()).all();
@@ -304,13 +316,12 @@ export async function healScloudMirrorJobs(fileId, env, uploadPolicy, syncDownlo
 export async function reconcileScloudJobs(env, uploadPolicy) {
   await ensureScloudJobTables(env);
   const now = nowMs();
-  // A crashed operation may have reached provider API: mark uncertain uploads
-  // for review rather than restarting them. Extraction is safe to restart.
-  await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'review',
-    last_error = 'Lease expired; check provider for existing submission',
-    lease_token = NULL, lease_until = NULL
+  // Expired lease: allow another attempt after a long cooldown, never immediately.
+  await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'queued',
+    last_error = 'Lease expired; automatic retry scheduled',
+    lease_token = NULL, lease_until = NULL, available_at = ?, updated_at=CURRENT_TIMESTAMP
     WHERE state = 'running' AND lease_until < ? AND provider <> 'extract'`
-  ).bind(now).run();
+  ).bind(now+1800000,now).run();
   await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state = 'queued',
     lease_token = NULL, lease_until = NULL, available_at = ?
     WHERE state = 'running' AND lease_until < ? AND provider = 'extract'`
@@ -333,6 +344,31 @@ export async function reconcileScloudJobs(env, uploadPolicy) {
       ).bind(now,j.file_id,j.provider).run();
     }
   }
+
+  // Recover legacy review jobs without a visitor. Keep attempts and cooldown.
+  // executeScloudMirrorJob rechecks current policy and saved links before sending.
+  await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state='queued',available_at=?,updated_at=CURRENT_TIMESTAMP
+    WHERE (file_id,provider) IN (SELECT j.file_id,j.provider FROM scloud_mirror_jobs j
+      JOIN files f ON f.short_id=j.file_id WHERE j.state IN ('review','safe_review') AND j.provider<>'extract'
+      AND j.available_at<=? AND j.updated_at<=datetime('now','-30 minutes')
+      AND COALESCE(f.status,'')<>'deleted' ORDER BY j.updated_at LIMIT 20)
+    AND state IN ('review','safe_review')`).bind(now,now).run();
+  // Existing saved Drivetot links can be recovered by read-only extraction.
+  // Never submit again merely because a mirror URL is missing.
+  await env.DB.prepare(`INSERT OR IGNORE INTO scloud_mirror_jobs(file_id,provider,state,available_at)
+    SELECT j.file_id,'extract','queued',? FROM scloud_mirror_jobs j JOIN files f ON f.short_id=j.file_id
+    WHERE j.provider='drivetot' AND j.state IN ('done','review','safe_review','queued') AND COALESCE(f.status,'')<>'deleted'
+      AND f.drivetot_url LIKE 'https://drivetot.website/%'
+      AND (COALESCE(f.hubcloud_url,'') IN ('','Not Found') OR COALESCE(f.gdflix_url,'') IN ('','Not Found'))
+      AND NOT EXISTS (SELECT 1 FROM scloud_mirror_jobs e WHERE e.file_id=j.file_id AND e.provider='extract')
+    LIMIT 20`).bind(now).run();
+  await env.DB.prepare(`UPDATE scloud_mirror_jobs SET state='queued',available_at=?,updated_at=CURRENT_TIMESTAMP
+    WHERE (file_id,provider) IN (SELECT j.file_id,j.provider FROM scloud_mirror_jobs j
+      JOIN files f ON f.short_id=j.file_id WHERE j.provider='extract' AND j.state IN ('review','done')
+      AND j.updated_at<=datetime('now','-30 minutes') AND COALESCE(f.status,'')<>'deleted'
+      AND f.drivetot_url LIKE 'https://drivetot.website/%'
+      AND (COALESCE(f.hubcloud_url,'') IN ('','Not Found') OR COALESCE(f.gdflix_url,'') IN ('','Not Found'))
+      ORDER BY j.updated_at LIMIT 20) AND state IN ('review','done')`).bind(now).run();
 
   // No automatic deletion without explicit opt-in. Never delete merely
   // because files.copy returned: both HubCloud and GDFlix must be resolved.
